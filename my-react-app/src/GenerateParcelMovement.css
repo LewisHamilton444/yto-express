@@ -1,0 +1,289 @@
+/* ─── Main Content Content Window Frame ─── */
+.generate-parcel-movement-main-content {
+  margin-left: 0;
+  flex: 1;
+  padding: 0;
+  overflow-y: auto;
+  background-color: #f9f7ff;
+}
+
+.generate-parcel-movement-main-content::-webkit-scrollbar { width: 8px; }
+.generate-parcel-movement-main-content::-webkit-scrollbar-track { background: #f9f7ff; }
+.generate-parcel-movement-main-content::-webkit-scrollbar-thumb { background: #d4c8e8; border-radius: 4px; }
+
+/* ============================================================
+   PAGE HEADER SETTINGS
+   ============================================================ */
+
+.gpm-page-header {
+  background: white;
+  border-bottom: 1px solid #e0d5f0;
+  padding: 24px 32px 20px;
+}
+
+.gpm-page-header-left { margin-bottom: 20px; }
+
+.gpm-page-title {
+  font-size: 26px;
+  font-weight: 800;
+  color: #1a1a1a;
+  letter-spacing: -0.5px;
+  line-height: 1.2;
+  margin: 0 0 4px 0;
+}
+
+.gpm-page-subtitle {
+  font-size: 13px;
+  color: #666;
+  font-weight: 400;
+  margin: 2px 0 0 0;
+}
+
+/* Breadcrumb Navigation Links */
+.gpm-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.gpm-breadcrumb-item {
+  font-size: 12px;
+  color: #666;
+  font-weight: 500;
+  cursor: default;
+  transition: color 0.2s ease;
+}
+
+.gpm-breadcrumb-item:not(.gpm-breadcrumb-item--active):hover { color: #390955; cursor: pointer; }
+.gpm-breadcrumb-item--active { color: #390955; font-weight: 600; }
+.gpm-breadcrumb-sep { font-size: 12px; color: #d4c8e8; user-select: none; }
+
+/* ============================================================
+   DYNAMIC MULTI-COLOR METRIC KPI BLOCKS
+   ============================================================ */
+.gpm-kpi-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.gpm-kpi-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: white;
+  border: 1.5px solid #e0d5f0;
+  border-radius: 10px;
+  padding: 14px 16px;
+  transition: all 0.2s ease;
+}
+
+.gpm-kpi-card:hover { 
+  box-shadow: 0 4px 16px rgba(57, 9, 85, 0.1); 
+  transform: translateY(-1px); 
+  border-color: #c4a8d8; 
+}
+
+.gpm-kpi-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.gpm-kpi-icon svg { width: 18px; height: 18px; }
+
+/* Dedicated color profiles per metric classification type */
+.gpm-kpi-card--total .gpm-kpi-icon { background: #f0eaf8; }
+.gpm-kpi-card--total .gpm-kpi-icon svg { stroke: #390955; }
+.gpm-kpi-card--total .gpm-kpi-value { color: #390955; }
+
+.gpm-kpi-card--delivered .gpm-kpi-icon { background: #d1fae5; }
+.gpm-kpi-card--delivered .gpm-kpi-icon svg { stroke: #065f46; }
+.gpm-kpi-card--delivered .gpm-kpi-value { color: #065f46; }
+
+.gpm-kpi-card--transit .gpm-kpi-icon { background: #fef3c7; }
+.gpm-kpi-card--transit .gpm-kpi-icon svg { stroke: #b45309; }
+.gpm-kpi-card--transit .gpm-kpi-value { color: #b45309; }
+
+.gpm-kpi-card--returned .gpm-kpi-icon { background: #fee2e2; }
+.gpm-kpi-card--returned .gpm-kpi-icon svg { stroke: #b91c1c; }
+.gpm-kpi-card--returned .gpm-kpi-value { color: #b91c1c; }
+
+.gpm-kpi-value { font-size: 22px; font-weight: 800; line-height: 1.1; }
+.gpm-kpi-label { font-size: 11px; color: #888; font-weight: 500; margin-top: 2px; }
+
+/* ─── Layout Framing Windows ─── */
+.generate-parcel-movement-content-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 24px 32px;
+}
+
+/* ─── Panel Layout Boxes ─── */
+.generate-parcel-movement-panel {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  border: 1px solid #e8e0f0;
+  box-shadow: 0 2px 8px rgba(57, 9, 85, 0.05);
+}
+
+.gpm-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1.5px solid #f0eaf8;
+}
+
+.generate-parcel-movement-panel-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin: 0;
+}
+
+/* ============================================================
+   TABLE INTERFACE CONFIGURATION
+   ============================================================ */
+.gpm-table-scroll-wrapper {
+  overflow-x: auto;
+  border-radius: 8px;
+  border: 1px solid #f0eaf8;
+}
+
+.gpm-data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px; /* Fixed from fontSize: 13px; */
+  text-align: left;
+}
+
+/* FIX: Height adjusted to 14px 16px to guarantee deep alignment breathing room */
+.gpm-data-table th {
+  background: #390955;
+  color: white;
+  padding: 14px 16px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.gpm-data-table td {
+  padding: 12px 16px;
+  color: #333;
+  border-bottom: 1px solid #f3f0f8;
+  white-space: nowrap;
+}
+
+.gpm-data-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.gpm-data-table tbody tr:nth-child(even) {
+  background: #faf9ff;
+}
+
+.gpm-data-table tbody tr:hover {
+  background: #f0eaf8 !important;
+}
+
+/* Status capsule badges matching system layout requirements */
+.gpm-status-pill {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: 100px;
+  display: inline-block;
+  white-space: nowrap;
+}
+
+/* ============================================================
+   EXPORT ACTIONS GROUPED BAR
+   ============================================================ */
+.gpm-header-actions-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.gpm-export-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s ease;
+}
+
+.gpm-export-btn--print {
+  background: #f0eaf8;
+  border: 1.5px solid #d4c8e8;
+  color: #390955;
+}
+
+.gpm-export-btn--print:hover {
+  background: #e5daf3;
+  border-color: #390955;
+}
+
+.gpm-export-btn--pdf {
+  background: #f37021;
+  border: 1.5px solid #f37021;
+  color: white;
+}
+
+.gpm-export-btn--pdf:hover {
+  background: #d95e10;
+  border-color: #d95e10;
+}
+
+/* Form inputs settings structure */
+.gpm-filter-select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1.5px solid #e0d5f0;
+  border-radius: 8px;
+  background: #faf9ff;
+  font-size: 13px;
+  color: #1a1a1a;
+  outline: none;
+  font-family: inherit;
+}
+
+.gpm-filter-select:focus {
+  border-color: #390955;
+}
+
+/* Responsive configurations */
+@media (max-width: 1200px) {
+  .gpm-kpi-row { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 768px) {
+  .gpm-kpi-row { grid-template-columns: repeat(2, 1fr); }
+  .gpm-header-actions-group { width: 100%; justify-content: flex-start; margin-top: 10px; }
+  .gpm-panel-header { flex-direction: column; align-items: flex-start; }
+}
+
+@media (max-width: 480px) {
+  .gpm-kpi-row { grid-template-columns: 1fr; }
+}

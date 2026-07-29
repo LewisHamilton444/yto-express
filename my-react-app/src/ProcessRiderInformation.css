@@ -1,0 +1,223 @@
+/* ============================================================
+   🎨 PROCESS RIDER INFORMATION CONTAINER THEME
+   ============================================================ */
+
+.process-rider-information-main-content {
+  flex: 1;
+  background-color: #f3f0f7; /* Soft tinted canvas background */
+  min-height: 100vh;
+  padding: 24px;             /* Gives breathing room around the primary interface cards */
+  box-sizing: border-box;
+}
+
+/* Internal structured layout width controller */
+.process-rider-information-container-inner {
+  max-width: 1400px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* ── MATCHING ANALYTICS DASHBOARD CARD HEADER FRAME ── */
+.process-rider-information-card-header {
+  background: #ffffff;
+  border-radius: 16px;       /* Beautiful card roundness matching dashboard style */
+  padding: 24px 32px;
+  box-shadow: 0 4px 20px rgba(57, 9, 85, 0.04);
+  border: 1px solid #e8e2f0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.process-rider-information-h1 {
+  font-size: 24px;
+  font-weight: 800;
+  color: #390955;            /* Rich deep purple palette */
+  letter-spacing: -0.5px;
+  margin: 0;
+}
+
+.process-rider-information-subtitle {
+  font-size: 13px;
+  color: #8c7f9d;
+  font-weight: 500;
+  margin: 6px 0 0 0;
+}
+
+/* Breadcrumb Navigation Lines */
+.pri-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+  border-top: 1px solid #f3eff7;
+  padding-top: 10px;
+}
+.pri-breadcrumb-item {
+  font-size: 12px;
+  color: #8c7f9d;
+  font-weight: 500;
+}
+.pri-breadcrumb-item--active {
+  color: #390955;
+  font-weight: 700;
+}
+.pri-breadcrumb-sep {
+  color: #dcd3e8;
+  font-size: 11px;
+}
+
+/* System Message Notifications */
+.process-rider-information-message {
+  padding: 14px 24px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 12px;
+  margin-bottom: 4px;
+}
+.process-rider-information-message--success {
+  background: #e6f9ed;
+  color: #1e7e34;
+  border: 1px solid #bbf7d0;
+}
+.process-rider-information-message--error {
+  background: #fdf2f2;
+  color: #9b1c1c;
+  border: 1px solid #fecaca;
+}
+
+/* Workspace Content Wrapper */
+.process-rider-information-content-area {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Primary Card Modules Container Panels */
+.process-rider-information-section {
+  background: white;
+  border-radius: 16px;
+  padding: 32px;
+  box-shadow: 0 4px 20px rgba(57, 9, 85, 0.04);
+  border: 1px solid #e8e2f0;
+}
+
+.process-rider-information-section-title {
+  font-size: 18px;
+  font-weight: 800;
+  color: #390955;
+  margin: 0 0 24px 0;
+  letter-spacing: -0.3px;
+}
+
+/* Form Grid System Blocks */
+.process-rider-information-form {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 18px 24px;
+}
+
+@media (max-width: 768px) {
+  .process-rider-information-form { grid-template-columns: 1fr; }
+}
+
+.process-rider-information-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.process-rider-information-form-group label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #7b6d8d;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.process-rider-information-form-group input,
+.process-rider-information-form-group select {
+  padding: 11px 14px;
+  border: 1px solid #dcd3e8;
+  border-radius: 8px;
+  background: white;
+  font-size: 13px;
+  font-weight: 500;
+  color: #390955;
+  transition: all 0.2s ease;
+}
+.process-rider-information-form-group input:focus,
+.process-rider-information-form-group select:focus {
+  outline: none;
+  border-color: #390955;
+  box-shadow: 0 0 0 3px rgba(57, 9, 85, 0.08);
+}
+.process-rider-information-form-group select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23390955' stroke-width='2.5'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: calc(100% - 14px) center;
+  padding-right: 36px;
+}
+
+/* Auto-Generated Fields */
+.ed-autofield-wrapper {
+  grid-column: span 1;
+}
+.ed-autofield-container {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: #f5effa;
+  border: 1.5px dashed #a05bb0;
+  font-family: monospace;
+  font-size: 13px;
+  color: #390955;
+  font-weight: 700;
+}
+.ed-autofield-badge {
+  margin-left: auto;
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  background: white;
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: #a05bb0;
+  border: 1px solid #ebdff5;
+}
+
+/* Buttons Controls */
+.process-rider-information-form-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-start;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.process-rider-information-btn {
+  padding: 11px 24px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.process-rider-information-btn--primary {
+  background: #390955;
+  color: white;
+  border: none;
+  box-shadow: 0 4px 12px rgba(57, 9, 85, 0.15);
+}
+.process-rider-information-btn--primary:hover {
+  background: #27043b;
+  transform: translateY(-1px);
+}
