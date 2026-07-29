@@ -1,0 +1,300 @@
+/* ============================================================
+   GenerateSellerReport.css — View Seller Stylesheet
+   ============================================================ */
+
+.gsr-layout {
+  display: flex;
+  flex-direction: column;
+  padding: 24px 30px 48px;
+  min-height: 100vh;
+  background: #f0ecf7;
+  font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  color: #390955;
+  box-sizing: border-box;
+}
+
+/* ── HEADER ── */
+.gsr-header {
+  margin-bottom: 24px;
+  background: white;
+  padding: 20px;
+  border-radius: 16px;
+  box-shadow: 0 4px 6px -1px rgba(57,9,85,0.07);
+}
+
+.gsr-title {
+  font-size: 22px;
+  font-weight: 800;
+  color: #390955;
+  margin: 0 0 4px 0;
+  letter-spacing: -0.5px;
+}
+
+.gsr-subtitle {
+  color: #a890c0;
+  font-size: 13px;
+  margin: 0 0 12px 0;
+  font-weight: 500;
+}
+
+.gsr-breadcrumb {
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+  gap: 8px;
+  border-top: 1px solid #f3edfb;
+  padding-top: 10px;
+  margin-top: 6px;
+}
+
+.gsr-breadcrumb-item {
+  color: #a890c0;
+  font-weight: 500;
+}
+
+.gsr-breadcrumb-sep {
+  color: #d1bce8;
+}
+
+.gsr-breadcrumb-current {
+  color: #f37021;
+  font-weight: 700;
+}
+
+/* ── PANEL ARCHITECTURE ── */
+.gsr-panel {
+  background: white;
+  border: 1px solid rgba(57,9,85,0.08);
+  border-radius: 16px;
+  margin-bottom: 20px;
+  box-shadow: 0 4px 12px rgba(57,9,85,0.04);
+  overflow: hidden;
+}
+
+.gsr-panel-header {
+  padding: 16px 24px;
+  background: #390955;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.gsr-panel-heading {
+  font-size: 15px;
+  font-weight: 700;
+  color: white;
+  margin: 0;
+  letter-spacing: -0.2px;
+}
+
+.gsr-panel-body {
+  padding: 24px;
+}
+
+/* ── FILTERS & GRIDS ── */
+.gsr-filter-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.gsr-filter-date-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.gsr-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.gsr-form-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #a890c0;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+
+.gsr-form-input {
+  padding: 10px 14px;
+  background: white;
+  border: 1.5px solid #e4d8f2;
+  border-radius: 10px;
+  color: #390955;
+  font-size: 13px;
+  font-family: inherit;
+  width: 100%;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.gsr-form-input:focus {
+  border-color: #f37021;
+}
+
+.gsr-filter-actions {
+  display: flex;
+  gap: 10px;
+}
+
+/* ── SELLER INFORMATION GRID ── */
+.gsr-info-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+
+.gsr-info-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 16px;
+  background: #faf7fd;
+  border-radius: 12px;
+  border: 1px solid #e4d8f2;
+}
+
+.gsr-info-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: #a890c0;
+}
+
+.gsr-info-value {
+  font-size: 15px;
+  font-weight: 700;
+  color: #390955;
+}
+
+/* ── KPI GRID BAR ── */
+.gsr-stats-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.gsr-stat-card {
+  padding: 16px 20px;
+  background: linear-gradient(135deg, #faf7fd 0%, #f5f0fc 100%);
+  border: 1px solid rgba(57,9,85,0.09);
+  border-radius: 12px;
+  text-align: center;
+}
+
+.gsr-stat-num {
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1;
+  font-family: 'DM Mono', monospace;
+}
+
+.gsr-stat-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: #a890c0;
+  margin-top: 6px;
+}
+
+/* ── DATA LEDGER TABLES ── */
+.gsr-table-wrapper {
+  padding: 8px 24px 24px;
+}
+
+.gsr-table-scroll {
+  overflow-x: auto;
+  border: 1px solid #e4d8f2;
+  border-radius: 12px;
+}
+
+.gsr-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.gsr-th {
+  padding: 14px 16px;
+  text-align: left;
+  font-weight: 700;
+  color: white;
+  background: #390955;
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.gsr-td {
+  padding: 14px 16px;
+  color: #390955;
+  border-bottom: 1px solid #f3edfb;
+  white-space: nowrap;
+}
+
+.gsr-table tbody tr:nth-child(even) {
+  background: #faf7fd;
+}
+
+.gsr-table tbody tr:nth-child(odd) {
+  background: white;
+}
+
+/* ── FOOTER SUBMIT OPERATIONS ── */
+.gsr-report-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+/* Custom Buttons matching system config */
+.gsr-btn-primary {
+  padding: 10px 22px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  background: #f37021;
+  color: white;
+  border: none;
+  box-shadow: 0 2px 8px rgba(243,112,33,0.25);
+  transition: background 0.2s;
+}
+
+.gsr-btn-primary:hover {
+  background: #e25e10;
+}
+
+.gsr-btn-outline {
+  padding: 10px 22px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  background: white;
+  color: #390955;
+  border: 1.5px solid #e4d8f2;
+  transition: background 0.2s;
+}
+
+.gsr-btn-outline:hover {
+  background: #faf7fd;
+}
+
+@media (max-width: 992px) {
+  .gsr-filter-grid, .gsr-stats-row, .gsr-info-grid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,0 +1,368 @@
+/* ==========================================================================
+   UNIFIED PARCEL MANAGEMENT SYSTEM STYLESHEET
+   COMPONENTS: GenerateParcelConfirmationStatus (gpcs) + GenerateParcelStatusReport (gpsr)
+   TWO-COLOR PALETTE: White + #390955 Deep Purple
+   ========================================================================== */
+
+:root {
+  /* --- GPCS Design Tokens --- */
+  --gpcs-accent:       #390955;
+  --gpcs-accent-light: #f0eaf8;
+  --gpcs-border:       #ebe4f5;
+  --gpcs-border-soft:  #f5f0ff;
+  --gpcs-bg:           #f4f1fb;
+  --gpcs-surface:      #faf8ff;
+
+  /* --- GPSR Design Tokens --- */
+  --gpsr-accent:       #390955;
+  --gpsr-accent-light: #f0eaf8;
+  --gpsr-border:       #e0d5f0;
+  --gpsr-bg:           #f9f7ff;
+}
+
+/* ==========================================================================
+   COMPONENT 1: GENERATE PARCEL CONFIRMATION STATUS (gpcs)
+   ========================================================================== */
+
+.generate-parcel-confirmation-status-wrapper {
+  display: flex; 
+  min-height: 100vh;
+  background: var(--gpcs-bg);
+  font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.generate-parcel-confirmation-status-main-content { 
+  flex: 1; 
+  overflow-y: auto; 
+  background: var(--gpcs-bg); 
+}
+.generate-parcel-confirmation-status-main-content::-webkit-scrollbar { width: 7px; }
+.generate-parcel-confirmation-status-main-content::-webkit-scrollbar-track { background: var(--gpcs-bg); }
+.generate-parcel-confirmation-status-main-content::-webkit-scrollbar-thumb { background: #d4c8e8; border-radius: 4px; }
+
+/* ── Page Header ── */
+.gpcs-page-header { background: white; border-bottom: 1px solid #e0d5f0; padding: 24px 32px 20px; }
+.gpcs-page-title { font-size: 24px; font-weight: 800; color: #1a1a1a; letter-spacing: -0.5px; margin: 0 0 3px 0; }
+.gpcs-page-subtitle { font-size: 13px; color: #888; margin: 0; }
+.gpcs-breadcrumb { display: flex; align-items: center; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+.gpcs-breadcrumb-item { font-size: 12px; color: #999; font-weight: 500; }
+.gpcs-breadcrumb-item--active { color: var(--gpcs-accent); font-weight: 700; }
+.gpcs-breadcrumb-sep { font-size: 12px; color: #ddd; }
+
+/* ── KPI Row ── */
+.gpcs-kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 18px; }
+.gpcs-kpi-card { display: flex; align-items: center; gap: 12px; background: white; border: 1.5px solid #e8e0f5; border-radius: 10px; padding: 13px 16px; }
+.gpcs-kpi-card--accent { background: var(--gpcs-accent); border-color: var(--gpcs-accent); }
+.gpcs-kpi-icon { width: 34px; height: 34px; background: var(--gpcs-accent-light); border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.gpcs-kpi-icon--white { background: rgba(255,255,255,0.18); }
+.gpcs-kpi-value { font-size: 18px; font-weight: 800; color: var(--gpcs-accent); }
+.gpcs-kpi-value--white { color: white; }
+.gpcs-kpi-label { font-size: 11px; color: #aaa; font-weight: 500; margin-top: 2px; }
+.gpcs-kpi-label--white { color: rgba(255,255,255,0.7); }
+
+/* ── Filter Bar ── */
+.gpcs-filter-bar { display: flex; align-items: center; gap: 10px; padding: 14px 32px; background: white; border-bottom: 1px solid #ede8f8; }
+.gpcs-filter-label { font-size: 11px; font-weight: 700; color: #aaa; text-transform: uppercase; letter-spacing: 0.6px; margin-right: 4px; }
+.gpcs-filter-btn { padding: 6px 14px; border-radius: 20px; border: 1.5px solid #e0d5f0; background: white; color: #555; font-size: 12px; font-weight: 700; cursor: pointer; font-family: inherit; transition: border-color 0.15s, color 0.15s; }
+.gpcs-filter-btn:hover { border-color: var(--gpcs-accent); color: var(--gpcs-accent); }
+.gpcs-filter-btn--active { background: var(--gpcs-accent); border-color: var(--gpcs-accent); color: white; }
+
+/* ── Body Layout ── */
+.gpcs-body { padding: 24px 32px; display: flex; flex-direction: column; gap: 20px; }
+
+/* ── Cards & Badges ── */
+.gpcs-card { background: white; border-radius: 14px; border: 1px solid var(--gpcs-border); box-shadow: 0 2px 12px rgba(57,9,85,0.06); overflow: hidden; }
+.gpcs-card-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1.5px solid var(--gpcs-border-soft); }
+.gpcs-card-icon { width: 26px; height: 26px; background: var(--gpcs-accent); border-radius: 7px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.gpcs-card-title { font-size: 13px; font-weight: 700; color: #1a1a1a; }
+.gpcs-badge { font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 20px; white-space: nowrap; }
+.gpcs-badge--light { background: var(--gpcs-accent-light); color: var(--gpcs-accent); }
+.gpcs-badge--solid { background: var(--gpcs-accent); color: white; }
+
+/* ── Search Bar ── */
+.gpcs-search-bar { padding: 12px 20px; background: #fdfcff; border-bottom: 1px solid var(--gpcs-border-soft); display: flex; align-items: center; gap: 10px; }
+.gpcs-search-wrap { position: relative; flex: 1; max-width: 440px; }
+.gpcs-search-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); pointer-events: none; }
+.gpcs-search-input { width: 100%; padding: 9px 36px; border: 1.5px solid #e0d5f0; border-radius: 8px; font-size: 13px; color: #1a1a1a; background: white; font-family: inherit; box-sizing: border-box; transition: border-color 0.2s, box-shadow 0.2s; outline: none; }
+.gpcs-search-input:focus { border-color: var(--gpcs-accent); box-shadow: 0 0 0 3px rgba(57,9,85,0.1); }
+.gpcs-search-input::placeholder { color: #bbb; }
+.gpcs-search-clear { position: absolute; right: 9px; top: 50%; transform: translateY(-50%); width: 19px; height: 19px; border-radius: 50%; border: none; background: #d4c8e8; color: #666; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; transition: background 0.15s; }
+.gpcs-search-clear:hover { background: #c4a8d8; }
+.gpcs-search-count { font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 20px; }
+.gpcs-search-count--match { color: var(--gpcs-accent); background: var(--gpcs-accent-light); }
+.gpcs-search-count--none  { color: #c2410c; background: #fff7ed; }
+
+/* ── Data Tables ── */
+.gpcs-table-wrap { overflow-x: auto; }
+.gpcs-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.gpcs-table thead tr { background: var(--gpcs-surface); border-bottom: 2px solid var(--gpcs-accent-light); }
+.gpcs-th { padding: 11px 14px; text-align: left; font-weight: 700; font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; cursor: pointer; user-select: none; transition: color 0.15s, background 0.15s; }
+.gpcs-th:hover { background: #f8f4ff; color: var(--gpcs-accent); }
+.gpcs-th--active { color: var(--gpcs-accent); border-bottom: 2px solid var(--gpcs-accent); }
+.gpcs-tr { border-bottom: 1px solid var(--gpcs-border-soft); cursor: pointer; transition: background 0.12s; }
+.gpcs-tr:hover td { background: #faf6ff; }
+.gpcs-tr--selected td { background: var(--gpcs-accent); }
+.gpcs-tr--selected td, .gpcs-tr--selected td * { color: white !important; opacity: 1 !important; }
+.gpcs-td { padding: 12px 14px; white-space: nowrap; }
+.gpcs-td--id   { font-weight: 800; font-size: 13px; color: var(--gpcs-accent); font-family: monospace; }
+.gpcs-td--mono { font-family: 'Courier New', monospace; font-size: 11px; color: #666; }
+.gpcs-td--bold { font-weight: 600; color: #1a1a1a; }
+.gpcs-td--muted { color: #555; }
+.gpcs-service-tag { font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 5px; white-space: nowrap; }
+
+/* Table Actions */
+.gpcs-actions-cell { padding: 12px 14px; text-align: center; white-space: nowrap; }
+.gpcs-actions-wrap { display: inline-flex; gap: 6px; align-items: center; }
+.gpcs-view-btn { font-size: 11px; font-weight: 700; padding: 5px 11px; border-radius: 6px; border: 1.5px solid var(--gpcs-accent); background: transparent; color: var(--gpcs-accent); cursor: pointer; font-family: inherit; display: inline-flex; align-items: center; gap: 4px; transition: background 0.15s, color 0.15s; }
+.gpcs-view-btn:hover { background: var(--gpcs-accent); color: white; }
+.gpcs-view-btn--inv { border-color: rgba(255,255,255,0.5); color: white; }
+.gpcs-view-btn--inv:hover { background: rgba(255,255,255,0.2); }
+.gpcs-select-btn { font-size: 11px; font-weight: 700; padding: 5px 11px; border-radius: 6px; border: none; background: var(--gpcs-accent); color: white; cursor: pointer; font-family: inherit; display: inline-flex; align-items: center; gap: 4px; transition: background 0.15s; }
+.gpcs-select-btn:hover { background: #4d0c72; }
+.gpcs-select-btn--active { background: rgba(255,255,255,0.2); }
+.gpcs-table-footer { padding: 10px 20px; border-top: 1px solid var(--gpcs-border-soft); display: flex; align-items: center; justify-content: space-between; background: var(--gpcs-surface); font-size: 11px; color: #aaa; }
+
+/* ── Modal Overlay & Card ── */
+.gpcs-modal-overlay { position: fixed; inset: 0; background: rgba(20,5,35,0.55); z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 24px; backdrop-filter: blur(3px); }
+.gpcs-modal { background: white; border-radius: 18px; width: 100%; max-width: 580px; max-height: 90vh; overflow-y: auto; box-shadow: 0 32px 80px rgba(57,9,85,0.25); animation: gpcs-modal-in 0.22s cubic-bezier(0.34,1.56,0.64,1) both; }
+
+@keyframes gpcs-modal-in {
+  from { opacity: 0; transform: scale(0.95) translateY(10px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.gpcs-modal-header { padding: 22px 24px 16px; border-bottom: 1.5px solid var(--gpcs-border-soft); display: flex; align-items: flex-start; justify-content: space-between; position: sticky; top: 0; background: white; z-index: 1; border-radius: 18px 18px 0 0; }
+.gpcs-modal-icon { width: 44px; height: 44px; background: var(--gpcs-accent); border-radius: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.gpcs-modal-id { font-size: 17px; font-weight: 800; color: #1a1a1a; letter-spacing: -0.4px; }
+.gpcs-modal-tracking { font-size: 11px; color: #aaa; font-family: monospace; margin-top: 3px; }
+.gpcs-modal-close { width: 30px; height: 30px; border-radius: 8px; border: 1.5px solid #e0d5f0; background: white; cursor: pointer; display: flex; align-items: center; justify-content: center; color: #999; font-size: 14px; transition: background 0.15s; }
+.gpcs-modal-close:hover { background: #f5f0ff; }
+.gpcs-modal-body { padding: 20px 24px; display: flex; flex-direction: column; gap: 18px; }
+.gpcs-modal-from-to { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.gpcs-modal-party { background: var(--gpcs-surface); border: 1.5px solid var(--gpcs-border); border-radius: 10px; padding: 14px 15px; }
+.gpcs-modal-party-label { font-size: 10px; font-weight: 700; color: #aaa; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+.gpcs-modal-party-name { font-size: 13px; font-weight: 700; color: #1a1a1a; }
+.gpcs-modal-party-sub { font-size: 11px; color: #888; margin-top: 3px; font-family: monospace; }
+.gpcs-modal-address { background: var(--gpcs-surface); border: 1.5px solid var(--gpcs-border); border-radius: 10px; padding: 14px 15px; display: flex; gap: 11px; align-items: flex-start; }
+.gpcs-modal-section-title { font-size: 11px; font-weight: 700; color: var(--gpcs-accent); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; }
+.gpcs-modal-details-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.gpcs-modal-detail-cell { background: white; border: 1px solid var(--gpcs-border); border-radius: 8px; padding: 10px 12px; }
+.gpcs-modal-detail-label { font-size: 10px; color: #aaa; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 3px; }
+.gpcs-modal-detail-value { font-size: 12px; font-weight: 700; color: #1a1a1a; word-break: break-all; }
+.gpcs-modal-instructions { display: flex; gap: 11px; align-items: flex-start; background: #f5f0ff; border: 1.5px solid #ddd0f8; border-radius: 10px; padding: 13px 15px; }
+.gpcs-modal-instr-label { font-size: 10px; font-weight: 700; color: var(--gpcs-accent); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+.gpcs-modal-instr-text { font-size: 12px; font-weight: 600; color: var(--gpcs-accent); }
+.gpcs-modal-footer { padding: 16px 24px 20px; border-top: 1.5px solid var(--gpcs-border-soft); display: flex; gap: 10px; position: sticky; bottom: 0; background: white; border-radius: 0 0 18px 18px; }
+.gpcs-modal-close-btn { flex: 1; padding: 11px; border-radius: 9px; border: 1.5px solid #e0d5f0; background: white; color: #666; font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit; }
+.gpcs-modal-select-btn { flex: 2; padding: 11px; border-radius: 9px; border: none; background: var(--gpcs-accent); color: white; font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit; display: flex; align-items: center; justify-content: center; gap: 7px; transition: background 0.15s; }
+.gpcs-modal-select-btn:hover { background: #4d0c72; }
+
+/* ── Detail Panels ── */
+.gpcs-detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; animation: gpcs-slide-up 0.28s ease both; }
+.gpcs-detail-left { display: flex; flex-direction: column; gap: 20px; }
+
+@keyframes gpcs-slide-up {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.gpcs-fields-grid { padding: 16px 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.gpcs-field-cell { display: flex; flex-direction: column; gap: 3px; }
+.gpcs-field-cell--full { grid-column: 1 / -1; }
+.gpcs-field-label { font-size: 10px; color: #aaa; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; }
+.gpcs-field-value { font-size: 12px; color: #1a1a1a; font-weight: 700; }
+.gpcs-field-value--accent { color: var(--gpcs-accent); }
+.gpcs-gps-body { padding: 16px 20px; display: flex; flex-direction: column; gap: 14px; }
+.gpcs-coords-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.gpcs-coord-tile { background: var(--gpcs-surface); border: 1px solid var(--gpcs-border); border-radius: 8px; padding: 9px 11px; }
+.gpcs-sig-block { background: var(--gpcs-accent); border-radius: 12px; padding: 18px; color: white; display: flex; flex-direction: column; gap: 14px; }
+.gpcs-sig-code { font-size: 13px; font-weight: 800; font-family: 'Courier New', monospace; letter-spacing: 1px; background: rgba(255,255,255,0.15); padding: 10px 13px; border-radius: 7px; word-break: break-all; }
+.gpcs-sig-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.gpcs-summary-block { background: var(--gpcs-surface); border: 1.5px solid var(--gpcs-border); border-radius: 12px; padding: 16px; }
+.gpcs-summary-head { font-size: 11px; font-weight: 700; color: var(--gpcs-accent); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1.5px solid var(--gpcs-accent-light); }
+.gpcs-summary-row { display: flex; justify-content: space-between; align-items: flex-start; padding: 7px 0; font-size: 12px; color: #666; border-bottom: 1px solid var(--gpcs-border-soft); gap: 8px; }
+.gpcs-summary-row:last-child { border-bottom: none; }
+.gpcs-summary-val { color: #1a1a1a; text-align: right; word-break: break-word; font-size: 11px; max-width: 60%; font-weight: 700; }
+.gpcs-summary-val--mono { font-family: 'Courier New', monospace; }
+
+/* ── UI Action Components ── */
+.gpcs-action-btn { display: flex; align-items: center; justify-content: center; gap: 7px; padding: 10px 16px; background: var(--gpcs-accent); color: white; border: none; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; transition: all 0.2s ease; width: 100%; font-family: inherit; }
+.gpcs-action-btn:hover { background: #4d0c72; box-shadow: 0 4px 14px rgba(57,9,85,0.3); transform: translateY(-1px); }
+.gpcs-action-btn--outline { background: white; color: var(--gpcs-accent); border: 2px solid var(--gpcs-accent); }
+.gpcs-action-btn--outline:hover { background: var(--gpcs-accent); color: white; }
+.gpcs-empty-box { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 40px 16px; background: var(--gpcs-surface); border: 1.5px dashed #d4c8e8; border-radius: 10px; text-align: center; }
+.gpcs-empty-box p { font-size: 12px; color: #bbb; margin: 0; }
+
+@keyframes gpcs-spin { to { transform: rotate(360deg); } }
+
+
+/* ==========================================================================
+   COMPONENT 2: GENERATE PARCEL STATUS REPORT (gpsr)
+   ========================================================================== */
+
+.generate-parcel-status-report-wrapper {
+  display: flex;
+  min-height: 100vh;
+  background-color: var(--gpsr-bg);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+.generate-parcel-status-report-main-content {
+  flex: 1;
+  overflow-y: auto;
+  background-color: var(--gpsr-bg);
+}
+
+.generate-parcel-status-report-main-content::-webkit-scrollbar { width: 8px; }
+.generate-parcel-status-report-main-content::-webkit-scrollbar-track { background: var(--gpsr-bg); }
+.generate-parcel-status-report-main-content::-webkit-scrollbar-thumb { background: #d4c8e8; border-radius: 4px; }
+
+/* ── Page Header ── */
+.gpsr-page-header { background: white; border-bottom: 1px solid var(--gpsr-border); padding: 24px 32px 20px; }
+.gpsr-page-title { font-size: 26px; font-weight: 800; color: #1a1a1a; letter-spacing: -0.5px; line-height: 1.2; margin: 0 0 4px 0; }
+.gpsr-page-subtitle { font-size: 13px; color: #666; font-weight: 400; margin: 2px 0 0 0; }
+.gpsr-breadcrumb { display: flex; align-items: center; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+.gpsr-breadcrumb-item { font-size: 12px; color: #666; font-weight: 500; }
+.gpsr-breadcrumb-item--active { color: var(--gpsr-accent); font-weight: 600; }
+.gpsr-breadcrumb-sep { font-size: 12px; color: var(--gpsr-border); }
+
+/* ── KPI Row ── */
+.gpsr-kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 20px; }
+.gpsr-kpi-card { display: flex; align-items: center; gap: 12px; background: white; border: 1.5px solid var(--gpsr-border); border-radius: 10px; padding: 14px 16px; }
+.gpsr-kpi-card--accent { background: var(--gpsr-accent); border-color: var(--gpsr-accent); }
+.gpsr-kpi-icon { width: 36px; height: 36px; background: var(--gpsr-accent-light); border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.gpsr-kpi-icon--white { background: rgba(255,255,255,0.2); }
+.gpsr-kpi-value { font-size: 19px; font-weight: 800; color: var(--gpsr-accent); }
+.gpsr-kpi-value--white { color: white; }
+.gpsr-kpi-label { font-size: 11px; color: #888; font-weight: 500; margin-top: 2px; }
+.gpsr-kpi-label--white { color: rgba(255,255,255,0.75); }
+
+/* ── Workspace Split Layout ── */
+.gpsr-body-layout { display: grid; grid-template-columns: 300px 1fr; gap: 20px; padding: 24px 32px; }
+.gpsr-right-col { display: flex; flex-direction: column; gap: 20px; }
+.gpsr-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+
+/* ── Content Panels ── */
+.generate-parcel-status-report-panel { background: white; border-radius: 12px; padding: 20px; border: 1px solid #e8e0f0; box-shadow: 0 2px 8px rgba(57,9,85,0.05); }
+.gpsr-panel-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1.5px solid var(--gpsr-accent-light); }
+.gpsr-panel-title-row { display: flex; align-items: center; gap: 8px; }
+.gpsr-panel-icon { width: 26px; height: 26px; background: var(--gpsr-accent); border-radius: 6px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.generate-parcel-status-report-panel-title { font-size: 14px; font-weight: 700; color: #1a1a1a; margin: 0; }
+.gpsr-count-badge { font-size: 11px; font-weight: 700; background: var(--gpsr-accent-light); color: var(--gpsr-accent); padding: 3px 10px; border-radius: 20px; }
+.gpsr-status-pill { font-size: 11px; font-weight: 700; background: var(--gpsr-accent); color: white; padding: 3px 10px; border-radius: 20px; }
+.generate-parcel-status-report-panel-body { display: flex; flex-direction: column; gap: 12px; }
+
+/* ── Parcel Selection List (Sidebar) ── */
+.generate-parcel-status-report-parcel-item { background: #faf9ff; border: 1.5px solid var(--gpsr-border); border-radius: 8px; padding: 12px; cursor: pointer; transition: all 0.2s ease; display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+.generate-parcel-status-report-parcel-item:hover { background: var(--gpsr-accent-light); border-color: var(--gpsr-accent); }
+.generate-parcel-status-report-parcel-item--active { background: var(--gpsr-accent); border-color: var(--gpsr-accent); color: white; }
+.generate-parcel-status-report-parcel-id { font-weight: 700; font-size: 13px; margin-bottom: 2px; }
+.generate-parcel-status-report-parcel-receiver { font-size: 12px; opacity: 0.85; margin-bottom: 2px; }
+.gpsr-parcel-sender { font-size: 11px; opacity: 0.65; }
+.gpsr-service-tag { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 4px; background: var(--gpsr-accent-light); color: var(--gpsr-accent); }
+.generate-parcel-status-report-parcel-item--active .gpsr-service-tag { background: rgba(255,255,255,0.2); color: white; }
+
+/* ── Focused Parcel Details ── */
+.gpsr-parcel-detail-card { background: #faf9ff; border: 1.5px solid var(--gpsr-border); border-radius: 10px; padding: 14px; }
+.gpsr-detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.gpsr-detail-cell { display: flex; flex-direction: column; gap: 2px; }
+.gpsr-detail-cell--full { grid-column: 1 / -1; }
+.gpsr-detail-cell span { font-size: 10px; color: #999; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; }
+.gpsr-detail-cell strong { font-size: 12px; color: #1a1a1a; font-weight: 700; }
+
+/* ── Dynamic Report Meta Data ── */
+.gpsr-report-meta { background: #faf9ff; border: 1.5px solid var(--gpsr-border); border-radius: 10px; padding: 12px; margin-bottom: 14px; display: flex; flex-direction: column; gap: 0; }
+.gpsr-meta-row { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: #666; padding: 6px 0; border-bottom: 1px solid var(--gpsr-accent-light); }
+.gpsr-meta-row:last-child { border-bottom: none; }
+.gpsr-meta-row strong { color: #1a1a1a; font-weight: 700; font-size: 12px; }
+.gpsr-status-badge { background: var(--gpsr-accent); color: white; font-size: 10px; font-weight: 700; padding: 3px 10px; border-radius: 20px; }
+
+/* ── Journey Timeline Tracking ── */
+.gpsr-timeline-heading { font-size: 11px; font-weight: 700; color: var(--gpsr-accent); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; }
+.gpsr-timeline-item { display: flex; gap: 12px; align-items: flex-start; }
+.gpsr-timeline-track { display: flex; flex-direction: column; align-items: center; flex-shrink: 0; width: 16px; }
+.gpsr-timeline-dot { width: 12px; height: 12px; border-radius: 50%; background: var(--gpsr-accent); border: 2px solid white; box-shadow: 0 0 0 2px rgba(57,9,85,0.2); margin-top: 4px; }
+.gpsr-timeline-dot--final { width: 14px; height: 14px; }
+.gpsr-timeline-line { width: 2px; flex: 1; min-height: 20px; background: rgba(57,9,85,0.15); margin: 2px 0; }
+.gpsr-timeline-body { flex: 1; padding-bottom: 14px; }
+.gpsr-timeline-item:last-child .gpsr-timeline-body { padding-bottom: 0; }
+.gpsr-timeline-time { font-size: 10px; font-weight: 700; color: var(--gpsr-accent); font-family: monospace; }
+.gpsr-timeline-event { font-size: 13px; font-weight: 700; color: #1a1a1a; margin: 2px 0; }
+.gpsr-timeline-loc { font-size: 11px; color: #888; }
+
+/* ── Export Formats Configuration ── */
+.gpsr-format-label { font-size: 11px; font-weight: 700; color: var(--gpsr-accent); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+.gpsr-format-card { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: #faf9ff; border: 1.5px solid var(--gpsr-border); border-radius: 8px; cursor: pointer; transition: all 0.2s ease; margin-bottom: 8px; }
+.gpsr-format-card:hover, .gpsr-format-card--active { border-color: var(--gpsr-accent); background: var(--gpsr-accent-light); }
+.gpsr-format-icon { width: 32px; height: 32px; background: var(--gpsr-accent); border-radius: 6px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.gpsr-format-name { font-size: 13px; font-weight: 700; color: #1a1a1a; }
+.gpsr-format-desc { font-size: 11px; color: #888; margin-top: 1px; }
+.gpsr-format-check { width: 20px; height: 20px; background: var(--gpsr-accent); border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-left: auto; }
+
+/* ── Report Print Layout Configurations ── */
+.gpsr-print-desc { font-size: 12px; color: #666; line-height: 1.6; background: #faf9ff; border: 1px solid var(--gpsr-border); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; }
+.gpsr-print-preview { border: 1.5px solid var(--gpsr-border); border-radius: 10px; overflow: hidden; margin-top: 12px; }
+.gpsr-preview-bar { display: flex; align-items: center; gap: 6px; background: var(--gpsr-accent); padding: 8px 12px; font-size: 11px; font-weight: 700; color: rgba(255,255,255,0.9); }
+.gpsr-preview-dot { width: 7px; height: 7px; border-radius: 50%; background: rgba(255,255,255,0.4); }
+.gpsr-preview-body { padding: 14px; background: white; display: flex; flex-direction: column; gap: 6px; }
+.gpsr-preview-title { font-size: 13px; font-weight: 800; color: var(--gpsr-accent); }
+.gpsr-preview-sub { font-size: 10px; color: #888; }
+.gpsr-preview-divider { height: 1px; background: var(--gpsr-border); margin: 4px 0; }
+.gpsr-preview-row { display: flex; justify-content: space-between; font-size: 11px; color: #666; }
+.gpsr-preview-row strong { color: #1a1a1a; }
+.gpsr-preview-pill { background: var(--gpsr-accent); color: white; font-size: 9px; font-weight: 700; padding: 2px 8px; border-radius: 10px; }
+
+/* ── Form Actions & Buttons ── */
+.gpsr-action-btn { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 11px 16px; background: var(--gpsr-accent); color: white; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s ease; width: 100%; font-family: inherit; }
+.gpsr-action-btn:hover { background: #4d0c72; }
+.gpsr-action-btn--outline { background: white; color: var(--gpsr-accent); border: 2px solid var(--gpsr-accent); }
+.gpsr-action-btn--outline:hover { background: var(--gpsr-accent); color: white; }
+.gpsr-empty-box { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 60px 24px; background: #faf9ff; border: 1.5px dashed #d4c8e8; border-radius: 10px; text-align: center; }
+.gpsr-empty-box p { font-size: 13px; color: #aaa; margin: 0; }
+
+
+/* ==========================================================================
+   SHARED RESPONSIVE MEDIA QUERIES (Unified Breakpoints)
+   ========================================================================== */
+
+@media (max-width: 1280px) {
+  .gpcs-kpi-row { grid-template-columns: repeat(2, 1fr); }
+  .gpcs-detail-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 1200px) {
+  .gpsr-kpi-row { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 900px) {
+  /* GPCS Component Adjustments */
+  .gpcs-body { padding: 16px; }
+  .gpcs-filter-bar { padding: 12px 16px; flex-wrap: wrap; }
+  .gpcs-fields-grid { grid-template-columns: 1fr; }
+  .gpcs-modal-details-grid { grid-template-columns: 1fr 1fr; }
+
+  /* GPSR Component Adjustments */
+  .gpsr-body-layout { grid-template-columns: 1fr; }
+  .gpsr-row-2 { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 768px) {
+  /* GPCS Layout Overrides */
+  .gpcs-page-header { padding: 16px; }
+  .gpcs-page-title { font-size: 20px; }
+  .gpcs-modal-from-to { grid-template-columns: 1fr; }
+
+  /* GPSR Layout Overrides */
+  .gpsr-page-header { padding: 16px; }
+  .gpsr-page-title { font-size: 20px; }
+  .gpsr-body-layout { padding: 16px; }
+}
+
+@media (max-width: 480px) {
+  /* Final Compact Layout Adjustments */
+  .gpcs-kpi-row { grid-template-columns: 1fr; }
+  .gpcs-modal-details-grid { grid-template-columns: 1fr; }
+  .gpcs-sig-fields { grid-template-columns: 1fr; }
+  
+  .gpsr-kpi-row { grid-template-columns: 1fr; }
+}

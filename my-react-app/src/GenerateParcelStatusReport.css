@@ -1,0 +1,354 @@
+/* ============================================================
+   GenerateParcelStatusReport.css
+   TWO-COLOR PALETTE: white + #390955
+   ============================================================ */
+
+:root {
+  --gpsr-accent: #390955;
+  --gpsr-accent-light: #f0eaf8;
+  --gpsr-border: #e0d5f0;
+  --gpsr-bg: #f9f7ff;
+}
+
+/* ── Wrapper ── */
+.generate-parcel-status-report-wrapper {
+  display: flex;
+  min-height: 100vh;
+  background-color: var(--gpsr-bg);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+/* ============================================================
+   MAIN CONTENT
+   ============================================================ */
+
+.generate-parcel-status-report-main-content {
+  flex: 1;
+  overflow-y: auto;
+  background-color: var(--gpsr-bg);
+}
+
+.generate-parcel-status-report-main-content::-webkit-scrollbar { width: 8px; }
+.generate-parcel-status-report-main-content::-webkit-scrollbar-track { background: var(--gpsr-bg); }
+.generate-parcel-status-report-main-content::-webkit-scrollbar-thumb { background: #d4c8e8; border-radius: 4px; }
+
+/* ============================================================
+   PAGE HEADER (unchanged)
+   ============================================================ */
+
+.gpsr-page-header {
+  background: white;
+  border-bottom: 1px solid var(--gpsr-border);
+  padding: 24px 32px 20px;
+}
+
+.gpsr-page-title {
+  font-size: 26px; font-weight: 800; color: #1a1a1a;
+  letter-spacing: -0.5px; line-height: 1.2; margin: 0 0 4px 0;
+}
+
+.gpsr-page-subtitle { font-size: 13px; color: #666; font-weight: 400; margin: 2px 0 0 0; }
+
+.gpsr-breadcrumb { display: flex; align-items: center; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+.gpsr-breadcrumb-item { font-size: 12px; color: #666; font-weight: 500; }
+.gpsr-breadcrumb-item--active { color: var(--gpsr-accent); font-weight: 600; }
+.gpsr-breadcrumb-sep { font-size: 12px; color: var(--gpsr-border); }
+
+.gpsr-kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 20px; }
+
+.gpsr-kpi-card {
+  display: flex; align-items: center; gap: 12px;
+  background: white; border: 1.5px solid var(--gpsr-border);
+  border-radius: 10px; padding: 14px 16px;
+}
+
+.gpsr-kpi-card--accent { background: var(--gpsr-accent); border-color: var(--gpsr-accent); }
+
+.gpsr-kpi-icon {
+  width: 36px; height: 36px; background: var(--gpsr-accent-light);
+  border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+
+.gpsr-kpi-icon--white { background: rgba(255,255,255,0.2); }
+.gpsr-kpi-value { font-size: 19px; font-weight: 800; color: var(--gpsr-accent); }
+.gpsr-kpi-value--white { color: white; }
+.gpsr-kpi-label { font-size: 11px; color: #888; font-weight: 500; margin-top: 2px; }
+.gpsr-kpi-label--white { color: rgba(255,255,255,0.75); }
+
+/* ============================================================
+   BODY LAYOUT — sidebar + right column
+   ============================================================ */
+
+.gpsr-body-layout {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  gap: 20px;
+  padding: 24px 32px;
+}
+
+.gpsr-right-col {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.gpsr-row-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+/* ── Panel ── */
+.generate-parcel-status-report-panel {
+  background: white; border-radius: 12px; padding: 20px;
+  border: 1px solid #e8e0f0;
+  box-shadow: 0 2px 8px rgba(57,9,85,0.05);
+}
+
+.gpsr-panel-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1.5px solid var(--gpsr-accent-light);
+}
+
+.gpsr-panel-title-row { display: flex; align-items: center; gap: 8px; }
+
+.gpsr-panel-icon {
+  width: 26px; height: 26px; background: var(--gpsr-accent);
+  border-radius: 6px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+
+.generate-parcel-status-report-panel-title {
+  font-size: 14px; font-weight: 700; color: #1a1a1a; margin: 0;
+}
+
+.gpsr-count-badge {
+  font-size: 11px; font-weight: 700;
+  background: var(--gpsr-accent-light); color: var(--gpsr-accent);
+  padding: 3px 10px; border-radius: 20px;
+}
+
+.gpsr-status-pill {
+  font-size: 11px; font-weight: 700;
+  background: var(--gpsr-accent); color: white;
+  padding: 3px 10px; border-radius: 20px;
+}
+
+.generate-parcel-status-report-panel-body { display: flex; flex-direction: column; gap: 12px; }
+
+/* ============================================================
+   PARCEL LIST (sidebar)
+   ============================================================ */
+
+.generate-parcel-status-report-parcel-item {
+  background: #faf9ff; border: 1.5px solid var(--gpsr-border);
+  border-radius: 8px; padding: 12px; cursor: pointer;
+  transition: all 0.2s ease; display: flex; justify-content: space-between; align-items: flex-start;
+  margin-bottom: 8px;
+}
+
+.generate-parcel-status-report-parcel-item:hover { background: var(--gpsr-accent-light); border-color: var(--gpsr-accent); }
+.generate-parcel-status-report-parcel-item--active { background: var(--gpsr-accent); border-color: var(--gpsr-accent); color: white; }
+
+.generate-parcel-status-report-parcel-id { font-weight: 700; font-size: 13px; margin-bottom: 2px; }
+.generate-parcel-status-report-parcel-receiver { font-size: 12px; opacity: 0.85; margin-bottom: 2px; }
+.gpsr-parcel-sender { font-size: 11px; opacity: 0.65; }
+
+.gpsr-service-tag {
+  font-size: 10px; font-weight: 700;
+  padding: 2px 7px; border-radius: 4px;
+  background: var(--gpsr-accent-light); color: var(--gpsr-accent);
+}
+
+.generate-parcel-status-report-parcel-item--active .gpsr-service-tag {
+  background: rgba(255,255,255,0.2); color: white;
+}
+
+/* ============================================================
+   PARCEL DETAIL CARD
+   ============================================================ */
+
+.gpsr-parcel-detail-card {
+  background: #faf9ff; border: 1.5px solid var(--gpsr-border); border-radius: 10px; padding: 14px;
+}
+
+.gpsr-detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.gpsr-detail-cell { display: flex; flex-direction: column; gap: 2px; }
+.gpsr-detail-cell--full { grid-column: 1 / -1; }
+.gpsr-detail-cell span { font-size: 10px; color: #999; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; }
+.gpsr-detail-cell strong { font-size: 12px; color: #1a1a1a; font-weight: 700; }
+
+/* ============================================================
+   REPORT / STATUS PANEL
+   ============================================================ */
+
+.gpsr-report-meta {
+  background: #faf9ff; border: 1.5px solid var(--gpsr-border);
+  border-radius: 10px; padding: 12px; margin-bottom: 14px;
+  display: flex; flex-direction: column; gap: 0;
+}
+
+.gpsr-meta-row {
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 12px; color: #666;
+  padding: 6px 0; border-bottom: 1px solid var(--gpsr-accent-light);
+}
+
+.gpsr-meta-row:last-child { border-bottom: none; }
+.gpsr-meta-row strong { color: #1a1a1a; font-weight: 700; font-size: 12px; }
+
+.gpsr-status-badge {
+  background: var(--gpsr-accent); color: white;
+  font-size: 10px; font-weight: 700; padding: 3px 10px; border-radius: 20px;
+}
+
+/* Timeline */
+.gpsr-timeline-heading {
+  font-size: 11px; font-weight: 700; color: var(--gpsr-accent);
+  text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px;
+}
+
+.gpsr-timeline-item { display: flex; gap: 12px; align-items: flex-start; }
+
+.gpsr-timeline-track {
+  display: flex; flex-direction: column; align-items: center; flex-shrink: 0; width: 16px;
+}
+
+.gpsr-timeline-dot {
+  width: 12px; height: 12px; border-radius: 50%;
+  background: var(--gpsr-accent);
+  border: 2px solid white; box-shadow: 0 0 0 2px rgba(57,9,85,0.2); margin-top: 4px;
+}
+
+.gpsr-timeline-dot--final { width: 14px; height: 14px; }
+
+.gpsr-timeline-line {
+  width: 2px; flex: 1; min-height: 20px;
+  background: rgba(57,9,85,0.15); margin: 2px 0;
+}
+
+.gpsr-timeline-body { flex: 1; padding-bottom: 14px; }
+.gpsr-timeline-item:last-child .gpsr-timeline-body { padding-bottom: 0; }
+.gpsr-timeline-time { font-size: 10px; font-weight: 700; color: var(--gpsr-accent); font-family: monospace; }
+.gpsr-timeline-event { font-size: 13px; font-weight: 700; color: #1a1a1a; margin: 2px 0; }
+.gpsr-timeline-loc { font-size: 11px; color: #888; }
+
+/* ============================================================
+   EXPORT SECTION
+   ============================================================ */
+
+.gpsr-format-label {
+  font-size: 11px; font-weight: 700; color: var(--gpsr-accent);
+  text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;
+}
+
+.gpsr-format-card {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px;
+  background: #faf9ff; border: 1.5px solid var(--gpsr-border);
+  border-radius: 8px; cursor: pointer; transition: all 0.2s ease;
+  margin-bottom: 8px;
+}
+
+.gpsr-format-card:hover, .gpsr-format-card--active { border-color: var(--gpsr-accent); background: var(--gpsr-accent-light); }
+
+.gpsr-format-icon {
+  width: 32px; height: 32px; background: var(--gpsr-accent);
+  border-radius: 6px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+
+.gpsr-format-name { font-size: 13px; font-weight: 700; color: #1a1a1a; }
+.gpsr-format-desc { font-size: 11px; color: #888; margin-top: 1px; }
+
+.gpsr-format-check {
+  width: 20px; height: 20px; background: var(--gpsr-accent);
+  border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-left: auto;
+}
+
+/* ============================================================
+   PRINT SECTION
+   ============================================================ */
+
+.gpsr-print-desc {
+  font-size: 12px; color: #666; line-height: 1.6;
+  background: #faf9ff; border: 1px solid var(--gpsr-border);
+  border-radius: 8px; padding: 10px 12px; margin-bottom: 12px;
+}
+
+.gpsr-print-preview {
+  border: 1.5px solid var(--gpsr-border); border-radius: 10px; overflow: hidden; margin-top: 12px;
+}
+
+.gpsr-preview-bar {
+  display: flex; align-items: center; gap: 6px;
+  background: var(--gpsr-accent); padding: 8px 12px;
+  font-size: 11px; font-weight: 700; color: rgba(255,255,255,0.9);
+}
+
+.gpsr-preview-dot { width: 7px; height: 7px; border-radius: 50%; background: rgba(255,255,255,0.4); }
+
+.gpsr-preview-body { padding: 14px; background: white; display: flex; flex-direction: column; gap: 6px; }
+.gpsr-preview-title { font-size: 13px; font-weight: 800; color: var(--gpsr-accent); }
+.gpsr-preview-sub { font-size: 10px; color: #888; }
+.gpsr-preview-divider { height: 1px; background: var(--gpsr-border); margin: 4px 0; }
+.gpsr-preview-row { display: flex; justify-content: space-between; font-size: 11px; color: #666; }
+.gpsr-preview-row strong { color: #1a1a1a; }
+.gpsr-preview-pill { background: var(--gpsr-accent); color: white; font-size: 9px; font-weight: 700; padding: 2px 8px; border-radius: 10px; }
+
+/* ============================================================
+   ACTION BUTTON
+   ============================================================ */
+
+.gpsr-action-btn {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 11px 16px;
+  background: var(--gpsr-accent); color: white;
+  border: none; border-radius: 8px;
+  font-size: 13px; font-weight: 700;
+  cursor: pointer; transition: all 0.2s ease;
+  width: 100%; font-family: inherit;
+}
+
+.gpsr-action-btn:hover { background: #4d0c72; }
+
+.gpsr-action-btn--outline {
+  background: white; color: var(--gpsr-accent); border: 2px solid var(--gpsr-accent);
+}
+
+.gpsr-action-btn--outline:hover { background: var(--gpsr-accent); color: white; }
+
+/* ============================================================
+   EMPTY BOX
+   ============================================================ */
+
+.gpsr-empty-box {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 10px; padding: 60px 24px;
+  background: #faf9ff; border: 1.5px dashed #d4c8e8;
+  border-radius: 10px; text-align: center;
+}
+
+.gpsr-empty-box p { font-size: 13px; color: #aaa; margin: 0; }
+
+/* ============================================================
+   RESPONSIVE
+   ============================================================ */
+
+@media (max-width: 1200px) {
+  .gpsr-kpi-row { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 900px) {
+  .gpsr-body-layout { grid-template-columns: 1fr; }
+  .gpsr-row-2 { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 768px) {
+  .gpsr-page-header { padding: 16px; }
+  .gpsr-page-title { font-size: 20px; }
+  .gpsr-kpi-row { grid-template-columns: repeat(2, 1fr); }
+  .gpsr-body-layout { padding: 16px; }
+}
+
+@media (max-width: 480px) {
+  .gpsr-kpi-row { grid-template-columns: 1fr; }
+}
