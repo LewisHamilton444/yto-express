@@ -83,7 +83,7 @@ export default function GenerateTrackingInformation({ reports: externalReports, 
   useEffect(() => {
     const fetchParcels = async () => {
       try {
-        const res = await fetch('http://localhost:3001/api/parcels');
+        const res = await fetch('http://https://yto-express.onrender.com/api/parcels');
         const data = await res.json();
         setParcels(data);
         if (data.length > 0) setSelectedParcel(data[0].trackingNumber);

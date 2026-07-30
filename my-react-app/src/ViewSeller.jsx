@@ -28,7 +28,7 @@ const GenerateSellerReport = ({ sellers: externalSellers, onUpdateSellers }) => 
   useEffect(() => {
     const fetchSellers = async () => {
       try {
-        const response = await fetch('http://localhost:3001/api/sellers');
+        const response = await fetch('http://https://yto-express.onrender.com/api/sellers');
         if (!response.ok) throw new Error('Failed to fetch');
         const data = await response.json();
         const normalized = data.map(normalizeSeller);
@@ -100,7 +100,7 @@ const GenerateSellerReport = ({ sellers: externalSellers, onUpdateSellers }) => 
         commissionRate: editingSeller.commissionRate,
       };
 
-      const response = await fetch(`http://localhost:3001/api/sellers/${editingSeller._id}`, {
+      const response = await fetch(`http://https://yto-express.onrender.com/api/sellers/${editingSeller._id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updateData),
