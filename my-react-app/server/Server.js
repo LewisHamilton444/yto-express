@@ -64,7 +64,7 @@ app.post('/api/riders', async (req, res) => {
         await newRider.save();
         res.status(201).json({ message: "Rider saved!" });
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        res.status(500).jsoan({ error: error.message });
     }
 });
 

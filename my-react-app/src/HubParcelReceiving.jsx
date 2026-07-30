@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-const API = 'http://localhost:3001/api/parcels';
+const API = 'http://https://yto-express.onrender.com/api/parcels';
 
 const STATUS_COLORS = {
   'Received at Hub':  { bg: '#d1fae5', color: '#065f46' },

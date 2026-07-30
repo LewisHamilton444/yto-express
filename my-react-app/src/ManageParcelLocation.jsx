@@ -132,7 +132,7 @@ export default function ProcessParcelLocation() {
 
   const fetchLocations = async () => {
     try {
-      const res = await fetch('http://localhost:3001/api/parcel-locations');
+      const res = await fetch('http://https://yto-express.onrender.com/api/parcel-locations');
       const data = await res.json();
       setLocations(data);
     } catch (err) {
@@ -154,7 +154,7 @@ export default function ProcessParcelLocation() {
 
   const handleSaveEdit = async (updates) => {
     try {
-      await fetch(`http://localhost:3001/api/parcel-locations/${editTarget._id}`, {
+      await fetch(`http://https://yto-express.onrender.com/api/parcel-locations/${editTarget._id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...updates, updatedAt: now() }),
@@ -182,7 +182,7 @@ export default function ProcessParcelLocation() {
       showMessage('This Parcel ID already exists.', 'error'); return;
     }
     try {
-      await fetch('http://localhost:3001/api/parcel-locations', {
+      await fetch('http://https://yto-express.onrender.com/api/parcel-locations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ parcelId: parcelId.trim(), lat: lat.trim(), lng: lng.trim(), location: locName.trim(), type: locType, status: 'Active', geofence: 'Inside', notes: notes.trim() }),

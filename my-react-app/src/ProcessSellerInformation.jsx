@@ -53,7 +53,7 @@ const ProcessSellerInformation = ({ pendingSellers: sellersProp, setPendingSelle
     // Phase 1: create the real seller record — only once, even across a resend.
     if (!created) {
       try {
-        const createResponse = await fetch('http://localhost:3001/api/sellers', {
+        const createResponse = await fetch('http://https://yto-express.onrender.com/api/sellers', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(buildSellerPayloadFromPendingRegistration(item)),
@@ -75,7 +75,7 @@ const ProcessSellerInformation = ({ pendingSellers: sellersProp, setPendingSelle
     // Phase 2: email the credentials via Gmail — this is the part that can be
     // resent. (SMS stays dormant until a paid PH provider is configured.)
     try {
-      const emailResponse = await fetch('http://localhost:3001/api/email/send', {
+      const emailResponse = await fetch('http://https://yto-express.onrender.com/api/email/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ to: targetEmail, subject: 'Your YTO Express account has been approved', message }),

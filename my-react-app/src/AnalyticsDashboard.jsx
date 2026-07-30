@@ -120,8 +120,8 @@ icons['hub-parcels'] = icons.parcel;
 
 const getIcon = (key) => icons[key] || icons.sub;
 
-const PARCELS_API = 'http://localhost:3001/api/parcels';
-const RIDERS_API  = 'http://localhost:3001/api/riders';
+const PARCELS_API = 'http://https://yto-express.onrender.com/api/parcels';
+const RIDERS_API  = 'http://https://yto-express.onrender.com/api/riders';
 
 const isReturnStatus = (status) => /return/i.test(status || '');
 const toDayKey = (isoString) => (isoString ? isoString.slice(0, 10) : null);
