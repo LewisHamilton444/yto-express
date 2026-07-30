@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import './Loginpage.css';
 
-const API = 'http://https://yto-express.onrender.com/api/accounts';
+const API = 'https://yto-express.onrender.com/api/accounts';
 
 const LoginPage = ({ onLogin }) => {
   const [email,    setEmail]    = useState('');
