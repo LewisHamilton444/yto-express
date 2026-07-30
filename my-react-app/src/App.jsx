@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-import LoginPage from './LoginPage';
+import LoginPage from './Loginpage';
 import AnalyticsDashboard from "./AnalyticsDashboard";
 
 import ProcessSellerInformation    from "./ProcessSellerInformation";
