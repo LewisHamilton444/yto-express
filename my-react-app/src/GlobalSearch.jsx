@@ -96,7 +96,7 @@ export default function GlobalSearch({ onNavigate }) {
                 <>
                   <div style={s.groupLabel}>Parcels</div>
                   {results.parcels.map(p => (
-                    <div key={p._id} style={s.resultRow} onClick={() => go('parcel-movement')}>
+                    <div key={p._id} style={s.resultRow} onClick={() => go('manage-parcels')}>
                       <span style={s.resultTitle}>📦 {p.trackingNumber}</span>
                       <span style={s.resultSub}>{p.status} · {p.destination || '—'}</span>
                     </div>
