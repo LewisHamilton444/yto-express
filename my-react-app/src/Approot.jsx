@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import LoginPage from './LoginPage';
 import ManageAccounts from './ManageAccounts';
+import ManageParcels from './ManageParcels';
 import { ROLE_PERMISSIONS } from './AuthContext';
 
 // ── Error Boundary — catches crashes from any child component (e.g. Leaflet) ──
@@ -189,15 +190,18 @@ const AppRoot = () => {
             <ManageAccounts currentUser={currentUser} />
           )}
 
+          {activePage === 'manage_parcels' && can('manage_parcels') && (
+            <ManageParcels />
+          )}
+
           {/* Uncomment as you build each page: */}
           {/* {activePage === 'process_seller' && <ProcessSellerInformation externalSellers={sellers} onSellersChange={setSellers} />} */}
           {/* {activePage === 'view_seller'    && <GenerateSellerReport sellers={sellers} onUpdateSellers={setSellers} />} */}
           {/* {activePage === 'dashboard'      && <Dashboard />} */}
-          {/* {activePage === 'manage_parcels' && <ManageParcels />} */}
           {/* {activePage === 'manage_riders'  && <ManageRiders />} */}
           {/* {activePage === 'gps_parcel'     && <GPSParcel />} */}
 
-          {!['manage_accounts'].includes(activePage) && (
+          {!['manage_accounts', 'manage_parcels'].includes(activePage) && (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', minHeight: '80vh', color: '#a890c0', fontSize: '14px', fontWeight: 500 }}>
               [{activePage}] — wire up your component here in AppRoot.jsx
             </div>
