@@ -4,7 +4,9 @@ import yto_logo from './yto_express_logo.png';
 
 import ProcessSellerInformation         from "./ProcessSellerInformation";
 import ViewSeller                        from "./ViewSeller";
-import ManageParcels                     from "./ManageParcels";
+import GenerateParcelMovement            from "./GenerateParcelMovement";
+import GenerateParcelConfirmationStatus  from "./GenerateParcelConfirmationStatus";
+import GenerateParcelStatusReport        from "./GenerateParcelStatusReport";
 import ProcessRiderInformation           from "./ProcessRiderInformation";
 import MonitorRiderStatus                from "./MonitorRiderStatus";
 import GenerateRiderDataReport           from "./GenerateRiderDataReport";
@@ -33,7 +35,13 @@ const getMenuItems = (role) => [
 
   role === 'hub_receiver'
     ? { label: 'Manage Parcels', key: 'hub-parcels' }
-    : { label: 'Manage Parcels', key: 'manage-parcels' },
+    : {
+        label: 'Manage Parcels', key: 'parcel', children: [
+          { label: 'View Registered Parcels',             key: 'parcel-movement'    },
+          { label: 'Generate Parcel Confirmation Status', key: 'parcel-confirmation' },
+          { label: 'General Parcel Status Report',        key: 'parcel-report'      },
+        ],
+      },
 
   ...(role !== 'hub_receiver' ? [{
     label: 'Manage Rider Information', key: 'rider', children: [
@@ -109,7 +117,6 @@ const icons = {
 };
 
 icons['hub-parcels'] = icons.parcel;
-icons['manage-parcels'] = icons.parcel;
 
 const getIcon = (key) => icons[key] || icons.sub;
 
@@ -291,7 +298,9 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
           />
         );
       case 'seller-report':       return <ViewSeller sellers={sharedSellers} onUpdateSellers={setSharedSellers} />;
-      case 'manage-parcels':      return <ManageParcels />;
+      case 'parcel-movement':     return <GenerateParcelMovement />;
+      case 'parcel-confirmation': return <GenerateParcelConfirmationStatus />;
+      case 'parcel-report':       return <GenerateParcelStatusReport />;
       case 'process-rider':
         return (
           <ProcessRiderInformation
@@ -521,7 +530,7 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
                     </div>
 
                     <div className="ed-action-footer">
-                      <button className="ed-btn-primary" onClick={() => handleMenuClick('manage-parcels')}>Generate Full Report</button>
+                      <button className="ed-btn-primary" onClick={() => handleMenuClick('parcel-movement')}>Generate Full Report</button>
                       <button className="ed-btn-secondary">Download PDF</button>
                     </div>
                   </section>
