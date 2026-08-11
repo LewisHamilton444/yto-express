@@ -61,9 +61,9 @@ export default function ProcessParcelInformation() {
   const fetchAll = async () => {
     try {
       const [parcelsRes, ridersRes, sellersRes] = await Promise.all([
-        fetch('http://https://yto-express.onrender.com/api/parcels'),
-        fetch('http://https://yto-express.onrender.com/api/riders'),
-        fetch('http://https://yto-express.onrender.com/api/sellers'),
+        fetch('https://yto-express.onrender.com/api/parcels'),
+        fetch('https://yto-express.onrender.com/api/riders'),
+        fetch('https://yto-express.onrender.com/api/sellers'),
       ]);
       const [parcelsData, ridersData, sellersData] = await Promise.all([
         parcelsRes.json(),
@@ -99,7 +99,7 @@ export default function ProcessParcelInformation() {
         }],
       };
 
-      const response = await fetch('http://https://yto-express.onrender.com/api/parcels', {
+      const response = await fetch('https://yto-express.onrender.com/api/parcels', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(parcelData),
@@ -133,7 +133,7 @@ export default function ProcessParcelInformation() {
       };
       const updatedEvents = [...(selectedParcel.events || []), newEvent];
 
-      await fetch(`http://https://yto-express.onrender.com/api/parcels/${selectedParcel._id}`, {
+      await fetch(`https://yto-express.onrender.com/api/parcels/${selectedParcel._id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...updateForm, events: updatedEvents }),
@@ -152,7 +152,7 @@ export default function ProcessParcelInformation() {
   // ── Delete Parcel from MongoDB ──
   const handleDeleteConfirm = async () => {
     try {
-      await fetch(`http://https://yto-express.onrender.com/api/parcels/${deleteConfirm._id}`, {
+      await fetch(`https://yto-express.onrender.com/api/parcels/${deleteConfirm._id}`, {
         method: 'DELETE',
       });
       await fetchAll();

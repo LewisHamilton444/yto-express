@@ -133,7 +133,7 @@ export default function Settings({
     if (confirmModal.action === 'reset-database') {
       setResetting(true);
       try {
-        const response = await fetch('http://https://yto-express.onrender.com/api/admin/reset-database', {
+        const response = await fetch('https://yto-express.onrender.com/api/admin/reset-database', {
           method: 'DELETE',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ confirm: 'RESET' }),

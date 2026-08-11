@@ -19,8 +19,8 @@ export default function MonitorGeofenceBoundary() {
   const fetchData = async () => {
     try {
       const [rRes, pRes] = await Promise.all([
-        fetch('http://https://yto-express.onrender.com/api/riders'),
-        fetch('http://https://yto-express.onrender.com/api/parcels'),
+        fetch('https://yto-express.onrender.com/api/riders'),
+        fetch('https://yto-express.onrender.com/api/parcels'),
       ]);
       const [rData, pData] = await Promise.all([rRes.json(), pRes.json()]);
 

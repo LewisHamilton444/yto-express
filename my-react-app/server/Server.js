@@ -64,7 +64,7 @@ app.post('/api/riders', async (req, res) => {
         await newRider.save();
         res.status(201).json({ message: "Rider saved!" });
     } catch (error) {
-        res.status(500).jsoan({ error: error.message });
+        res.status(500).json({ error: error.message });
     }
 });
 
@@ -185,10 +185,8 @@ app.delete('/api/parcel-locations/:id', async (req, res) => {
 
 // ── ACCOUNT ROUTES ──
 
-// GET all accounts
 app.get('/api/accounts', async (req, res) => {
     try {
-        // Never return passwords to frontend
         const accounts = await Account.find().select('-password');
         res.json(accounts);
     } catch (error) {
@@ -196,10 +194,8 @@ app.get('/api/accounts', async (req, res) => {
     }
 });
 
-// POST create new account
 app.post('/api/accounts', async (req, res) => {
     try {
-        // Check duplicate email
         const existing = await Account.findOne({ email: req.body.email.toLowerCase().trim() });
         if (existing) {
             return res.status(400).json({ error: 'An account with this email already exists.' });
@@ -209,7 +205,6 @@ app.post('/api/accounts', async (req, res) => {
             email: req.body.email.toLowerCase().trim(),
         });
         await newAccount.save();
-        // Return without password
         const saved = newAccount.toObject();
         delete saved.password;
         res.status(201).json(saved);
@@ -218,10 +213,8 @@ app.post('/api/accounts', async (req, res) => {
     }
 });
 
-// PUT update account (name, email, phone, role, status)
 app.put('/api/accounts/:id', async (req, res) => {
     try {
-        // If no password provided, don't overwrite existing password
         const updateData = { ...req.body };
         if (!updateData.password || updateData.password.trim() === '') {
             delete updateData.password;
@@ -237,7 +230,6 @@ app.put('/api/accounts/:id', async (req, res) => {
     }
 });
 
-// PATCH toggle status (Active ↔ Deactivated)
 app.patch('/api/accounts/:id/status', async (req, res) => {
     try {
         const account = await Account.findById(req.params.id);
@@ -255,7 +247,6 @@ app.patch('/api/accounts/:id/status', async (req, res) => {
     }
 });
 
-// POST login — checks email + password
 app.post('/api/accounts/login', async (req, res) => {
     try {
         const { email, password } = req.body;
@@ -278,11 +269,6 @@ app.post('/api/accounts/login', async (req, res) => {
 });
 
 // ── SMS ROUTES ──
-// Twilio is tried first (trial-friendly: no business/TIN verification, free trial
-// credit, only the recipient number needs one-time verification in the Twilio
-// console). Semaphore is kept as a fallback for whenever that account is ready.
-
-// PH local numbers (09XXXXXXXXX) -> E.164 (+639XXXXXXXXX), which Twilio requires.
 function toE164PH(number) {
     const digits = number.replace(/\D/g, '');
     if (number.trim().startsWith('+')) return '+' + digits;
@@ -345,19 +331,14 @@ app.post('/api/sms/send', async (req, res) => {
             return res.json(result);
         }
 
-        // No provider configured yet — simulate success instead of blocking the
-        // verify workflow. Once real Twilio/Semaphore credentials are added to
-        // .env, this branch stops being hit and real texts go out automatically.
-        console.log(`[SMS SIMULATED — no provider configured] To: ${number} | Message: ${message}`);
+        console.log(`[SMS SIMULATED] To: ${number} \vert{} Message:${message}`);
         return res.json({ success: true, provider: 'simulated', result: { number, message } });
     } catch (error) {
         res.status(502).json({ error: error.message, details: error.details, moreInfo: error.moreInfo });
     }
 });
 
-// ── EMAIL ROUTES (Gmail SMTP via Nodemailer) ──
-// No business/KYC verification needed — just a Gmail account + an App Password
-// (myaccount.google.com/apppasswords, requires 2-Step Verification turned on).
+// ── EMAIL ROUTES ──
 let emailTransporter = null;
 function getEmailTransporter() {
     if (emailTransporter) return emailTransporter;
@@ -381,8 +362,7 @@ app.post('/api/email/send', async (req, res) => {
         const hasGmail = process.env.EMAIL_USER && process.env.EMAIL_APP_PASSWORD;
 
         if (!hasGmail) {
-            // Same graceful fallback as /api/sms/send — never blocks the verify workflow.
-            console.log(`[EMAIL SIMULATED — no provider configured] To: ${to} | Subject: ${subject} | Message: ${message}`);
+            console.log(`[EMAIL SIMULATED] To: ${to} | Subject: ${subject} \vert{} Message:${message}`);
             return res.json({ success: true, provider: 'simulated', result: { to, subject, message } });
         }
 
@@ -399,11 +379,7 @@ app.post('/api/email/send', async (req, res) => {
     }
 });
 
-// ── ADMIN: DATABASE RESET (DANGER ZONE) ──
-// Wipes every Seller and Rider document for a clean testing slate. Only the
-// collections' contents are removed (deleteMany), not the collections/schema
-// themselves. Requires the literal phrase "RESET" in the body so a stray or
-// replayed request can't trigger it by accident.
+// ── ADMIN: DATABASE RESET ──
 app.delete('/api/admin/reset-database', async (req, res) => {
     if (req.body?.confirm !== 'RESET') {
         return res.status(400).json({ error: 'Missing or incorrect confirmation phrase.' });
@@ -425,8 +401,11 @@ app.delete('/api/admin/reset-database', async (req, res) => {
     }
 });
 
+// Use dynamic port for Render
+const PORT = process.env.PORT || 3001;
+
 mongoose.connect(process.env.MONGO_URI)
   .then(() => {
-    app.listen(3001, () => console.log("Server running on port 3001 and Connected to MongoDB!"));
+    app.listen(PORT, () => console.log(`Server running on port ${PORT} and Connected to MongoDB!`));
   })
   .catch(err => console.error("DB Connection Error:", err));
