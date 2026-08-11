@@ -15,6 +15,11 @@ const Parcel          = require('./models/Parcel');
 const ParcelLocation  = require('./models/ParcelLocation');
 const Account         = require('./models/Account');
 
+// ── ROOT ROUTE ──
+app.get('/', (req, res) => {
+    res.send('YTO Express API Server is Running!');
+});
+
 // ── SELLER ROUTES ──
 app.post('/api/sellers', async (req, res) => {
     try {
@@ -331,7 +336,7 @@ app.post('/api/sms/send', async (req, res) => {
             return res.json(result);
         }
 
-        console.log(`[SMS SIMULATED] To: ${number} \vert{} Message:${message}`);
+        console.log(`[SMS SIMULATED] To: ${number} | Message: ${message}`);
         return res.json({ success: true, provider: 'simulated', result: { number, message } });
     } catch (error) {
         res.status(502).json({ error: error.message, details: error.details, moreInfo: error.moreInfo });
@@ -362,7 +367,7 @@ app.post('/api/email/send', async (req, res) => {
         const hasGmail = process.env.EMAIL_USER && process.env.EMAIL_APP_PASSWORD;
 
         if (!hasGmail) {
-            console.log(`[EMAIL SIMULATED] To: ${to} | Subject: ${subject} \vert{} Message:${message}`);
+            console.log(`[EMAIL SIMULATED] To: ${to} | Subject: ${subject} | Message: ${message}`);
             return res.json({ success: true, provider: 'simulated', result: { to, subject, message } });
         }
 
