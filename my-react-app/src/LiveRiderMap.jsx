@@ -23,8 +23,8 @@ function congestionColor(rider) {
   return '#22c55e';
 }
 
-const RIDERS_API  = 'http://https://yto-express.onrender.com/api/riders';
-const PARCELS_API = 'http://https://yto-express.onrender.com/api/parcels';
+const RIDERS_API  = 'https://yto-express.onrender.com/api/riders';
+const PARCELS_API = 'https://yto-express.onrender.com/api/parcels';
 
 const vehicleEmoji = (v) => {
   const t = String(v).toLowerCase();

@@ -137,7 +137,7 @@ export default function MonitorRiderStatus() {
 
   const fetchRiders = async () => {
     try {
-      const response = await fetch('http://https://yto-express.onrender.com/api/riders');
+      const response = await fetch('https://yto-express.onrender.com/api/riders');
       const data = await response.json();
 
       const normalized  = data.map(normalizeRider);

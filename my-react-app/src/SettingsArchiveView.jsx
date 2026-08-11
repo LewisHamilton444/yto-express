@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { normalizeSeller, normalizeRider, SELLER_STATUS, RIDER_STATUS } from './sellerRiderData';
 
-const API = 'http://https://yto-express.onrender.com';
+const API = 'https://yto-express.onrender.com';
 
 // Archiving/Restoring/Permanently-Deleting sellers & riders all live here now
 // — the seller/rider ledger pages (View Seller, Generate Rider Data Report)

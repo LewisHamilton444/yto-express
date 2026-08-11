@@ -53,7 +53,7 @@ const ProcessRiderInformation = ({ pendingRiders: ridersProp, setPendingRiders: 
     // Phase 1: create the real rider record — only once, even across a resend.
     if (!created) {
       try {
-        const createResponse = await fetch('http://https://yto-express.onrender.com/api/riders', {
+        const createResponse = await fetch('https://yto-express.onrender.com/api/riders', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(buildRiderPayloadFromPendingRegistration(item)),
@@ -75,7 +75,7 @@ const ProcessRiderInformation = ({ pendingRiders: ridersProp, setPendingRiders: 
     // Phase 2: email the credentials via Gmail — this is the part that can be
     // resent. (SMS stays dormant until a paid PH provider is configured.)
     try {
-      const emailResponse = await fetch('http://https://yto-express.onrender.com/api/email/send', {
+      const emailResponse = await fetch('https://yto-express.onrender.com/api/email/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ to: targetEmail, subject: 'Your YTO Express account has been approved', message }),

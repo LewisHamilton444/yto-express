@@ -7,9 +7,7 @@ import ProcessSellerInformation    from "./ProcessSellerInformation";
 import ViewSeller                  from "./ViewSeller";
 
 import ProcessParcelInformation    from "./ProcessParcelInformation";
-import GenerateParcelMovement      from "./GenerateParcelMovement";
-import GenerateParcelConfirmationStatus from "./GenerateParcelConfirmationStatus";
-import GenerateParcelStatusReport  from "./GenerateParcelStatusReport";
+import ManageParcels               from "./ManageParcels";
 
 import ProcessRiderInformation     from "./ProcessRiderInformation";
 import MonitorRiderStatus          from "./MonitorRiderStatus";
@@ -29,9 +27,7 @@ const PAGE_MAP = {
   'seller-report':       ViewSeller,
 
   'process-parcel':      ProcessParcelInformation,
-  'parcel-movement':     GenerateParcelMovement,
-  'parcel-confirmation': GenerateParcelConfirmationStatus,
-  'parcel-report':       GenerateParcelStatusReport,
+  'manage-parcels':      ManageParcels,
 
   'process-rider':       ProcessRiderInformation,
   'monitor-rider':       MonitorRiderStatus,

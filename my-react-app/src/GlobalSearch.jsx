@@ -1,7 +1,7 @@
 'use client';
 import React, { useEffect, useRef, useState } from 'react';
 
-const API = 'http://https://yto-express.onrender.com/api';
+const API = 'https://yto-express.onrender.com/api';
 
 const s = {
   wrap:     { position: 'relative', width: 340 },
@@ -96,7 +96,7 @@ export default function GlobalSearch({ onNavigate }) {
                 <>
                   <div style={s.groupLabel}>Parcels</div>
                   {results.parcels.map(p => (
-                    <div key={p._id} style={s.resultRow} onClick={() => go('parcel-movement')}>
+                    <div key={p._id} style={s.resultRow} onClick={() => go('manage-parcels')}>
                       <span style={s.resultTitle}>📦 {p.trackingNumber}</span>
                       <span style={s.resultSub}>{p.status} · {p.destination || '—'}</span>
                     </div>

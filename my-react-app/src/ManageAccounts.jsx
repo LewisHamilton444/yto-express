@@ -1,6 +1,11 @@
 import React, { useState, useEffect } from 'react';
 
-const API = 'http://https://yto-express.onrender.com/api/accounts';
+// Vite exposes env vars via import.meta.env (not process.env — that's a
+// Create React App convention and would be undefined here). Set
+// VITE_API_URL in a .env file to point at a different backend (e.g. local
+// dev); otherwise this falls back to the live Render API.
+const API_BASE = import.meta.env.VITE_API_URL || 'https://yto-express.onrender.com/api';
+const API = `${API_BASE}/accounts`;
 
 const ROLE_LABELS = {
   super_admin:  'Super Admin',
@@ -14,6 +19,17 @@ const ROLE_COLORS = {
   hub_receiver: { bg: '#fef3c7', color: '#92400e' },
 };
 
+// Shown only when the real API is unreachable or returns nothing, so the
+// layout stays testable offline. Clearly labeled in the UI (see the banner
+// below) rather than silently standing in for real records — an admin
+// screen that can activate/deactivate accounts should never let someone
+// mistake sample rows for real ones.
+const MOCK_ACCOUNTS = [
+  { _id: 'mock-1', name: 'Sample Staff',        email: 'staff.sample@ytoexpress.ph', phone: '09171234567', role: 'staff',        status: 'Active',      createdDate: '2026-01-15' },
+  { _id: 'mock-2', name: 'Sample Hub Receiver', email: 'hub.sample@ytoexpress.ph',   phone: '09179876543', role: 'hub_receiver', status: 'Active',      createdDate: '2026-02-03' },
+  { _id: 'mock-3', name: 'Jane Dela Cruz',      email: 'jane.delacruz@ytoexpress.ph',phone: '09051112222', role: 'staff',        status: 'Deactivated', createdDate: '2025-11-20' },
+];
+
 export default function ManageAccounts({ currentUser }) {
   const [accounts,     setAccounts]     = useState([]);
   const [loading,      setLoading]      = useState(true);
@@ -26,6 +42,7 @@ export default function ManageAccounts({ currentUser }) {
   const [errorMsg,     setErrorMsg]     = useState('');
   const [showDeactivateConfirm, setShowDeactivateConfirm] = useState(null);
   const [showFormPass, setShowFormPass] = useState(false);
+  const [usingMockData, setUsingMockData] = useState(false);
 
   const blankForm = { name: '', email: '', phone: '', role: 'staff', password: '' };
   const [formData, setFormData] = useState(blankForm);
@@ -39,10 +56,21 @@ export default function ManageAccounts({ currentUser }) {
     setLoading(true);
     try {
       const res = await fetch(API);
+      if (!res.ok) throw new Error(`Server responded ${res.status}`);
       const data = await res.json();
-      setAccounts(data);
+      if (Array.isArray(data) && data.length > 0) {
+        setAccounts(data);
+        setUsingMockData(false);
+      } else {
+        // Backend reachable but empty — fall back so the layout stays
+        // testable, but say so rather than pretending it's real data.
+        setAccounts(MOCK_ACCOUNTS);
+        setUsingMockData(true);
+      }
     } catch (err) {
-      flash('Failed to load accounts. Is the server running?', 'error');
+      setAccounts(MOCK_ACCOUNTS);
+      setUsingMockData(true);
+      flash('Could not reach the server — showing sample data instead.', 'error');
     } finally {
       setLoading(false);
     }
@@ -205,6 +233,11 @@ export default function ManageAccounts({ currentUser }) {
 
       {successMsg && <div style={{ padding: '14px 20px', background: '#e6f9ed', color: '#1e7e34', border: '1px solid #bbf7d0', borderRadius: '12px', fontSize: '13px', fontWeight: 600, marginBottom: '16px' }}>{successMsg}</div>}
       {errorMsg   && <div style={{ padding: '14px 20px', background: '#fdf2f2', color: '#9b1c1c', border: '1px solid #fecaca', borderRadius: '12px', fontSize: '13px', fontWeight: 600, marginBottom: '16px' }}>{errorMsg}</div>}
+      {usingMockData && !loading && (
+        <div style={{ padding: '14px 20px', background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a', borderRadius: '12px', fontSize: '13px', fontWeight: 600, marginBottom: '16px' }}>
+          ⚠️ Showing sample accounts — the server didn't return live data. Actions below won't be saved until it's back.
+        </div>
+      )}
 
       {/* Stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px', marginBottom: '20px' }}>

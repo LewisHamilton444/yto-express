@@ -75,7 +75,7 @@ export default function GenerateRiderDataReport() {
 
   const fetchRiders = async () => {
     try {
-      const response = await fetch('http://https://yto-express.onrender.com/api/riders');
+      const response = await fetch('https://yto-express.onrender.com/api/riders');
       const data = await response.json();
       setRiders(data.map(normalizeRider));
     } catch (err) {
@@ -88,7 +88,7 @@ export default function GenerateRiderDataReport() {
 
   const fetchParcels = async () => {
     try {
-      const response = await fetch('http://https://yto-express.onrender.com/api/parcels');
+      const response = await fetch('https://yto-express.onrender.com/api/parcels');
       const data = await response.json();
       setParcels(Array.isArray(data) ? data : []);
     } catch (err) {
@@ -120,7 +120,7 @@ export default function GenerateRiderDataReport() {
         payoutCycle:   editingRider.payoutCycle,
       };
 
-      const response = await fetch(`http://https://yto-express.onrender.com/api/riders/${editingRider._id}`, {
+      const response = await fetch(`https://yto-express.onrender.com/api/riders/${editingRider._id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updateData),
