@@ -34,6 +34,23 @@ const CITY_COORDS = {
   Bayombong:{lat:16.4833,lng:121.1500}, 'Davao City':{lat:7.0731,lng:125.6128},
 };
 
+// Deterministic pseudo-random generator seeded from a string, so the same
+// rider always gets the same simulated battery/sync reading instead of a new
+// random one on every re-render or 15s poll.
+function seededRandom(seed) {
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
+  return () => { h = (h * 1103515245 + 12345) >>> 0; return (h % 1000) / 1000; };
+}
+
+function getDeviceHealth(riderId) {
+  const rand = seededRandom(String(riderId));
+  return {
+    battery: Math.floor(15 + rand() * 85),          // 15–100%
+    syncStatus: rand() > 0.15 ? 'synced' : 'syncing', // ~85% synced
+  };
+}
+
 function MapView({ lat, lng, vehicle, uniqueId }) {
   const containerRef = useRef(null);
   const mapInstanceRef = useRef(null);
@@ -132,6 +149,11 @@ export default function MonitorRiderStatus() {
         isOnline: true,
         isMoving: true,
       },
+      // Simulated device-health telemetry — there's no real battery/app-sync
+      // API yet (same placeholder situation as isOnline/isMoving above),
+      // seeded per rider ID so values stay stable across re-renders/polls
+      // instead of flickering randomly.
+      deviceHealth: getDeviceHealth(r.riderId),
     };
   });
 
@@ -247,10 +269,28 @@ export default function MonitorRiderStatus() {
                           <p style={{ margin: 0, fontSize: '11px', color: '#888' }}>{r.riderId} · {r.vehicleType}</p>
                         </div>
                       </div>
-                      <span style={{ fontSize: '10px', background: '#e6f9ed', color: '#1e7e34', padding: '3px 8px', borderRadius: '10px', fontWeight: 700, display:'flex', alignItems:'center', gap:4 }}>
-                        <span style={{ width:5, height:5, borderRadius:'50%', background:'#22c55e', animation:'pulse 1.5s infinite', display:'inline-block' }}/>
-                        {r.liveGps.isOnline ? 'Online' : 'Offline'} · {r.liveGps.isMoving ? 'Moving' : 'Idle'}
-                      </span>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 5 }}>
+                        <span style={{ fontSize: '10px', background: '#e6f9ed', color: '#1e7e34', padding: '3px 8px', borderRadius: '10px', fontWeight: 700, display:'flex', alignItems:'center', gap:4 }}>
+                          <span style={{ width:5, height:5, borderRadius:'50%', background:'#22c55e', animation:'pulse 1.5s infinite', display:'inline-block' }}/>
+                          {r.liveGps.isOnline ? 'Online' : 'Offline'} · {r.liveGps.isMoving ? 'Moving' : 'Idle'}
+                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                          <span title="Battery" style={{
+                            fontSize: '9px', fontWeight: 700, padding: '2px 7px', borderRadius: '8px',
+                            background: r.deviceHealth.battery > 50 ? '#e6f9ed' : r.deviceHealth.battery > 20 ? '#fff4ec' : '#fff0f0',
+                            color: r.deviceHealth.battery > 50 ? '#1e7e34' : r.deviceHealth.battery > 20 ? '#c2540d' : '#b91c1c',
+                          }}>
+                            🔋 {r.deviceHealth.battery}%
+                          </span>
+                          <span title="App Sync Status" style={{
+                            fontSize: '9px', fontWeight: 700, padding: '2px 7px', borderRadius: '8px',
+                            background: r.deviceHealth.syncStatus === 'synced' ? '#f0eaf8' : '#fff4ec',
+                            color: r.deviceHealth.syncStatus === 'synced' ? '#390955' : '#c2540d',
+                          }}>
+                            {r.deviceHealth.syncStatus === 'synced' ? '✓ Synced' : '⟳ Syncing'}
+                          </span>
+                        </div>
+                      </div>
                     </div>
 
                     <div style={{ background: '#fcfbfe', border: '1px solid #f0eaf8', borderRadius: '8px', padding: '10px', fontSize: '12px', display: 'flex', flexDirection: 'column', gap: '4px' }}>

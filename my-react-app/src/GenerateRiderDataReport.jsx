@@ -41,14 +41,34 @@ const STATUS_BADGE = {
   ARCHIVED:             { bg: '#7f8c8d', color: 'white',   border: 'none',              dot: '#ddd' },
 };
 
-// A rider is "on duty" whenever they're currently holding an in-progress
-// parcel — there's no separate presence/heartbeat system, so this is the one
-// real signal we have for whether someone is actively working right now.
+// On Duty used to be a plain Active/Inactive flag derived only from whether a
+// rider is currently holding a parcel — which contradicted the account
+// STATUS column whenever an approved (Active) rider simply wasn't carrying
+// anything at that moment ("On Duty: Inactive" next to "Status: Active" reads
+// like the account itself is disabled). These three states use the same two
+// real signals we have (account status + held-parcel flag) without implying
+// that, so the two columns never disagree:
+//   Offline     — account isn't Active yet (pending verification)
+//   On Delivery — Active and currently holding a pending/in-transit parcel
+//   Online      — Active and free (approved, just not carrying anything)
+const DUTY_LABELS = { online: 'Online', 'on-delivery': 'On Delivery', offline: 'Offline' };
+const DUTY_BADGE = {
+  online:        { bg: '#e6f9ed', color: '#1e7e34', dot: '#22c55e' },
+  'on-delivery': { bg: '#fff4ec', color: '#c2540d', dot: '#f37021' },
+  offline:       { bg: '#f5f5f5', color: '#888',    dot: '#bbb'    },
+};
+
+// A rider is "holding" a shipment whenever they're currently carrying an
+// in-progress parcel — there's no separate presence/heartbeat system, so this
+// is the one real signal we have for whether someone is actively working
+// right now.
 const HELD_STATUSES   = ['pending', 'in-transit'];
 const CLOSED_STATUSES = ['delivered', 'returned', 'failed'];
 const ARCHIVE_AFTER_DAYS = 7;
 
-const belongsToRider = (parcel, riderObj) => parcel.riderId === riderObj.riderId || parcel.riderId === riderObj._id;
+const norm = (v) => String(v ?? '').trim().toLowerCase();
+const belongsToRider = (parcel, riderObj) =>
+  (!!parcel.riderId) && (norm(parcel.riderId) === norm(riderObj.riderId) || norm(parcel.riderId) === norm(riderObj._id));
 
 // Delivered/returned/failed parcels auto-archive from the visible delivery
 // history once they're more than 7 days past their last status update —
@@ -99,9 +119,22 @@ export default function GenerateRiderDataReport() {
 
   useEffect(() => { fetchRiders(); fetchParcels(); }, []);
 
+  // While a rider's profile is open, re-poll parcels so "Currently Held
+  // Shipments" reflects what's actually scanned/active in their mobile app
+  // session as it changes, instead of a one-time snapshot from page load.
+  useEffect(() => {
+    if (!selectedRider) return;
+    const interval = setInterval(fetchParcels, 10000);
+    return () => clearInterval(interval);
+  }, [selectedRider]);
+
   const getHeldParcels   = (riderObj) => parcels.filter(p => HELD_STATUSES.includes(p.status) && belongsToRider(p, riderObj));
   const getClosedParcels = (riderObj) => parcels.filter(p => CLOSED_STATUSES.includes(p.status) && belongsToRider(p, riderObj));
   const isOnDuty         = (riderObj) => getHeldParcels(riderObj).length > 0;
+  const getDutyState     = (riderObj) => {
+    if (riderObj.status !== RIDER_STATUS.ACTIVE) return 'offline';
+    return isOnDuty(riderObj) ? 'on-delivery' : 'online';
+  };
 
   // ── Save edit to MongoDB ──
   const handleSaveEdit = async (e) => {
@@ -115,6 +148,8 @@ export default function GenerateRiderDataReport() {
         city:          editingRider.location.city,
         licenseNumber: editingRider.driverLicenseNumber,
         vehiclePlate:  editingRider.vehiclePlateNumber,
+        emergencyContactName:  editingRider.emergencyContactName,
+        emergencyContactPhone: editingRider.emergencyContactPhone,
         bankName:      editingRider.bankName,
         payoutRate:    editingRider.payoutCommissionShare,
         payoutCycle:   editingRider.payoutCycle,
@@ -153,8 +188,7 @@ export default function GenerateRiderDataReport() {
     if (filters.riderName && !r.fullName.toLowerCase().includes(filters.riderName.toLowerCase())) return false;
     if (filters.status !== 'all' && r.status !== filters.status)                              return false;
     if (filters.vehicleType !== 'all' && r.vehicleType !== filters.vehicleType)                return false;
-    if (filters.duty === 'active' && !isOnDuty(r))                                             return false;
-    if (filters.duty === 'inactive' && isOnDuty(r))                                             return false;
+    if (filters.duty !== 'all' && getDutyState(r) !== filters.duty)                             return false;
     if (filters.area && !r.location.city.toLowerCase().includes(filters.area.toLowerCase()))           return false;
     return true;
   });
@@ -235,9 +269,10 @@ export default function GenerateRiderDataReport() {
                   <label style={{ fontSize: 11, fontWeight: 700, color: '#390955', textTransform: 'uppercase', letterSpacing: 0.4 }}>On Duty</label>
                   <select value={filters.duty} onChange={e => handleFilterChange('duty', e.target.value)}
                     style={{ padding: '9px 12px', border: '1.5px solid #e0d5f0', borderRadius: 8, fontSize: 13, fontFamily: 'inherit', background: '#faf9ff', color: '#1a1a1a' }}>
-                    <option value="all">Active or Inactive</option>
-                    <option value="active">Active (holding a shipment)</option>
-                    <option value="inactive">Inactive (no shipment)</option>
+                    <option value="all">Any Duty State</option>
+                    <option value="online">Online (available)</option>
+                    <option value="on-delivery">On Delivery (holding a shipment)</option>
+                    <option value="offline">Offline (not yet active)</option>
                   </select>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -286,7 +321,8 @@ export default function GenerateRiderDataReport() {
                     <tbody>
                       {paginatedData.map((r, i) => {
                         const badge = STATUS_BADGE[r.status] || STATUS_BADGE.ACTIVE;
-                        const onDuty = isOnDuty(r);
+                        const duty = getDutyState(r);
+                        const dutyBadge = DUTY_BADGE[duty];
                         return (
                         <tr key={r.riderId} className="hrow" onClick={() => setSelectedRider(r.riderId)}
                           style={{ cursor: 'pointer', ...(i%2===0 ? {} : { background: 'rgba(57,9,85,0.015)' }) }}>
@@ -298,14 +334,14 @@ export default function GenerateRiderDataReport() {
                             </div>
                           </td>
                           <td style={td}><span style={{ fontSize: 12, fontWeight: 600, color: '#555' }}>{r.vehicleType}</span></td>
-                          <td style={td}><span style={{ fontSize: 12, fontWeight: 600, color: '#555', background: '#f5f0fc', padding: '3px 9px', borderRadius: 6 }}>{r.location.city}</span></td>
+                          <td style={td}><span style={{ fontSize: 12, fontWeight: 600, color: '#555', background: '#f5f0fc', padding: '3px 9px', borderRadius: 6 }}>{r.location.city || '—'}</span></td>
                           <td style={{ ...td, fontWeight: 700 }}>{r.performance.deliveriesCount}</td>
                           <td style={td}><Stars rating={r.performance.rating}/></td>
                           <td style={td}>
                             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700,
-                              background: onDuty ? '#e6f9ed' : '#f5f5f5', color: onDuty ? '#1e7e34' : '#888' }}>
-                              <span style={{ width: 5, height: 5, borderRadius: '50%', background: onDuty ? '#22c55e' : '#bbb' }}/>
-                              {onDuty ? 'Active' : 'Inactive'}
+                              background: dutyBadge.bg, color: dutyBadge.color }}>
+                              <span style={{ width: 5, height: 5, borderRadius: '50%', background: dutyBadge.dot }}/>
+                              {DUTY_LABELS[duty]}
                             </span>
                           </td>
                           <td style={td}>
@@ -398,9 +434,20 @@ export default function GenerateRiderDataReport() {
                         ['Vehicle Type',     rider.vehicleType],
                         ['Driver License No.', rider.driverLicenseNumber || '—'],
                         ['Plate No.',        rider.vehiclePlateNumber || '—'],
-                        ['City',             rider.location.city],
+                        ['City',             rider.location.city || '—'],
                         ['Province',         rider.location.province || '—'],
                         ['Joined',           rider.joined],
+                      ].map(([k, v]) => (
+                        <div key={k} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 0', borderBottom: '1px solid #f5f0ff', fontSize: 13 }}>
+                          <span style={{ color: '#888', fontWeight: 500 }}>{k}</span>
+                          <span style={{ color: '#1a1a1a', fontWeight: 700 }}>{v}</span>
+                        </div>
+                      ))}
+
+                      <div style={{ fontSize: 11, fontWeight: 700, color: '#390955', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 14, marginBottom: 2 }}>Emergency Contact</div>
+                      {[
+                        ['Name',  rider.emergencyContactName || '—'],
+                        ['Phone', rider.emergencyContactPhone || '—'],
                       ].map(([k, v]) => (
                         <div key={k} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 0', borderBottom: '1px solid #f5f0ff', fontSize: 13 }}>
                           <span style={{ color: '#888', fontWeight: 500 }}>{k}</span>
@@ -549,6 +596,16 @@ export default function GenerateRiderDataReport() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 <label style={{ fontSize: 11, fontWeight: 700, color: '#390955', textTransform: 'uppercase' }}>Plate No.</label>
                 <input type="text" value={editingRider.vehiclePlateNumber || ''} onChange={e => setEditingRider({ ...editingRider, vehiclePlateNumber: e.target.value })}
+                  style={{ padding: '10px 14px', border: '1.5px solid #e0d5f0', borderRadius: 8, fontSize: 13, fontFamily: 'inherit', background: '#faf9ff', color: '#1a1a1a' }}/>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <label style={{ fontSize: 11, fontWeight: 700, color: '#390955', textTransform: 'uppercase' }}>Emergency Contact Name</label>
+                <input type="text" value={editingRider.emergencyContactName || ''} onChange={e => setEditingRider({ ...editingRider, emergencyContactName: e.target.value })}
+                  style={{ padding: '10px 14px', border: '1.5px solid #e0d5f0', borderRadius: 8, fontSize: 13, fontFamily: 'inherit', background: '#faf9ff', color: '#1a1a1a' }}/>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <label style={{ fontSize: 11, fontWeight: 700, color: '#390955', textTransform: 'uppercase' }}>Emergency Contact Phone</label>
+                <input type="text" value={editingRider.emergencyContactPhone || ''} onChange={e => setEditingRider({ ...editingRider, emergencyContactPhone: e.target.value })}
                   style={{ padding: '10px 14px', border: '1.5px solid #e0d5f0', borderRadius: 8, fontSize: 13, fontFamily: 'inherit', background: '#faf9ff', color: '#1a1a1a' }}/>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
