@@ -254,11 +254,6 @@ function StatusBadge({ status }) {
   );
 }
 
-function ServiceBadge({ service }) {
-  const s = SERVICE_CONFIG[service] || SERVICE_CONFIG.Standard;
-  return <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 5, background: s.bg, color: s.color, whiteSpace: 'nowrap' }}>{service}</span>;
-}
-
 // Small reusable rider glyph — used in the table's Assigned Rider column,
 // the modal header chip, and the icon action buttons.
 function RiderIcon({ size = 10 }) {
@@ -901,7 +896,7 @@ export default function ManageParcels() {
     setShowBookModal(false);
   };
 
-  const COLS = ['Parcel ID', 'Sender', 'Receiver', 'Delivery Address', 'Weight', 'Service', 'Assigned Rider', 'Date Created', 'Status'];
+  const COLS = ['Parcel ID', 'Sender', 'Receiver', 'Delivery Address', 'Weight', 'Assigned Rider', 'Status'];
 
   return (
     <div style={{ flex: 1, overflowY: 'auto', backgroundColor: '#f9f7ff', fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" }}>
@@ -979,14 +974,12 @@ export default function ManageParcels() {
                     <td style={{ padding: '12px 16px', color: '#374151', whiteSpace: 'nowrap', borderBottom: '1px solid #f3f0f8' }}>{p.receiver.name}</td>
                     <td style={{ padding: '12px 16px', color: '#666', borderBottom: '1px solid #f3f0f8', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.address}</td>
                     <td style={{ padding: '12px 16px', color: '#374151', whiteSpace: 'nowrap', borderBottom: '1px solid #f3f0f8', textAlign: 'center' }}>{p.weight}</td>
-                    <td style={{ padding: '12px 16px', whiteSpace: 'nowrap', borderBottom: '1px solid #f3f0f8' }}><ServiceBadge service={p.service} /></td>
                     <td style={{ padding: '12px 16px', whiteSpace: 'nowrap', borderBottom: '1px solid #f3f0f8' }}>
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: p.assignedRider ? '#1a1a1a' : '#bbb', fontWeight: 600, fontSize: 12 }}>
                         <span style={{ color: '#7c3aed' }}><RiderIcon size={13} /></span>
                         {p.assignedRider || 'Unassigned'}
                       </span>
                     </td>
-                    <td style={{ padding: '12px 16px', color: '#666', whiteSpace: 'nowrap', borderBottom: '1px solid #f3f0f8' }}>{fmtDate(p.registeredDate)}</td>
                     <td style={{ padding: '12px 16px', whiteSpace: 'nowrap', borderBottom: '1px solid #f3f0f8' }}><StatusBadge status={p.status} /></td>
                     <td style={{ padding: '12px 16px', textAlign: 'center', borderBottom: '1px solid #f3f0f8' }}>
                       <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
@@ -994,9 +987,6 @@ export default function ManageParcels() {
                           style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 14px', borderRadius: 6, border: '1.5px solid #390955', background: 'white', color: '#390955', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="11" height="11"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>
                           View
-                        </button>
-                        <button onClick={() => setViewParcel(p)} className="mp-icon-btn" title="Edit" style={iconBtnStyle}>
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="13" height="13"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z" /></svg>
                         </button>
                         <AssignRiderButton parcel={p} onAssign={handleAssignRider} />
                       </div>
