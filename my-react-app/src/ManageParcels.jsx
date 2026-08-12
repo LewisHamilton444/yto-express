@@ -4,17 +4,18 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 /**
  * ManageParcels.jsx
  * ──────────────────────────────────────────────────────────────────────────
- * Consolidates three legacy screens into one unified page, reusing the exact
- * visual language, color tokens and interaction patterns of the originals:
+ * Peer-to-peer (P2P) courier tracking page — every parcel is a direct
+ * person-to-person shipment (no seller/store origin distinction) with a
+ * rider assigned for pickup and delivery. Built on the same visual language,
+ * color tokens and interaction patterns as the original consolidated view:
  *   1. GenerateParcelMovement.jsx           ("View Registered Parcels")
- *      → master table shape, Seller/Customer origin split, status footer pills
+ *      → master table shape, status footer pills
  *   2. GenerateParcelConfirmationStatus.jsx ("Generate Parcel Confirmation Status")
  *      → parcel detail modal layout, live GPS/geofence MiniMap, signature flow
  *   3. GenerateParcelStatusReport.jsx       ("General Parcel Status Report")
  *      → delivery timeline stepper, Export & Print panel
  *
- * This file is self-contained and renders from local mock data (the same
- * records the three legacy files used, merged into one shape) — no live API
+ * This file is self-contained and renders from local mock data — no live API
  * calls, safe to preview without touching the real backend.
  *
  * When you're ready to wire it to real data, replace the `useEffect` below
@@ -47,13 +48,10 @@ const SERVICE_CONFIG = {
   Overnight: { color: '#b45309', bg: '#fef3c7' },
 };
 
-// New — needed because the merge adds a single "Origin" column where the
-// legacy Movement file used two separate tables. Kept inside the same
-// purple/blue family already used for statuses/services.
-const ORIGIN_STYLES = {
-  Seller:   { color: '#4c1d95', bg: '#ede9fe' },
-  Customer: { color: '#075985', bg: '#e0f2fe' },
-};
+// Rider pool for the "Assign Rider" action + Book Shipment form. Kept inside
+// the same blue family already used elsewhere (was Customer's origin color).
+const RIDER_POOL = ['John Doe', 'Mark Tan', 'Angela Reyes', 'Paolo Santos', 'Kevin Cruz'];
+const RIDER_STYLE = { color: '#075985', bg: '#e0f2fe' };
 
 const EXPORT_FORMATS = [
   { key: 'pdf', label: 'PDF Document',    desc: 'Portable, print-ready' },
@@ -73,81 +71,80 @@ const PH_CITY_COORDS = {
 };
 const NCR_BOUNDS = { minLat: 14.45, maxLat: 14.75, minLng: 120.90, maxLng: 121.15 };
 
-// ── Mock Parcels (standalone — merges Movement.jsx's SELLER_PARCELS +
-// CUSTOMER_PARCELS, enriched with the extra fields Confirmation/StatusReport
-// need for the GPS, signature, and timeline tabs) ───────────────────────────
+// ── Mock Parcels (standalone, P2P — every shipment is one person sending to
+// another, with a rider assigned for pickup/delivery) ───────────────────────
 
 const RAW_PARCELS = [
-  { id: 'PKG-S-2025-001', origin: 'Seller',
-    sender: { name: 'Tech Store Pro', phone: '+63 917 200 1001', email: 'orders@techstorepro.ph' },
+  { id: 'PKG-2025-001',
+    sender: { name: 'Juan Dela Cruz', phone: '+63 917 200 1001', email: 'juan.delacruz@gmail.com' },
     receiver: { name: 'Maria Santos', phone: '+63 918 334 2210' },
     address: '123 Rizal St, Manila', city: 'Manila',
     weight: '2.5 kg', dimensions: '30 x 20 x 15 cm', contents: 'Electronics', value: '$250.00',
-    service: 'Express', status: 'In Transit', registeredDate: '2025-02-15',
+    service: 'Express', status: 'In Transit', registeredDate: '2025-02-15', assignedRider: 'John Doe',
     instructions: 'Handle with care — fragile electronics.' },
 
-  { id: 'PKG-S-2025-002', origin: 'Seller',
-    sender: { name: 'Fashion Outlet', phone: '+63 917 200 1002', email: 'ship@fashionoutlet.ph' },
+  { id: 'PKG-2025-002',
+    sender: { name: 'Sarah Alonzo', phone: '+63 917 200 1002', email: 'sarah.alonzo@gmail.com' },
     receiver: { name: 'Jose Reyes', phone: '+63 919 445 3321' },
     address: '456 Mabini Ave, Makati', city: 'Makati City',
     weight: '1.2 kg', dimensions: '25 x 18 x 10 cm', contents: 'Apparel', value: '$120.00',
-    service: 'Standard', status: 'Out for Delivery', registeredDate: '2025-02-15',
+    service: 'Standard', status: 'Out for Delivery', registeredDate: '2025-02-15', assignedRider: 'Mark Tan',
     instructions: 'Call recipient before arrival.' },
 
-  { id: 'PKG-S-2025-003', origin: 'Seller',
-    sender: { name: 'Electronics Hub', phone: '+63 917 200 1003', email: 'logistics@electronicshub.ph' },
+  { id: 'PKG-2025-003',
+    sender: { name: 'Michael Reyes', phone: '+63 917 200 1003', email: 'michael.reyes@gmail.com' },
     receiver: { name: 'Ana Cruz', phone: '+63 920 556 4432' },
     address: '789 Quezon Blvd, QC', city: 'Quezon City',
     weight: '3.8 kg', dimensions: '35 x 25 x 20 cm', contents: 'Computer Parts', value: '$520.00',
-    service: 'Overnight', status: 'Picked Up', registeredDate: '2025-02-14',
+    service: 'Overnight', status: 'Picked Up', registeredDate: '2025-02-14', assignedRider: 'Angela Reyes',
     instructions: 'Signature required on delivery.' },
 
-  { id: 'PKG-S-2025-004', origin: 'Seller',
-    sender: { name: 'Books & More', phone: '+63 917 200 1004', email: 'orders@booksandmore.ph' },
+  { id: 'PKG-2025-004',
+    sender: { name: 'Angela Bautista', phone: '+63 917 200 1004', email: 'angela.bautista@gmail.com' },
     receiver: { name: 'Carlo Mendoza', phone: '+63 921 667 5543' },
     address: '12 Taft Ave, Pasay', city: 'Pasay',
     weight: '0.9 kg', dimensions: '20 x 15 x 8 cm', contents: 'Books & Merch', value: '$95.00',
-    service: 'Standard', status: 'Pending', registeredDate: '2025-02-14',
+    service: 'Standard', status: 'Pending', registeredDate: '2025-02-14', assignedRider: 'Paolo Santos',
     instructions: 'Leave at door if not home.' },
 
-  { id: 'PKG-S-2025-005', origin: 'Seller',
-    sender: { name: 'Tech Store Pro', phone: '+63 917 200 1001', email: 'orders@techstorepro.ph' },
+  { id: 'PKG-2025-005',
+    sender: { name: 'Juan Dela Cruz', phone: '+63 917 200 1001', email: 'juan.delacruz@gmail.com' },
     receiver: { name: 'Liza Soriano', phone: '+63 922 778 6654' },
     address: '88 Shaw Blvd, Mandaluyong', city: 'Mandaluyong City',
     weight: '1.7 kg', dimensions: '28 x 20 x 12 cm', contents: 'Electronics', value: '$180.00',
-    service: 'Express', status: 'Delivered', registeredDate: '2025-02-13',
+    service: 'Express', status: 'Delivered', registeredDate: '2025-02-13', assignedRider: 'Kevin Cruz',
     instructions: 'Ring doorbell twice.' },
 
-  { id: 'PKG-C-2025-001', origin: 'Customer',
+  { id: 'PKG-2025-006',
     sender: { name: 'Ramon Villanueva', phone: '+63 920 441 7712', email: 'ramon.v@gmail.com' },
     receiver: { name: 'Grace Tan', phone: '+63 927 118 9902' },
     address: '55 Ortigas Ave, Pasig', city: 'Pasig City',
     weight: '1.0 kg', dimensions: '22 x 16 x 10 cm', contents: 'Personal Parcel', value: '$60.00',
-    service: 'Standard', status: 'In Transit', registeredDate: '2025-02-15',
+    service: 'Standard', status: 'In Transit', registeredDate: '2025-02-15', assignedRider: 'John Doe',
     instructions: 'Call recipient before arrival.' },
 
-  { id: 'PKG-C-2025-002', origin: 'Customer',
+  { id: 'PKG-2025-007',
     sender: { name: 'Jenny Pascual', phone: '+63 918 774 2201', email: 'jenny.pascual@yahoo.com' },
     receiver: { name: 'Mark Aquino', phone: '+63 921 305 5567' },
     address: '23 España Blvd, Manila', city: 'Manila',
     weight: '0.5 kg', dimensions: '18 x 12 x 8 cm', contents: 'Documents', value: '$20.00',
-    service: 'Express', status: 'Pending', registeredDate: '2025-02-15',
+    service: 'Express', status: 'Pending', registeredDate: '2025-02-15', assignedRider: 'Mark Tan',
     instructions: 'Signature required on delivery.' },
 
-  { id: 'PKG-C-2025-003', origin: 'Customer',
+  { id: 'PKG-2025-008',
     sender: { name: 'Roberto Flores', phone: '+63 917 902 3345', email: 'roberto.flores@gmail.com' },
     receiver: { name: 'Diana Castillo', phone: '+63 906 447 8821' },
     address: '101 Katipunan Ave, QC', city: 'Quezon City',
     weight: '2.1 kg', dimensions: '26 x 18 x 14 cm', contents: 'Gift Item', value: '$85.00',
-    service: 'Overnight', status: 'Delivered', registeredDate: '2025-02-14',
+    service: 'Overnight', status: 'Delivered', registeredDate: '2025-02-14', assignedRider: 'Angela Reyes',
     instructions: 'Leave with building guard if unavailable.' },
 
-  { id: 'PKG-C-2025-004', origin: 'Customer',
+  { id: 'PKG-2025-009',
     sender: { name: 'Marivic Santos', phone: '+63 917 220 6690', email: 'marivic.santos@gmail.com' },
     receiver: { name: 'Paolo Gutierrez', phone: '+63 928 550 1123' },
     address: '77 EDSA, Mandaluyong', city: 'Mandaluyong City',
     weight: '0.8 kg', dimensions: '20 x 14 x 8 cm', contents: 'Personal Parcel', value: '$45.00',
-    service: 'Standard', status: 'Out for Delivery', registeredDate: '2025-02-13',
+    service: 'Standard', status: 'Out for Delivery', registeredDate: '2025-02-13', assignedRider: 'Kevin Cruz',
     instructions: 'Leave at door if not home.' },
 ];
 
@@ -174,7 +171,7 @@ function fmtDateTime(d) {
 // DELIVERY_EVENTS_MAP, personalized with each parcel's own sender/city/address.
 const STEP_META = [
   { status: 'Pending',          label: 'Order Received',   loc: (p) => `${p.sender.name} — Order Processing` },
-  { status: 'Picked Up',        label: 'Picked Up',         loc: (p) => `Picked up from ${p.sender.name}` },
+  { status: 'Picked Up',        label: 'Picked Up',         loc: (p) => `Picked up by ${p.assignedRider || 'rider'} from ${p.sender.name}` },
   { status: 'In Transit',       label: 'In Transit',        loc: () => 'Metro Manila Sorting Hub' },
   { status: 'Out for Delivery', label: 'Out for Delivery',  loc: (p) => `${p.city} Local Delivery Station` },
   { status: 'Delivered',        label: 'Delivered',         loc: (p) => p.address },
@@ -205,10 +202,10 @@ const MOCK_PARCELS = RAW_PARCELS.map((p) => {
 
 // ── Export helpers (CSV via Blob download, PDF via print window — no extra deps) ──
 
-const EXPORT_COLUMNS = ['Parcel ID', 'Origin', 'Registered By', 'Receiver', 'Delivery Address', 'Weight', 'Service', 'Date Registered', 'Status'];
+const EXPORT_COLUMNS = ['Parcel ID', 'Sender', 'Receiver', 'Delivery Address', 'Weight', 'Service', 'Assigned Rider', 'Date Created', 'Status'];
 
 function rowValues(p) {
-  return [p.id, p.origin, p.sender.name, p.receiver.name, p.address, p.weight, p.service, fmtDate(p.registeredDate), p.status];
+  return [p.id, p.sender.name, p.receiver.name, p.address, p.weight, p.service, p.assignedRider || 'Unassigned', fmtDate(p.registeredDate), p.status];
 }
 
 function exportCSV(rows) {
@@ -262,16 +259,22 @@ function ServiceBadge({ service }) {
   return <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 5, background: s.bg, color: s.color, whiteSpace: 'nowrap' }}>{service}</span>;
 }
 
-function OriginBadge({ origin }) {
-  const o = ORIGIN_STYLES[origin] || ORIGIN_STYLES.Customer;
+// Small reusable rider glyph — used in the table's Assigned Rider column,
+// the modal header chip, and the icon action buttons.
+function RiderIcon({ size = 10 }) {
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 10, fontWeight: 700, padding: '3px 9px', borderRadius: 6, background: o.bg, color: o.color, textTransform: 'uppercase', letterSpacing: 0.4, whiteSpace: 'nowrap' }}>
-      {origin === 'Seller' ? (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="10" height="10"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><polyline points="9 22 9 12 15 12 15 22" /></svg>
-      ) : (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width="10" height="10"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>
-      )}
-      {origin}
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" width={size} height={size}>
+      <circle cx="5.5" cy="17.5" r="3.5" /><circle cx="18.5" cy="17.5" r="3.5" />
+      <path d="M15 6a1 1 0 1 0 0-2 1 1 0 0 0 0 2zM12 17.5V14l-3-3 4-3 2 3h2" />
+    </svg>
+  );
+}
+
+function RiderBadge({ name }) {
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 10, fontWeight: 700, padding: '3px 9px', borderRadius: 6, background: RIDER_STYLE.bg, color: RIDER_STYLE.color, textTransform: 'uppercase', letterSpacing: 0.4, whiteSpace: 'nowrap' }}>
+      <RiderIcon />
+      {name || 'Unassigned'}
     </span>
   );
 }
@@ -455,7 +458,7 @@ function ParcelModal({ parcel, onClose }) {
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <OriginBadge origin={parcel.origin} />
+            <RiderBadge name={parcel.assignedRider} />
             <span style={{ fontSize: 10, fontWeight: 700, padding: '4px 10px', borderRadius: 6, background: svc.bg, color: svc.color }}>{parcel.service}</span>
             <button onClick={onClose} style={{ width: 30, height: 30, borderRadius: 8, border: '1.5px solid #e0d5f0', background: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999', fontSize: 14 }}>✕</button>
           </div>
@@ -494,7 +497,7 @@ function ParcelModal({ parcel, onClose }) {
               <div>
                 <div style={{ fontSize: 11, fontWeight: 700, color: '#390955', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10 }}>Package Details</div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
-                  {[['Weight', parcel.weight], ['Dimensions', parcel.dimensions], ['Value', parcel.value], ['Contents', parcel.contents], ['Email', parcel.sender.email], ['Date Registered', fmtDate(parcel.registeredDate)], ['Est. Delivery', parcel.estimatedDelivery]].map(([l, v]) => (
+                  {[['Weight', parcel.weight], ['Dimensions', parcel.dimensions], ['Value', parcel.value], ['Contents', parcel.contents], ['Email', parcel.sender.email], ['Assigned Rider', parcel.assignedRider || 'Unassigned'], ['Date Created', fmtDate(parcel.registeredDate)], ['Est. Delivery', parcel.estimatedDelivery]].map(([l, v]) => (
                     <div key={l} style={{ background: 'white', border: '1px solid #ebe4f5', borderRadius: 8, padding: '10px 12px' }}>
                       <div style={{ fontSize: 10, color: '#aaa', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 3 }}>{l}</div>
                       <div style={{ fontSize: 12, fontWeight: 700, color: '#1a1a1a', wordBreak: 'break-all' }}>{v}</div>
@@ -635,6 +638,7 @@ function ParcelModal({ parcel, onClose }) {
                         ['Sender',         parcel.sender.name,    false],
                         ['Receiver',       parcel.receiver.name,  false],
                         ['Address',        parcel.address,        false],
+                        ['Assigned Rider', parcel.assignedRider || 'Unassigned', false],
                         ['GPS',            gps ? `${gps.lat.toFixed(4)}°N, ${gps.lng.toFixed(4)}°E` : 'N/A', true],
                         ['Geofence',       geofence?.status ?? 'N/A', false],
                         ['Confirmation',   confirmCode,           true],
@@ -659,7 +663,7 @@ function ParcelModal({ parcel, onClose }) {
 
 // ── Toolbar (search + status filter + Export PDF/CSV) ──────────────────────
 
-function Toolbar({ search, setSearch, statusFilter, setStatusFilter, onExportCSV, onExportPDF, resultCount }) {
+function Toolbar({ search, setSearch, statusFilter, setStatusFilter, onExportCSV, onExportPDF, onBookShipment, resultCount }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
 
@@ -697,24 +701,142 @@ function Toolbar({ search, setSearch, statusFilter, setStatusFilter, onExportCSV
 
       <span style={{ fontSize: 12, color: '#aaa' }}>{resultCount} result{resultCount !== 1 ? 's' : ''}</span>
 
-      <div ref={menuRef} style={{ position: 'relative', marginLeft: 'auto' }}>
-        <button onClick={() => setMenuOpen((v) => !v)} className="mp-export-btn"
-          style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 15px', borderRadius: 8, border: 'none', background: '#f37021', color: 'white', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" width="13" height="13"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
-          Export PDF/CSV
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginLeft: 'auto' }}>
+        <button onClick={onBookShipment} className="mp-export-btn"
+          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 18px', borderRadius: 9, border: 'none', background: '#f37021', color: 'white', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+          Book Shipment
         </button>
-        {menuOpen && (
-          <div style={{ position: 'absolute', right: 0, top: 'calc(100% + 6px)', background: 'white', border: '1px solid #e0d5f0', borderRadius: 10, boxShadow: '0 12px 32px rgba(57,9,85,0.14)', overflow: 'hidden', minWidth: 170, zIndex: 20 }}>
-            <button onClick={() => { onExportCSV(); setMenuOpen(false); }} style={menuItemStyle}>📄 Export as CSV</button>
-            <button onClick={() => { onExportPDF(); setMenuOpen(false); }} style={menuItemStyle}>🖨️ Export as PDF</button>
-          </div>
-        )}
+
+        <div ref={menuRef} style={{ position: 'relative' }}>
+          <button onClick={() => setMenuOpen((v) => !v)} className="mp-export-btn"
+            style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 15px', borderRadius: 8, border: 'none', background: '#f37021', color: 'white', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" width="13" height="13"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
+            Export PDF/CSV
+          </button>
+          {menuOpen && (
+            <div style={{ position: 'absolute', right: 0, top: 'calc(100% + 6px)', background: 'white', border: '1px solid #e0d5f0', borderRadius: 10, boxShadow: '0 12px 32px rgba(57,9,85,0.14)', overflow: 'hidden', minWidth: 170, zIndex: 20 }}>
+              <button onClick={() => { onExportCSV(); setMenuOpen(false); }} style={menuItemStyle}>📄 Export as CSV</button>
+              <button onClick={() => { onExportPDF(); setMenuOpen(false); }} style={menuItemStyle}>🖨️ Export as PDF</button>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
 }
 
 const menuItemStyle = { display: 'block', width: '100%', textAlign: 'left', padding: '10px 14px', background: 'transparent', border: 'none', color: '#1a1a1a', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' };
+
+// Small square icon-button, shared by the View / Edit / Assign Rider trio in
+// the Actions column — same outline-purple-hovers-to-orange treatment as the
+// existing "View" pill, just icon-only and more compact.
+const iconBtnStyle = { width: 28, height: 28, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: 6, border: '1.5px solid #390955', background: 'white', color: '#390955', cursor: 'pointer', fontFamily: 'inherit' };
+
+// ── Assign Rider (popover menu attached to its own action-column button) ───
+
+function AssignRiderButton({ parcel, onAssign }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const onClickOutside = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', onClickOutside);
+    return () => document.removeEventListener('mousedown', onClickOutside);
+  }, []);
+
+  return (
+    <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
+      <button onClick={() => setOpen((v) => !v)} className="mp-icon-btn" title="Assign Rider" style={iconBtnStyle}>
+        <RiderIcon size={13} />
+      </button>
+      {open && (
+        <div style={{ position: 'absolute', right: 0, top: 'calc(100% + 6px)', background: 'white', border: '1px solid #e0d5f0', borderRadius: 10, boxShadow: '0 12px 32px rgba(57,9,85,0.14)', overflow: 'hidden', minWidth: 160, zIndex: 20, textAlign: 'left' }}>
+          <div style={{ padding: '8px 14px', fontSize: 10, fontWeight: 700, color: '#aaa', textTransform: 'uppercase', letterSpacing: 0.4 }}>Assign Rider</div>
+          {RIDER_POOL.map((name) => (
+            <button key={name} onClick={() => { onAssign(parcel.id, name); setOpen(false); }}
+              style={{ ...menuItemStyle, background: parcel.assignedRider === name ? '#f0eaf8' : 'transparent', color: parcel.assignedRider === name ? '#390955' : '#1a1a1a', fontWeight: parcel.assignedRider === name ? 700 : 600 }}>
+              {parcel.assignedRider === name ? '✓ ' : ''}{name}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Book Shipment modal (new P2P booking form) ──────────────────────────────
+
+const bookFieldStyle = { padding: '9px 12px', border: '1.5px solid #e0d5f0', borderRadius: 8, fontSize: 13, color: '#1a1a1a', background: 'white', fontFamily: 'inherit', outline: 'none', width: '100%', boxSizing: 'border-box' };
+const bookLabelStyle = { fontSize: 10, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: 0.5, display: 'block', marginBottom: 5 };
+
+function BookShipmentModal({ onClose, onCreate }) {
+  const blank = { senderName: '', senderPhone: '', receiverName: '', receiverPhone: '', address: '', city: Object.keys(PH_CITY_COORDS)[0], weight: '', service: 'Standard', assignedRider: '', instructions: '' };
+  const [form, setForm] = useState(blank);
+  const [error, setError] = useState('');
+
+  const change = (e) => setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!form.senderName.trim() || !form.receiverName.trim() || !form.address.trim() || !form.weight.trim()) {
+      setError('Sender, receiver, address and weight are required.');
+      return;
+    }
+    onCreate(form);
+  };
+
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(20,5,35,0.55)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, backdropFilter: 'blur(3px)' }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: 'white', borderRadius: 18, width: '100%', maxWidth: 560, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 32px 80px rgba(57,9,85,0.25)', animation: 'mp-modal-in 0.22s cubic-bezier(0.34,1.56,0.64,1) both' }}>
+        <div style={{ padding: '20px 24px', background: '#390955', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderRadius: '18px 18px 0 0', position: 'sticky', top: 0 }}>
+          <h3 style={{ color: 'white', margin: 0, fontSize: 15, fontWeight: 700 }}>Book Shipment</h3>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', fontSize: 20, lineHeight: 1 }}>&times;</button>
+        </div>
+        <form onSubmit={handleSubmit} style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {error && <div style={{ padding: '10px 14px', background: '#fdf2f2', color: '#9b1c1c', border: '1px solid #fecaca', borderRadius: 8, fontSize: 12, fontWeight: 600 }}>{error}</div>}
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+            <div><label style={bookLabelStyle}>Sender Name *</label><input style={bookFieldStyle} name="senderName" value={form.senderName} onChange={change} placeholder="e.g. Juan Dela Cruz" /></div>
+            <div><label style={bookLabelStyle}>Sender Phone</label><input style={bookFieldStyle} name="senderPhone" value={form.senderPhone} onChange={change} placeholder="+63 9xx xxx xxxx" /></div>
+            <div><label style={bookLabelStyle}>Receiver Name *</label><input style={bookFieldStyle} name="receiverName" value={form.receiverName} onChange={change} placeholder="e.g. Maria Santos" /></div>
+            <div><label style={bookLabelStyle}>Receiver Phone</label><input style={bookFieldStyle} name="receiverPhone" value={form.receiverPhone} onChange={change} placeholder="+63 9xx xxx xxxx" /></div>
+            <div style={{ gridColumn: 'span 2' }}><label style={bookLabelStyle}>Delivery Address *</label><input style={bookFieldStyle} name="address" value={form.address} onChange={change} placeholder="Street, Barangay" /></div>
+            <div>
+              <label style={bookLabelStyle}>City</label>
+              <select style={bookFieldStyle} name="city" value={form.city} onChange={change}>
+                {Object.keys(PH_CITY_COORDS).map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div><label style={bookLabelStyle}>Weight *</label><input style={bookFieldStyle} name="weight" value={form.weight} onChange={change} placeholder="e.g. 1.5 kg" /></div>
+            <div>
+              <label style={bookLabelStyle}>Service</label>
+              <select style={bookFieldStyle} name="service" value={form.service} onChange={change}>
+                {Object.keys(SERVICE_CONFIG).map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={bookLabelStyle}>Assigned Rider</label>
+              <select style={bookFieldStyle} name="assignedRider" value={form.assignedRider} onChange={change}>
+                <option value="">Unassigned</option>
+                {RIDER_POOL.map((r) => <option key={r} value={r}>{r}</option>)}
+              </select>
+            </div>
+            <div style={{ gridColumn: 'span 2' }}>
+              <label style={bookLabelStyle}>Special Instructions</label>
+              <input style={bookFieldStyle} name="instructions" value={form.instructions} onChange={change} placeholder="Optional" />
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 4 }}>
+            <button type="button" onClick={onClose} style={{ padding: '9px 18px', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', background: 'white', color: '#390955', border: '1.5px solid #e0d5f0', fontFamily: 'inherit' }}>Cancel</button>
+            <button type="submit" style={{ padding: '10px 22px', borderRadius: 9, fontSize: 13, fontWeight: 700, cursor: 'pointer', background: '#f37021', color: 'white', border: 'none', fontFamily: 'inherit' }}>Book Shipment</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
 
 // ── Main Component ──────────────────────────────────────────────────────────
 
@@ -742,12 +864,44 @@ export default function ManageParcels() {
         p.id.toLowerCase().includes(q) ||
         p.sender.name.toLowerCase().includes(q) ||
         p.receiver.name.toLowerCase().includes(q) ||
-        p.address.toLowerCase().includes(q)
+        p.address.toLowerCase().includes(q) ||
+        (p.assignedRider && p.assignedRider.toLowerCase().includes(q))
       );
     });
   }, [parcels, search, statusFilter]);
 
-  const COLS = ['Parcel ID', 'Origin', 'Registered By', 'Receiver', 'Delivery Address', 'Weight', 'Service', 'Date Registered', 'Status'];
+  const handleAssignRider = (parcelId, riderName) => {
+    setParcels((prev) => prev.map((p) => (p.id === parcelId ? { ...p, assignedRider: riderName } : p)));
+  };
+
+  const [showBookModal, setShowBookModal] = useState(false);
+
+  const handleCreateShipment = (form) => {
+    const today = new Date().toISOString().slice(0, 10);
+    const seq = parcels.length + 1;
+    const id = `PKG-2025-${String(seq).padStart(3, '0')}`;
+    const base = {
+      id,
+      sender: { name: form.senderName.trim(), phone: form.senderPhone.trim(), email: `${form.senderName.trim().toLowerCase().replace(/\s+/g, '.')}@gmail.com` },
+      receiver: { name: form.receiverName.trim(), phone: form.receiverPhone.trim() },
+      address: form.address.trim(), city: form.city,
+      weight: form.weight.trim(), dimensions: '20 x 15 x 10 cm', contents: 'Personal Parcel', value: '$0.00',
+      service: form.service, status: 'Pending', registeredDate: today,
+      assignedRider: form.assignedRider, instructions: form.instructions.trim() || 'No special instructions.',
+    };
+    const base2 = PH_CITY_COORDS[form.city] || { lat: 14.6, lng: 121.0 };
+    const newParcel = {
+      ...base,
+      trackingNumber: `TRK-${id.replace('PKG-', '')}`,
+      estimatedDelivery: addDays(today, 3).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }),
+      lat: base2.lat, lng: base2.lng,
+      timeline: buildTimeline(base),
+    };
+    setParcels((prev) => [newParcel, ...prev]);
+    setShowBookModal(false);
+  };
+
+  const COLS = ['Parcel ID', 'Sender', 'Receiver', 'Delivery Address', 'Weight', 'Service', 'Assigned Rider', 'Date Created', 'Status'];
 
   return (
     <div style={{ flex: 1, overflowY: 'auto', backgroundColor: '#f9f7ff', fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" }}>
@@ -757,18 +911,19 @@ export default function ManageParcels() {
         .mp-search:focus, .mp-select:focus { border-color:#390955 !important; box-shadow:0 0 0 3px rgba(57,9,85,0.1); }
         .mp-export-btn:hover { filter:brightness(1.08); }
         .mp-row:hover td      { background:#f0eaf8 !important; }
-        .mp-view-btn:hover    { background:#f37021 !important; color:white !important; border-color:#f37021 !important; }
+        .mp-view-btn:hover, .mp-icon-btn:hover { background:#f37021 !important; color:white !important; border-color:#f37021 !important; }
 
         .mp-table-wrap { width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch; }
         .mp-table-wrap table { width:100%; min-width:1040px; border-collapse:collapse; font-size:13px; }
       `}</style>
 
       {viewParcel && <ParcelModal key={viewParcel.id} parcel={viewParcel} onClose={() => setViewParcel(null)} />}
+      {showBookModal && <BookShipmentModal onClose={() => setShowBookModal(false)} onCreate={handleCreateShipment} />}
 
       {/* Header */}
       <header style={{ background: 'white', borderBottom: '1px solid #e0d5f0', padding: '24px 32px 20px' }}>
         <h1 style={{ fontSize: 26, fontWeight: 800, color: '#1a1a1a', letterSpacing: -0.5, margin: '0 0 4px 0' }}>Manage Parcels</h1>
-        <p style={{ fontSize: 13, color: '#666', margin: '2px 0 0 0' }}>Unified registry, confirmation status &amp; delivery reporting — sellers &amp; customers in one view</p>
+        <p style={{ fontSize: 13, color: '#666', margin: '2px 0 0 0' }}>Peer-to-peer parcel registry, delivery status &amp; rider assignment in one view</p>
         <nav style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 10 }}>
           <span style={{ fontSize: 12, color: '#666', fontWeight: 500 }}>Dashboard</span>
           <span style={{ fontSize: 12, color: '#d4c8e8' }}>/</span>
@@ -789,7 +944,7 @@ export default function ManageParcels() {
             </div>
             <div>
               <h2 style={{ fontSize: 14, fontWeight: 700, color: '#1a1a1a', margin: 0 }}>Parcel List</h2>
-              <p style={{ fontSize: 11, color: '#888', margin: '1px 0 0' }}>{filtered.length} of {parcels.length} records — sellers &amp; customers combined</p>
+              <p style={{ fontSize: 11, color: '#888', margin: '1px 0 0' }}>{filtered.length} of {parcels.length} records — All active shipments and assigned rider tracking</p>
             </div>
           </div>
 
@@ -798,6 +953,7 @@ export default function ManageParcels() {
             statusFilter={statusFilter} setStatusFilter={setStatusFilter}
             onExportCSV={() => exportCSV(filtered)}
             onExportPDF={() => exportPDF(filtered)}
+            onBookShipment={() => setShowBookModal(true)}
             resultCount={filtered.length}
           />
 
@@ -808,7 +964,7 @@ export default function ManageParcels() {
                   {COLS.map((h) => (
                     <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontWeight: 700, color: 'white', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.3, whiteSpace: 'nowrap' }}>{h}</th>
                   ))}
-                  <th style={{ padding: '10px 16px', textAlign: 'center', fontWeight: 700, color: 'white', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.3 }}>Action</th>
+                  <th style={{ padding: '10px 16px', textAlign: 'center', fontWeight: 700, color: 'white', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.3 }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -819,20 +975,31 @@ export default function ManageParcels() {
                 ) : filtered.map((p, idx) => (
                   <tr key={p.id} className="mp-row" style={{ background: idx % 2 === 0 ? 'white' : '#faf9ff' }}>
                     <td style={{ padding: '12px 16px', fontFamily: 'monospace', color: '#390955', fontWeight: 700, whiteSpace: 'nowrap', borderBottom: '1px solid #f3f0f8' }}>{p.id}</td>
-                    <td style={{ padding: '12px 16px', borderBottom: '1px solid #f3f0f8' }}><OriginBadge origin={p.origin} /></td>
                     <td style={{ padding: '12px 16px', color: '#1a1a1a', fontWeight: 600, whiteSpace: 'nowrap', borderBottom: '1px solid #f3f0f8' }}>{p.sender.name}</td>
                     <td style={{ padding: '12px 16px', color: '#374151', whiteSpace: 'nowrap', borderBottom: '1px solid #f3f0f8' }}>{p.receiver.name}</td>
                     <td style={{ padding: '12px 16px', color: '#666', borderBottom: '1px solid #f3f0f8', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.address}</td>
                     <td style={{ padding: '12px 16px', color: '#374151', whiteSpace: 'nowrap', borderBottom: '1px solid #f3f0f8', textAlign: 'center' }}>{p.weight}</td>
                     <td style={{ padding: '12px 16px', whiteSpace: 'nowrap', borderBottom: '1px solid #f3f0f8' }}><ServiceBadge service={p.service} /></td>
+                    <td style={{ padding: '12px 16px', whiteSpace: 'nowrap', borderBottom: '1px solid #f3f0f8' }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: p.assignedRider ? '#1a1a1a' : '#bbb', fontWeight: 600, fontSize: 12 }}>
+                        <span style={{ color: '#7c3aed' }}><RiderIcon size={13} /></span>
+                        {p.assignedRider || 'Unassigned'}
+                      </span>
+                    </td>
                     <td style={{ padding: '12px 16px', color: '#666', whiteSpace: 'nowrap', borderBottom: '1px solid #f3f0f8' }}>{fmtDate(p.registeredDate)}</td>
                     <td style={{ padding: '12px 16px', whiteSpace: 'nowrap', borderBottom: '1px solid #f3f0f8' }}><StatusBadge status={p.status} /></td>
                     <td style={{ padding: '12px 16px', textAlign: 'center', borderBottom: '1px solid #f3f0f8' }}>
-                      <button onClick={() => setViewParcel(p)} className="mp-view-btn"
-                        style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 14px', borderRadius: 6, border: '1.5px solid #390955', background: 'white', color: '#390955', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="11" height="11"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>
-                        View
-                      </button>
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        <button onClick={() => setViewParcel(p)} className="mp-view-btn" title="View"
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 14px', borderRadius: 6, border: '1.5px solid #390955', background: 'white', color: '#390955', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="11" height="11"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>
+                          View
+                        </button>
+                        <button onClick={() => setViewParcel(p)} className="mp-icon-btn" title="Edit" style={iconBtnStyle}>
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="13" height="13"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z" /></svg>
+                        </button>
+                        <AssignRiderButton parcel={p} onAssign={handleAssignRider} />
+                      </div>
                     </td>
                   </tr>
                 ))}
