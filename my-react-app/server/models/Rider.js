@@ -14,6 +14,8 @@ const riderSchema = new mongoose.Schema({
     postalCode: String,
     licenseNumber: String,
     vehiclePlate: String,
+    emergencyContactName: String,
+    emergencyContactPhone: String,
     bankName: String,
     payoutRate: Number,
     payoutCycle: String,

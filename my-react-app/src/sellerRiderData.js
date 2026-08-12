@@ -95,6 +95,32 @@ function generateAccountNumber() {
   return String(Math.floor(1000000000 + Math.random() * 9000000000));
 }
 
+// ── City extraction from a free-text address ────────────────────────────────
+// Pending registrations only carry a single `address` string (e.g. "45 Mabini
+// Ave, Barangay San Isidro, Pasig City" or "78 Aguinaldo Hwy, Barangay Zapote,
+// Bacoor, Cavite") — the city was never being pulled out of it, so approved
+// riders/sellers were saved with an empty `city`, which is why the CITY column
+// downstream rendered blank. PH addresses conventionally end either with just
+// "<City>" (common for Metro Manila cities, which are usually written without
+// their province) or "<City>, <Province>". We only need to tell those two
+// shapes apart for the province names that actually show up in this app's
+// service area.
+const PH_PROVINCES_NEAR_METRO = new Set([
+  'Metro Manila', 'Cavite', 'Laguna', 'Batangas', 'Rizal', 'Bulacan',
+  'Pampanga', 'Bataan', 'Nueva Ecija', 'Zambales', 'Tarlac',
+]);
+
+export function extractCityFromAddress(address) {
+  if (!address || typeof address !== 'string') return { city: '', province: '' };
+  const parts = address.split(',').map(s => s.trim()).filter(Boolean);
+  if (parts.length === 0) return { city: '', province: '' };
+  const last = parts[parts.length - 1];
+  if (parts.length >= 2 && PH_PROVINCES_NEAR_METRO.has(last)) {
+    return { city: parts[parts.length - 2], province: last };
+  }
+  return { city: last, province: '' };
+}
+
 export function buildSellerPayloadFromPendingRegistration(item) {
   return {
     registrationId: generateRegistrationId('SH'),
@@ -117,6 +143,7 @@ export function buildSellerPayloadFromPendingRegistration(item) {
 }
 
 export function buildRiderPayloadFromPendingRegistration(item) {
+  const { city, province } = extractCityFromAddress(item.address);
   return {
     registrationId: generateRegistrationId('RD'),
     accountNumber: generateAccountNumber(),
@@ -125,9 +152,9 @@ export function buildRiderPayloadFromPendingRegistration(item) {
     email: item.email,
     phone: item.contactNumber,
     address: item.address || '',
-    city: '',
-    state: '',
-    country: '',
+    city,
+    state: province,
+    country: 'Philippines',
     postalCode: '',
     licenseNumber: item.governmentId?.number || '',
     vehiclePlate: item.vehicle?.plate || '',
@@ -141,6 +168,11 @@ export function buildRiderPayloadFromPendingRegistration(item) {
 }
 
 export function normalizeRider(raw = {}) {
+  // Riders saved before the city-extraction fix (or created some other way)
+  // can still have an empty `city`/`state` even though their `address` string
+  // has one embedded — fall back to parsing it so the CITY column doesn't
+  // render blank for those older records either.
+  const addrFallback = raw.city ? { city: '', province: '' } : extractCityFromAddress(raw.address);
   return {
     _id: raw._id,
     riderId: raw.registrationId || raw.riderId || raw._id || '—',
@@ -151,10 +183,12 @@ export function normalizeRider(raw = {}) {
     vehicleType: raw.vehicleType || 'Motorcycle',
     vehiclePlateNumber: raw.vehiclePlate || raw.vehiclePlateNumber || '',
     location: {
-      province: raw.state || raw.province || '',
-      city: raw.city || '',
+      province: raw.state || raw.province || addrFallback.province || '',
+      city: raw.city || addrFallback.city || '',
       barangay: raw.barangay || '',
     },
+    emergencyContactName: raw.emergencyContactName || '',
+    emergencyContactPhone: raw.emergencyContactPhone || '',
     payoutCommissionShare: raw.payoutRate ?? 0,
     bankName: raw.bankName || '',
     accountNumber: raw.accountNumber || '',
