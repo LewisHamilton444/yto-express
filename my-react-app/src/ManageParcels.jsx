@@ -48,8 +48,8 @@ const SERVICE_CONFIG = {
   Overnight: { color: '#b45309', bg: '#fef3c7' },
 };
 
-// Rider pool for the "Assign Rider" action + Book Shipment form. Kept inside
-// the same blue family already used elsewhere (was Customer's origin color).
+// Rider pool for the "Assign Rider" action. Kept inside the same blue family
+// already used elsewhere (was Customer's origin color).
 const RIDER_POOL = ['John Doe', 'Mark Tan', 'Angela Reyes', 'Paolo Santos', 'Kevin Cruz'];
 const RIDER_STYLE = { color: '#075985', bg: '#e0f2fe' };
 
@@ -658,7 +658,7 @@ function ParcelModal({ parcel, onClose }) {
 
 // ── Toolbar (search + status filter + Export PDF/CSV) ──────────────────────
 
-function Toolbar({ search, setSearch, statusFilter, setStatusFilter, onExportCSV, onExportPDF, onBookShipment, resultCount }) {
+function Toolbar({ search, setSearch, statusFilter, setStatusFilter, onExportCSV, onExportPDF, resultCount }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
 
@@ -696,26 +696,18 @@ function Toolbar({ search, setSearch, statusFilter, setStatusFilter, onExportCSV
 
       <span style={{ fontSize: 12, color: '#aaa' }}>{resultCount} result{resultCount !== 1 ? 's' : ''}</span>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginLeft: 'auto' }}>
-        <button onClick={onBookShipment} className="mp-export-btn"
-          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 18px', borderRadius: 9, border: 'none', background: '#f37021', color: 'white', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-          Book Shipment
+      <div ref={menuRef} style={{ position: 'relative', marginLeft: 'auto' }}>
+        <button onClick={() => setMenuOpen((v) => !v)} className="mp-export-btn"
+          style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 15px', borderRadius: 8, border: 'none', background: '#f37021', color: 'white', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" width="13" height="13"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
+          Export PDF/CSV
         </button>
-
-        <div ref={menuRef} style={{ position: 'relative' }}>
-          <button onClick={() => setMenuOpen((v) => !v)} className="mp-export-btn"
-            style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 15px', borderRadius: 8, border: 'none', background: '#f37021', color: 'white', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" width="13" height="13"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
-            Export PDF/CSV
-          </button>
-          {menuOpen && (
-            <div style={{ position: 'absolute', right: 0, top: 'calc(100% + 6px)', background: 'white', border: '1px solid #e0d5f0', borderRadius: 10, boxShadow: '0 12px 32px rgba(57,9,85,0.14)', overflow: 'hidden', minWidth: 170, zIndex: 20 }}>
-              <button onClick={() => { onExportCSV(); setMenuOpen(false); }} style={menuItemStyle}>📄 Export as CSV</button>
-              <button onClick={() => { onExportPDF(); setMenuOpen(false); }} style={menuItemStyle}>🖨️ Export as PDF</button>
-            </div>
-          )}
-        </div>
+        {menuOpen && (
+          <div style={{ position: 'absolute', right: 0, top: 'calc(100% + 6px)', background: 'white', border: '1px solid #e0d5f0', borderRadius: 10, boxShadow: '0 12px 32px rgba(57,9,85,0.14)', overflow: 'hidden', minWidth: 170, zIndex: 20 }}>
+            <button onClick={() => { onExportCSV(); setMenuOpen(false); }} style={menuItemStyle}>📄 Export as CSV</button>
+            <button onClick={() => { onExportPDF(); setMenuOpen(false); }} style={menuItemStyle}>🖨️ Export as PDF</button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -723,9 +715,9 @@ function Toolbar({ search, setSearch, statusFilter, setStatusFilter, onExportCSV
 
 const menuItemStyle = { display: 'block', width: '100%', textAlign: 'left', padding: '10px 14px', background: 'transparent', border: 'none', color: '#1a1a1a', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' };
 
-// Small square icon-button, shared by the View / Edit / Assign Rider trio in
-// the Actions column — same outline-purple-hovers-to-orange treatment as the
-// existing "View" pill, just icon-only and more compact.
+// Small square icon-button used by the Assign Rider action in the Actions
+// column — same outline-purple-hovers-to-orange treatment as the existing
+// "View" pill, just icon-only and more compact.
 const iconBtnStyle = { width: 28, height: 28, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: 6, border: '1.5px solid #390955', background: 'white', color: '#390955', cursor: 'pointer', fontFamily: 'inherit' };
 
 // ── Assign Rider (popover menu attached to its own action-column button) ───
@@ -756,79 +748,6 @@ function AssignRiderButton({ parcel, onAssign }) {
           ))}
         </div>
       )}
-    </div>
-  );
-}
-
-// ── Book Shipment modal (new P2P booking form) ──────────────────────────────
-
-const bookFieldStyle = { padding: '9px 12px', border: '1.5px solid #e0d5f0', borderRadius: 8, fontSize: 13, color: '#1a1a1a', background: 'white', fontFamily: 'inherit', outline: 'none', width: '100%', boxSizing: 'border-box' };
-const bookLabelStyle = { fontSize: 10, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: 0.5, display: 'block', marginBottom: 5 };
-
-function BookShipmentModal({ onClose, onCreate }) {
-  const blank = { senderName: '', senderPhone: '', receiverName: '', receiverPhone: '', address: '', city: Object.keys(PH_CITY_COORDS)[0], weight: '', service: 'Standard', assignedRider: '', instructions: '' };
-  const [form, setForm] = useState(blank);
-  const [error, setError] = useState('');
-
-  const change = (e) => setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (!form.senderName.trim() || !form.receiverName.trim() || !form.address.trim() || !form.weight.trim()) {
-      setError('Sender, receiver, address and weight are required.');
-      return;
-    }
-    onCreate(form);
-  };
-
-  return (
-    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(20,5,35,0.55)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, backdropFilter: 'blur(3px)' }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ background: 'white', borderRadius: 18, width: '100%', maxWidth: 560, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 32px 80px rgba(57,9,85,0.25)', animation: 'mp-modal-in 0.22s cubic-bezier(0.34,1.56,0.64,1) both' }}>
-        <div style={{ padding: '20px 24px', background: '#390955', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderRadius: '18px 18px 0 0', position: 'sticky', top: 0 }}>
-          <h3 style={{ color: 'white', margin: 0, fontSize: 15, fontWeight: 700 }}>Book Shipment</h3>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', fontSize: 20, lineHeight: 1 }}>&times;</button>
-        </div>
-        <form onSubmit={handleSubmit} style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {error && <div style={{ padding: '10px 14px', background: '#fdf2f2', color: '#9b1c1c', border: '1px solid #fecaca', borderRadius: 8, fontSize: 12, fontWeight: 600 }}>{error}</div>}
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-            <div><label style={bookLabelStyle}>Sender Name *</label><input style={bookFieldStyle} name="senderName" value={form.senderName} onChange={change} placeholder="e.g. Juan Dela Cruz" /></div>
-            <div><label style={bookLabelStyle}>Sender Phone</label><input style={bookFieldStyle} name="senderPhone" value={form.senderPhone} onChange={change} placeholder="+63 9xx xxx xxxx" /></div>
-            <div><label style={bookLabelStyle}>Receiver Name *</label><input style={bookFieldStyle} name="receiverName" value={form.receiverName} onChange={change} placeholder="e.g. Maria Santos" /></div>
-            <div><label style={bookLabelStyle}>Receiver Phone</label><input style={bookFieldStyle} name="receiverPhone" value={form.receiverPhone} onChange={change} placeholder="+63 9xx xxx xxxx" /></div>
-            <div style={{ gridColumn: 'span 2' }}><label style={bookLabelStyle}>Delivery Address *</label><input style={bookFieldStyle} name="address" value={form.address} onChange={change} placeholder="Street, Barangay" /></div>
-            <div>
-              <label style={bookLabelStyle}>City</label>
-              <select style={bookFieldStyle} name="city" value={form.city} onChange={change}>
-                {Object.keys(PH_CITY_COORDS).map((c) => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </div>
-            <div><label style={bookLabelStyle}>Weight *</label><input style={bookFieldStyle} name="weight" value={form.weight} onChange={change} placeholder="e.g. 1.5 kg" /></div>
-            <div>
-              <label style={bookLabelStyle}>Service</label>
-              <select style={bookFieldStyle} name="service" value={form.service} onChange={change}>
-                {Object.keys(SERVICE_CONFIG).map((s) => <option key={s} value={s}>{s}</option>)}
-              </select>
-            </div>
-            <div>
-              <label style={bookLabelStyle}>Assigned Rider</label>
-              <select style={bookFieldStyle} name="assignedRider" value={form.assignedRider} onChange={change}>
-                <option value="">Unassigned</option>
-                {RIDER_POOL.map((r) => <option key={r} value={r}>{r}</option>)}
-              </select>
-            </div>
-            <div style={{ gridColumn: 'span 2' }}>
-              <label style={bookLabelStyle}>Special Instructions</label>
-              <input style={bookFieldStyle} name="instructions" value={form.instructions} onChange={change} placeholder="Optional" />
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 4 }}>
-            <button type="button" onClick={onClose} style={{ padding: '9px 18px', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', background: 'white', color: '#390955', border: '1.5px solid #e0d5f0', fontFamily: 'inherit' }}>Cancel</button>
-            <button type="submit" style={{ padding: '10px 22px', borderRadius: 9, fontSize: 13, fontWeight: 700, cursor: 'pointer', background: '#f37021', color: 'white', border: 'none', fontFamily: 'inherit' }}>Book Shipment</button>
-          </div>
-        </form>
-      </div>
     </div>
   );
 }
@@ -869,33 +788,6 @@ export default function ManageParcels() {
     setParcels((prev) => prev.map((p) => (p.id === parcelId ? { ...p, assignedRider: riderName } : p)));
   };
 
-  const [showBookModal, setShowBookModal] = useState(false);
-
-  const handleCreateShipment = (form) => {
-    const today = new Date().toISOString().slice(0, 10);
-    const seq = parcels.length + 1;
-    const id = `PKG-2025-${String(seq).padStart(3, '0')}`;
-    const base = {
-      id,
-      sender: { name: form.senderName.trim(), phone: form.senderPhone.trim(), email: `${form.senderName.trim().toLowerCase().replace(/\s+/g, '.')}@gmail.com` },
-      receiver: { name: form.receiverName.trim(), phone: form.receiverPhone.trim() },
-      address: form.address.trim(), city: form.city,
-      weight: form.weight.trim(), dimensions: '20 x 15 x 10 cm', contents: 'Personal Parcel', value: '$0.00',
-      service: form.service, status: 'Pending', registeredDate: today,
-      assignedRider: form.assignedRider, instructions: form.instructions.trim() || 'No special instructions.',
-    };
-    const base2 = PH_CITY_COORDS[form.city] || { lat: 14.6, lng: 121.0 };
-    const newParcel = {
-      ...base,
-      trackingNumber: `TRK-${id.replace('PKG-', '')}`,
-      estimatedDelivery: addDays(today, 3).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }),
-      lat: base2.lat, lng: base2.lng,
-      timeline: buildTimeline(base),
-    };
-    setParcels((prev) => [newParcel, ...prev]);
-    setShowBookModal(false);
-  };
-
   const COLS = ['Parcel ID', 'Sender', 'Receiver', 'Delivery Address', 'Weight', 'Assigned Rider', 'Status'];
 
   return (
@@ -913,7 +805,6 @@ export default function ManageParcels() {
       `}</style>
 
       {viewParcel && <ParcelModal key={viewParcel.id} parcel={viewParcel} onClose={() => setViewParcel(null)} />}
-      {showBookModal && <BookShipmentModal onClose={() => setShowBookModal(false)} onCreate={handleCreateShipment} />}
 
       {/* Header */}
       <header style={{ background: 'white', borderBottom: '1px solid #e0d5f0', padding: '24px 32px 20px' }}>
@@ -948,7 +839,6 @@ export default function ManageParcels() {
             statusFilter={statusFilter} setStatusFilter={setStatusFilter}
             onExportCSV={() => exportCSV(filtered)}
             onExportPDF={() => exportPDF(filtered)}
-            onBookShipment={() => setShowBookModal(true)}
             resultCount={filtered.length}
           />
 
