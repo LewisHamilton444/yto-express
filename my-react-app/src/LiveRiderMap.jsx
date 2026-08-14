@@ -143,6 +143,7 @@ export default function LiveRiderMap() {
   const [lastUpdated, setLastUpdated] = useState('');
   const [selectedHub, setSelectedHub]     = useState(null);
   const [selectedRider, setSelectedRider] = useState(null);
+  const [riderFilter, setRiderFilter]     = useState('all');
   const [mapReady, setMapReady]       = useState(false);
   const [layers, setLayers] = useState({ satellite: false, geofences: true, heatmap: false, traffic: false });
   const [dismissedAlertIds, setDismissedAlertIds] = useState([]);
@@ -334,17 +335,28 @@ export default function LiveRiderMap() {
 
   const hubMetrics = LOGISTICS_HUBS.map(hub => {
     const { lat, lng } = hub.coordinates;
-    const activeParcelsCount = parcels.filter(p => {
+    const parcelsInside = parcels.filter(p => {
       const pLat = parseFloat(p.lat), pLng = parseFloat(p.lng);
       return pLat && pLng && haversineKm(lat, lng, pLat, pLng) <= hub.geofenceRadius;
-    }).length;
+    });
     const assignedRidersCount = riders.filter(r => r.destinationHubId === hub.hubId).length;
-    return { ...hub, activeParcelsCount, assignedRidersCount };
+    return { ...hub, activeParcelsCount: parcelsInside.length, parcelsInside, assignedRidersCount };
   });
 
   const hub = selectedHub ? hubMetrics.find(h => h.hubId === selectedHub) : null;
   const rider = selectedRider ? riders.find(r => r.riderId === selectedRider) : null;
   const riderDestHub = rider ? LOGISTICS_HUBS.find(h => h.hubId === rider.destinationHubId) : null;
+  // "Currently scanned" = whatever's linked to this rider by riderId, the
+  // same real signal GenerateRiderDataReport's Currently Held Shipments uses.
+  const riderParcels = rider ? parcels.filter(p => p.riderId === rider.riderId) : [];
+
+  const visibleRiders = riderFilter === 'all' ? riders : riders.filter(r => r.riderId === riderFilter);
+
+  const handleSelectRiderFilter = (id) => {
+    setRiderFilter(id);
+    setSelectedHub(null);
+    setSelectedRider(id === 'all' ? null : id);
+  };
 
   const activeAlerts = buildLiveAlerts(riders).filter(a => !dismissedAlertIds.includes(a.id));
   const topAlert = activeAlerts[0];
@@ -389,6 +401,16 @@ export default function LiveRiderMap() {
         <button style={layerBtn(layers.heatmap)} onClick={() => toggleLayer('heatmap')}>🔥 Heatmap</button>
       </div>
 
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 20px', borderBottom: '1px solid rgba(57,9,85,0.07)', flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color: '#9b82b2', textTransform: 'uppercase', letterSpacing: 0.4 }}>Filter Rider</span>
+        <select value={riderFilter} onChange={(e) => handleSelectRiderFilter(e.target.value)}
+          style={{ padding: '6px 12px', borderRadius: 20, fontSize: 11, fontWeight: 700, fontFamily: 'inherit', border: `1.5px solid ${riderFilter !== 'all' ? '#390955' : '#e0d5f0'}`, background: riderFilter !== 'all' ? '#390955' : 'white', color: riderFilter !== 'all' ? 'white' : '#555', cursor: 'pointer' }}>
+          <option value="all">All riders — show every path</option>
+          {riders.map(r => <option key={r.riderId} value={r.riderId}>{r.fullName} · {r.riderId}</option>)}
+        </select>
+        {riderFilter !== 'all' && <span style={{ fontSize: 11, color: '#9b82b2' }}>Showing 1 of {riders.length} riders</span>}
+      </div>
+
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 0 }}>
         <div style={{ position: 'relative', height: 480 }}>
           {loading && (
@@ -398,7 +420,7 @@ export default function LiveRiderMap() {
           )}
           <div ref={divRef} style={{ position: 'absolute', inset: 0 }} />
 
-          {mapReady && !loading && riders.map(r => (
+          {mapReady && !loading && visibleRiders.map(r => (
             <AnimatedRiderMarker
               key={r.riderId}
               L={LRef.current}
@@ -459,6 +481,20 @@ export default function LiveRiderMap() {
               <div style={statRow}><span style={{ color: '#888' }}>Geofence Radius</span><span style={{ fontWeight: 700 }}>{hub.geofenceRadius} km</span></div>
               <div style={statRow}><span style={{ color: '#888' }}>Active Parcels Inside</span><span style={{ fontWeight: 700, color: '#f37021' }}>{hub.activeParcelsCount}</span></div>
               <div style={statRow}><span style={{ color: '#888' }}>Assigned Riders</span><span style={{ fontWeight: 700, color: '#390955' }}>{hub.assignedRidersCount}</span></div>
+
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#390955', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 14, marginBottom: 8 }}>Currently Scanned Parcels</div>
+              {hub.parcelsInside.length === 0 ? (
+                <div style={{ fontSize: 12, color: '#bbb', padding: '10px 0' }}>No parcels currently inside this geofence.</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {hub.parcelsInside.map(p => (
+                    <div key={p._id} style={{ padding: '8px 10px', background: '#faf8ff', border: '1px solid rgba(57,9,85,0.08)', borderRadius: 8 }}>
+                      <div style={{ fontFamily: 'monospace', fontSize: 11, fontWeight: 700, color: '#f37021' }}>{p.trackingNumber}</div>
+                      <div style={{ fontSize: 11, color: '#9b82b2', marginTop: 2 }}>{p.item || '—'} · {p.status}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -473,6 +509,20 @@ export default function LiveRiderMap() {
               <div style={statRow}><span style={{ color: '#888' }}>Live Status</span><span style={{ fontWeight: 700, color: '#16a34a' }}>● Moving • {rider.speedKmh || 30} km/h</span></div>
               <div style={statRow}><span style={{ color: '#888' }}>Current Location</span><span style={{ fontWeight: 700 }}>{rider.city || '—'}</span></div>
               <div style={statRow}><span style={{ color: '#888' }}>Destination Hub</span><span style={{ fontWeight: 700, color: '#f37021' }}>{riderDestHub?.hubName || '—'}</span></div>
+
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#390955', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 14, marginBottom: 8 }}>Currently Scanned Parcels</div>
+              {riderParcels.length === 0 ? (
+                <div style={{ fontSize: 12, color: '#bbb', padding: '10px 0' }}>No parcels currently assigned to this rider.</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {riderParcels.map(p => (
+                    <div key={p._id} style={{ padding: '8px 10px', background: '#faf8ff', border: '1px solid rgba(57,9,85,0.08)', borderRadius: 8 }}>
+                      <div style={{ fontFamily: 'monospace', fontSize: 11, fontWeight: 700, color: '#f37021' }}>{p.trackingNumber}</div>
+                      <div style={{ fontSize: 11, color: '#9b82b2', marginTop: 2 }}>{p.item || '—'} · {p.status}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>
