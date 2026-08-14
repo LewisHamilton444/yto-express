@@ -113,8 +113,9 @@ icons['manage-parcels'] = icons.parcel;
 
 const getIcon = (key) => icons[key] || icons.sub;
 
-const PARCELS_API = 'https://yto-express.onrender.com/api/parcels';
-const RIDERS_API  = 'https://yto-express.onrender.com/api/riders';
+const PARCELS_API  = 'https://yto-express.onrender.com/api/parcels';
+const RIDERS_API   = 'https://yto-express.onrender.com/api/riders';
+const DASHBOARD_STATS_API = 'https://yto-express.onrender.com/api/dashboard/stats';
 
 const isReturnStatus = (status) => /return/i.test(status || '');
 const toDayKey = (isoString) => (isoString ? isoString.slice(0, 10) : null);
@@ -197,6 +198,15 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
   const [riders, setRiders]           = useState([]);
   const [dashboardLoading, setDashboardLoading] = useState(true);
 
+  // Top KPI row is bound to the real GET /api/dashboard/stats aggregate
+  // (server-computed counts, cheaper than shipping the full parcels/riders
+  // arrays just to total them). `dashboardStats` is null until it resolves —
+  // everything below still falls back to computing the same numbers from the
+  // full arrays fetched above, so the KPI cards never go blank if the stats
+  // endpoint alone fails.
+  const [dashboardStats, setDashboardStats] = useState(null);
+  const [statsError,     setStatsError]     = useState(false);
+
   useEffect(() => {
     let cancelled = false;
     setDashboardLoading(true);
@@ -209,18 +219,25 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
       setRiders(Array.isArray(ridersData) ? ridersData : []);
       setDashboardLoading(false);
     });
+    fetch(DASHBOARD_STATS_API)
+      .then(r => { if (!r.ok) throw new Error(`Stats endpoint responded ${r.status}`); return r.json(); })
+      .then(data => { if (!cancelled) setDashboardStats(data); })
+      .catch(() => { if (!cancelled) setStatsError(true); });
     return () => { cancelled = true; };
   }, []);
 
-  const totalParcels    = parcels.length;
-  const deliveredCount  = parcels.filter(p => p.status === 'Delivered').length;
+  const totalParcels    = dashboardStats ? dashboardStats.totalParcels   : parcels.length;
+  const deliveredCount  = dashboardStats ? dashboardStats.deliveredCount : parcels.filter(p => p.status === 'Delivered').length;
   const returnedCount   = parcels.filter(p => isReturnStatus(p.status)).length;
-  const deliverySuccessPct = totalParcels ? ((deliveredCount / totalParcels) * 100).toFixed(1) : '0.0';
+  const deliverySuccessPct = dashboardStats ? dashboardStats.deliverySuccessPct.toFixed(1)
+    : totalParcels ? ((deliveredCount / totalParcels) * 100).toFixed(1) : '0.0';
   const returnRatePct      = totalParcels ? ((returnedCount / totalParcels) * 100).toFixed(1) : '0.0';
 
-  const activeRidersCount = riders.filter(r => r.status === 'Active').length;
-  const avgRating   = riders.length ? (riders.reduce((s, r) => s + (r.rating || 0), 0) / riders.length).toFixed(1) : '0.0';
-  const totalRides  = riders.reduce((s, r) => s + (r.deliveries || 0), 0);
+  const totalRidersCount  = dashboardStats ? dashboardStats.totalRiders       : riders.length;
+  const activeRidersCount = dashboardStats ? dashboardStats.activeRidersCount : riders.filter(r => r.status === 'Active').length;
+  const avgRating   = dashboardStats ? dashboardStats.avgRiderRating.toFixed(1)
+    : riders.length ? (riders.reduce((s, r) => s + (r.rating || 0), 0) / riders.length).toFixed(1) : '0.0';
+  const totalRides  = dashboardStats ? dashboardStats.totalDeliveries : riders.reduce((s, r) => s + (r.deliveries || 0), 0);
 
   const last7 = useMemo(() => buildLast7Days(parcels), [parcels]);
   const createdVals  = last7.map(d => d.created);
@@ -243,8 +260,8 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
 
   const kpis = [
     { label: 'Delivery Success',  value: `${deliverySuccessPct}%`, sub: `${deliveredCount} of ${totalParcels} parcels` },
-    { label: 'Active Riders',     value: `${activeRidersCount}/${riders.length}`, sub: 'currently on duty' },
-    { label: 'Avg Rider Rating',  value: `${avgRating} / 5`, sub: `across ${riders.length} rider${riders.length === 1 ? '' : 's'}` },
+    { label: 'Active Riders',     value: `${activeRidersCount}/${totalRidersCount}`, sub: 'currently on duty' },
+    { label: 'Avg Rider Rating',  value: `${avgRating} / 5`, sub: `across ${totalRidersCount} rider${totalRidersCount === 1 ? '' : 's'}` },
     { label: 'Total Parcels',     value: `${totalParcels}`, change: `${weekChangePct >= 0 ? '+' : ''}${weekChangePct}%`, sub: `${deliveredCount} delivered`, spark: createdVals },
   ];
 
@@ -406,6 +423,11 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
               </div>
             ) : (
               <>
+                {statsError && (
+                  <div style={{ fontSize: '11px', fontWeight: 600, color: '#c2410c', background: '#fff4ec', padding: '6px 12px', borderRadius: '8px', marginBottom: '10px', display: 'inline-block' }}>
+                    ⚠️ Stats endpoint unreachable — KPIs below are computed from the full parcel/rider lists instead.
+                  </div>
+                )}
                 <div className="ed-kpi-row">
                   {kpis.map((kpi, index) => (
                     <div className="ed-kpi-card" key={index}>

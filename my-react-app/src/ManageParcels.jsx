@@ -15,12 +15,11 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
  *   3. GenerateParcelStatusReport.jsx       ("General Parcel Status Report")
  *      → delivery timeline stepper, Export & Print panel
  *
- * This file is self-contained and renders from local mock data — no live API
- * calls, safe to preview without touching the real backend.
- *
- * When you're ready to wire it to real data, replace the `useEffect` below
- * (the one that seeds `parcels` from MOCK_PARCELS) with a fetch against your
- * existing endpoints and map the response into this same shape.
+ * Fetches real parcels from GET /api/parcels and real riders from
+ * GET /api/riders (for the Assign Rider list + resolving assignedRider
+ * names), normalized via normalizeParcel() below. Falls back to
+ * FALLBACK_PARCELS — clearly flagged in the UI — only if the API is
+ * unreachable, so the page never renders blank.
  *
  * Palette (unchanged from the legacy files):
  *   page bg #f9f7ff · card white / border #e8e0f0 · table header #390955
@@ -30,16 +29,39 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 
 // ── Reference Data ──────────────────────────────────────────────────────────
 
-const STATUSES = ['Pending', 'Picked Up', 'In Transit', 'Out for Delivery', 'Delivered'];
+// 'Picked Up' and 'Out for Delivery' are kept for the fallback dataset below,
+// but real /api/parcels records only ever carry pending/in-transit/delivered/
+// returned/failed (see ProcessParcelInformation.jsx's status options) — those
+// two extra values were added to represent that real vocabulary faithfully.
+const STATUSES = ['Pending', 'Picked Up', 'In Transit', 'Out for Delivery', 'Delivered', 'Returned', 'Failed'];
 
-// Exact palette from GenerateParcelMovement.jsx's STATUS_COLORS.
+// Exact palette from GenerateParcelMovement.jsx's STATUS_COLORS, extended
+// with Returned/Failed (real values the backend actually produces).
 const STATUS_COLORS = {
   'Pending':          { bg: '#f3f4f6', color: '#374151' },
   'Picked Up':        { bg: '#ede9fe', color: '#4c1d95' },
   'In Transit':       { bg: '#e0f2fe', color: '#075985' },
   'Out for Delivery': { bg: '#fef3c7', color: '#92400e' },
   'Delivered':        { bg: '#d1fae5', color: '#065f46' },
+  'Returned':         { bg: '#f3f4f6', color: '#6b7280' },
+  'Failed':           { bg: '#fee2e2', color: '#991b1b' },
 };
+
+// Real parcel documents store status as lowercase-hyphenated
+// ('pending' | 'in-transit' | 'delivered' | 'returned' | 'failed' — see
+// ProcessParcelInformation.jsx). This maps that real vocabulary onto the
+// Title Case labels this page's badges/filters already use.
+const REAL_STATUS_MAP = {
+  'pending': 'Pending',
+  'in-transit': 'In Transit',
+  'delivered': 'Delivered',
+  'returned': 'Returned',
+  'failed': 'Failed',
+};
+function mapRealStatus(rawStatus) {
+  const key = String(rawStatus || '').trim().toLowerCase();
+  return REAL_STATUS_MAP[key] || 'Pending';
+}
 
 // Exact palette from GenerateParcelStatusReport.jsx's SERVICE_CONFIG.
 const SERVICE_CONFIG = {
@@ -48,9 +70,9 @@ const SERVICE_CONFIG = {
   Overnight: { color: '#b45309', bg: '#fef3c7' },
 };
 
-// Rider pool for the "Assign Rider" action. Kept inside the same blue family
-// already used elsewhere (was Customer's origin color).
-const RIDER_POOL = ['John Doe', 'Mark Tan', 'Angela Reyes', 'Paolo Santos', 'Kevin Cruz'];
+// Badge color for rider chips — kept inside the same blue family already
+// used elsewhere (was Customer's origin color). The rider list itself now
+// comes from real GET /api/riders (see the main component below).
 const RIDER_STYLE = { color: '#075985', bg: '#e0f2fe' };
 
 const EXPORT_FORMATS = [
@@ -61,18 +83,36 @@ const EXPORT_FORMATS = [
 
 // Approximate NCR-area coordinates, used only to place a pin on the
 // Live GPS map preview — mirrors MiniMap from GenerateParcelConfirmationStatus.jsx.
+// Covers both this file's own fallback dataset (the "City" keys) AND the real
+// origin/destination values ProcessParcelInformation.jsx's CITIES dropdown
+// actually writes to real parcels ('Makati', 'Pasig', 'Mandaluyong', etc. —
+// no "City" suffix there, and it includes places outside NCR entirely).
 const PH_CITY_COORDS = {
   'Manila':            { lat: 14.5995, lng: 120.9842 },
   'Makati City':       { lat: 14.5547, lng: 121.0244 },
+  'Makati':            { lat: 14.5547, lng: 121.0244 },
   'Quezon City':       { lat: 14.6760, lng: 121.0437 },
   'Pasay':             { lat: 14.5378, lng: 121.0014 },
   'Mandaluyong City':  { lat: 14.5794, lng: 121.0359 },
+  'Mandaluyong':       { lat: 14.5794, lng: 121.0359 },
   'Pasig City':        { lat: 14.5764, lng: 121.0851 },
+  'Pasig':             { lat: 14.5764, lng: 121.0851 },
+  'BGC':               { lat: 14.5509, lng: 121.0489 },
+  'Caloocan':          { lat: 14.6488, lng: 120.9673 },
+  'Marikina':          { lat: 14.6507, lng: 121.1029 },
+  'Bulacan':           { lat: 14.7943, lng: 120.8799 },
+  'Hagonoy':           { lat: 14.8340, lng: 120.7310 },
 };
+// Cebu, Davao, and "Other" are real dropdown options too, but this map
+// preview is NCR-only (see NCR_BOUNDS below) — those fall back to the NCR
+// center below rather than being silently placed on the wrong side of the
+// country.
+const NCR_FALLBACK_CENTER = { lat: 14.6, lng: 121.0 };
 const NCR_BOUNDS = { minLat: 14.45, maxLat: 14.75, minLng: 120.90, maxLng: 121.15 };
 
-// ── Mock Parcels (standalone, P2P — every shipment is one person sending to
-// another, with a rider assigned for pickup/delivery) ───────────────────────
+// ── Fallback Parcels (used only if the live API is unreachable — every
+// shipment is one person sending to another, with a rider assigned for
+// pickup/delivery) ───────────────────────────────────────────────────────
 
 const RAW_PARCELS = [
   { id: 'PKG-2025-001',
@@ -188,8 +228,8 @@ function buildTimeline(p) {
   }));
 }
 
-const MOCK_PARCELS = RAW_PARCELS.map((p) => {
-  const base = PH_CITY_COORDS[p.city] || { lat: 14.6, lng: 121.0 };
+const FALLBACK_PARCELS = RAW_PARCELS.map((p) => {
+  const base = PH_CITY_COORDS[p.city] || NCR_FALLBACK_CENTER;
   return {
     ...p,
     trackingNumber: `TRK-${p.id.replace('PKG-', '')}`,
@@ -199,6 +239,61 @@ const MOCK_PARCELS = RAW_PARCELS.map((p) => {
     timeline: buildTimeline(p),
   };
 });
+
+// ── Real-data adapter ───────────────────────────────────────────────────────
+// Maps a raw /api/parcels document (trackingNumber, senderName, receiverName,
+// item, weight, value, origin, destination, status, riderId, events[]) onto
+// this page's display shape. Fields the real schema doesn't have yet
+// (sender/receiver phone & email, dimensions, service tier, free-text
+// instructions) get an honest placeholder rather than a fabricated value.
+const PARCELS_API = 'https://yto-express.onrender.com/api/parcels';
+const RIDERS_API  = 'https://yto-express.onrender.com/api/riders';
+
+function normalizeParcel(raw, riderNameById) {
+  const city = raw.destination || raw.origin || '';
+  const base = PH_CITY_COORDS[city] || NCR_FALLBACK_CENTER;
+  const createdAt = raw.createdAt ? raw.createdAt.slice(0, 10) : new Date().toISOString().slice(0, 10);
+  const riderId = raw.riderId || '';
+
+  const parcel = {
+    id: raw.trackingNumber || raw._id,
+    _id: raw._id,
+    sender: { name: raw.senderName || 'Unknown', phone: '—', email: '—' },
+    receiver: { name: raw.receiverName || 'Unknown', phone: '—' },
+    address: raw.destination || raw.origin || 'Unknown',
+    city,
+    weight: raw.weight || '—',
+    dimensions: '—',
+    contents: raw.item || '—',
+    value: raw.value || '—',
+    // The backend doesn't persist a service tier yet — Standard is a display
+    // default, not a real recorded value.
+    service: 'Standard',
+    status: mapRealStatus(raw.status),
+    registeredDate: createdAt,
+    riderId,
+    assignedRider: riderId ? (riderNameById[riderId] || riderId) : '',
+    instructions: 'No special instructions.',
+    trackingNumber: raw.trackingNumber || '—',
+    estimatedDelivery: addDays(createdAt, 3).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }),
+    lat: base.lat,
+    lng: base.lng,
+  };
+
+  // Real per-scan history if the backend recorded any events; otherwise fall
+  // back to the same synthetic cumulative-steps generator the fallback
+  // dataset uses, so the Timeline tab is never empty.
+  parcel.timeline = Array.isArray(raw.events) && raw.events.length > 0
+    ? raw.events.map((ev) => ({
+        status: mapRealStatus(ev.status),
+        label: ev.event || 'Status update',
+        location: ev.location || '—',
+        timestamp: ev.time || '—',
+      }))
+    : buildTimeline(parcel);
+
+  return parcel;
+}
 
 // ── Export helpers (CSV via Blob download, PDF via print window — no extra deps) ──
 
@@ -277,7 +372,7 @@ function RiderBadge({ name }) {
 // ── Live GPS Mini-Map (adapted from GenerateParcelConfirmationStatus.jsx's
 // MiniMap — same animated-pin/geofence-ring SVG, NCR bounds instead of US) ──
 
-function MiniMap({ parcel, gps, geofence }) {
+function MiniMap({ parcel, gps, geofence, allParcels }) {
   const VW = 400, VH = 200;
   const { minLat, maxLat, minLng, maxLng } = NCR_BOUNDS;
   const project = (lat, lng) => ({
@@ -295,7 +390,7 @@ function MiniMap({ parcel, gps, geofence }) {
       <svg viewBox={`0 0 ${VW} ${VH}`} style={{ width: '100%', display: 'block' }}>
         <rect width={VW} height={VH} fill="#e8ecf5" />
         {gridLines.map((l, i) => <line key={i} x1={l.x1} y1={l.y1} x2={l.x2} y2={l.y2} stroke="rgba(57,9,85,0.08)" strokeWidth="1" />)}
-        {MOCK_PARCELS.filter((p) => p.id !== parcel.id).map((p) => {
+        {allParcels.filter((p) => p.id !== parcel.id).map((p) => {
           const pt = project(p.lat, p.lng);
           return <circle key={p.id} cx={pt.x} cy={pt.y} r="4" fill="rgba(57,9,85,0.2)" stroke="white" strokeWidth="1" />;
         })}
@@ -363,7 +458,7 @@ const tabPillStyle = (active) => ({
   fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
 });
 
-function ParcelModal({ parcel, onClose }) {
+function ParcelModal({ parcel, onClose, allParcels }) {
   const [activeTab, setActiveTab] = useState('details');
   const [exportFmt, setExportFmt] = useState('pdf');
 
@@ -569,7 +664,7 @@ function ParcelModal({ parcel, onClose }) {
                   </div>
                 ) : gps && (
                   <>
-                    <MiniMap parcel={parcel} gps={gps} geofence={geofence} />
+                    <MiniMap parcel={parcel} gps={gps} geofence={geofence} allParcels={allParcels} />
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 12 }}>
                       {[['Latitude', `${gps.lat.toFixed(5)}° N`], ['Longitude', `${gps.lng.toFixed(5)}° E`], ['Accuracy', `±${gps.accuracy} m`], ['Satellites', `${gps.satellites} locked`]].map(([l, v]) => (
                         <div key={l} style={{ background: '#faf8ff', border: '1px solid #e8e0f5', borderRadius: 8, padding: '9px 11px' }}>
@@ -722,7 +817,7 @@ const iconBtnStyle = { width: 28, height: 28, display: 'inline-flex', alignItems
 
 // ── Assign Rider (popover menu attached to its own action-column button) ───
 
-function AssignRiderButton({ parcel, onAssign }) {
+function AssignRiderButton({ parcel, riders, onAssign }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
 
@@ -738,12 +833,14 @@ function AssignRiderButton({ parcel, onAssign }) {
         <RiderIcon size={13} />
       </button>
       {open && (
-        <div style={{ position: 'absolute', right: 0, top: 'calc(100% + 6px)', background: 'white', border: '1px solid #e0d5f0', borderRadius: 10, boxShadow: '0 12px 32px rgba(57,9,85,0.14)', overflow: 'hidden', minWidth: 160, zIndex: 20, textAlign: 'left' }}>
+        <div style={{ position: 'absolute', right: 0, top: 'calc(100% + 6px)', background: 'white', border: '1px solid #e0d5f0', borderRadius: 10, boxShadow: '0 12px 32px rgba(57,9,85,0.14)', overflow: 'hidden', minWidth: 160, maxHeight: 260, overflowY: 'auto', zIndex: 20, textAlign: 'left' }}>
           <div style={{ padding: '8px 14px', fontSize: 10, fontWeight: 700, color: '#aaa', textTransform: 'uppercase', letterSpacing: 0.4 }}>Assign Rider</div>
-          {RIDER_POOL.map((name) => (
-            <button key={name} onClick={() => { onAssign(parcel.id, name); setOpen(false); }}
-              style={{ ...menuItemStyle, background: parcel.assignedRider === name ? '#f0eaf8' : 'transparent', color: parcel.assignedRider === name ? '#390955' : '#1a1a1a', fontWeight: parcel.assignedRider === name ? 700 : 600 }}>
-              {parcel.assignedRider === name ? '✓ ' : ''}{name}
+          {riders.length === 0 ? (
+            <div style={{ padding: '10px 14px', fontSize: 12, color: '#bbb' }}>No riders available.</div>
+          ) : riders.map((r) => (
+            <button key={r.riderId} onClick={() => { onAssign(parcel, r); setOpen(false); }}
+              style={{ ...menuItemStyle, background: parcel.riderId === r.riderId ? '#f0eaf8' : 'transparent', color: parcel.riderId === r.riderId ? '#390955' : '#1a1a1a', fontWeight: parcel.riderId === r.riderId ? 700 : 600 }}>
+              {parcel.riderId === r.riderId ? '✓ ' : ''}{r.riderName}
             </button>
           ))}
         </div>
@@ -756,18 +853,48 @@ function AssignRiderButton({ parcel, onAssign }) {
 
 export default function ManageParcels() {
   const [parcels, setParcels]           = useState([]);
+  const [riders, setRiders]             = useState([]); // [{ riderId, riderName }] from GET /api/riders
   const [loading, setLoading]           = useState(true);
+  const [usingFallback, setUsingFallback] = useState(false);
+  const [actionError, setActionError]   = useState('');
   const [search, setSearch]             = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [viewParcel, setViewParcel]     = useState(null);
 
-  useEffect(() => {
-    const t = setTimeout(() => {
-      setParcels(MOCK_PARCELS);
+  const flashActionError = (msg) => { setActionError(msg); setTimeout(() => setActionError(''), 4000); };
+
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const [parcelsRes, ridersRes] = await Promise.all([fetch(PARCELS_API), fetch(RIDERS_API)]);
+      if (!parcelsRes.ok) throw new Error(`Parcels endpoint responded ${parcelsRes.status}`);
+      const [parcelsData, ridersData] = await Promise.all([
+        parcelsRes.json(),
+        ridersRes.ok ? ridersRes.json() : Promise.resolve([]),
+      ]);
+
+      const riderList = (Array.isArray(ridersData) ? ridersData : [])
+        .filter((r) => String(r.status || '').toLowerCase() !== 'archived')
+        .map((r) => ({ riderId: r.registrationId || r._id, riderName: r.riderName || 'Unknown Rider' }));
+      const riderNameById = {};
+      riderList.forEach((r) => { riderNameById[r.riderId] = r.riderName; });
+
+      const normalized = (Array.isArray(parcelsData) ? parcelsData : []).map((p) => normalizeParcel(p, riderNameById));
+
+      setParcels(normalized);
+      setRiders(riderList);
+      setUsingFallback(false);
+    } catch (err) {
+      console.error('ManageParcels: falling back to sample data —', err);
+      setParcels(FALLBACK_PARCELS);
+      setRiders([]);
+      setUsingFallback(true);
+    } finally {
       setLoading(false);
-    }, 300);
-    return () => clearTimeout(t);
-  }, []);
+    }
+  };
+
+  useEffect(() => { loadData(); }, []);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -784,8 +911,26 @@ export default function ManageParcels() {
     });
   }, [parcels, search, statusFilter]);
 
-  const handleAssignRider = (parcelId, riderName) => {
-    setParcels((prev) => prev.map((p) => (p.id === parcelId ? { ...p, assignedRider: riderName } : p)));
+  // Persists the assignment to the real parcel record (PUT /api/parcels/:id)
+  // when we're on live data; in fallback mode (API unreachable) there's
+  // nothing real to persist to, so it just updates local state like before.
+  const handleAssignRider = async (parcel, rider) => {
+    const prevParcels = parcels;
+    setParcels((prev) => prev.map((p) => (p.id === parcel.id ? { ...p, riderId: rider.riderId, assignedRider: rider.riderName } : p)));
+
+    if (usingFallback || !parcel._id) return;
+    try {
+      const res = await fetch(`${PARCELS_API}/${parcel._id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ riderId: rider.riderId }),
+      });
+      if (!res.ok) throw new Error(`Server responded ${res.status}`);
+    } catch (err) {
+      console.error('Error assigning rider:', err);
+      setParcels(prevParcels);
+      flashActionError(`Could not assign ${rider.riderName} to ${parcel.id} — server error. Please try again.`);
+    }
   };
 
   const COLS = ['Parcel ID', 'Sender', 'Receiver', 'Delivery Address', 'Weight', 'Assigned Rider', 'Status'];
@@ -804,7 +949,7 @@ export default function ManageParcels() {
         .mp-table-wrap table { width:100%; min-width:1040px; border-collapse:collapse; font-size:13px; }
       `}</style>
 
-      {viewParcel && <ParcelModal key={viewParcel.id} parcel={viewParcel} onClose={() => setViewParcel(null)} />}
+      {viewParcel && <ParcelModal key={viewParcel.id} parcel={viewParcel} onClose={() => setViewParcel(null)} allParcels={parcels} />}
 
       {/* Header */}
       <header style={{ background: 'white', borderBottom: '1px solid #e0d5f0', padding: '24px 32px 20px' }}>
@@ -821,6 +966,16 @@ export default function ManageParcels() {
 
       {/* Body */}
       <div style={{ padding: '24px 32px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+        {usingFallback && !loading && (
+          <div style={{ padding: '12px 16px', background: '#fff4ec', color: '#c2410c', border: '1px solid #f9d4b6', borderRadius: 10, fontSize: 12.5, fontWeight: 600 }}>
+            ⚠️ Showing sample parcels — the live server didn't respond. Rider assignment won't be saved until it's back.
+          </div>
+        )}
+        {actionError && (
+          <div style={{ padding: '12px 16px', background: '#fdf2f2', color: '#9b1c1c', border: '1px solid #fecaca', borderRadius: 10, fontSize: 12.5, fontWeight: 600 }}>
+            ❌ {actionError}
+          </div>
+        )}
         <div style={{ background: 'white', borderRadius: 12, border: '1px solid #e8e0f0', boxShadow: '0 2px 8px rgba(57,9,85,0.05)', overflow: 'hidden' }}>
 
           {/* Panel header */}
@@ -878,7 +1033,7 @@ export default function ManageParcels() {
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="11" height="11"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>
                           View
                         </button>
-                        <AssignRiderButton parcel={p} onAssign={handleAssignRider} />
+                        <AssignRiderButton parcel={p} riders={riders} onAssign={handleAssignRider} />
                       </div>
                     </td>
                   </tr>

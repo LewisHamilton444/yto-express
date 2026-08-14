@@ -188,6 +188,45 @@ app.delete('/api/parcel-locations/:id', async (req, res) => {
     }
 });
 
+// ── DASHBOARD ANALYTICS ──
+// Real aggregates over the real Parcel/Rider/Seller collections — nothing
+// simulated here. Status casing has drifted across the app over time
+// ('Active' schema default vs 'ACTIVE' written by the approval flow, etc.),
+// so counts match case-insensitively rather than assuming one canonical form.
+app.get('/api/dashboard/stats', async (req, res) => {
+    try {
+        const [totalParcels, deliveredCount, totalRiders, activeRidersCount, totalSellers, riderStats] = await Promise.all([
+            Parcel.countDocuments(),
+            Parcel.countDocuments({ status: { $regex: /^delivered$/i } }),
+            Rider.countDocuments(),
+            Rider.countDocuments({ status: { $regex: /^active$/i } }),
+            Seller.countDocuments(),
+            Rider.find({}, 'rating deliveries'),
+        ]);
+
+        const deliverySuccessPct = totalParcels
+            ? Number(((deliveredCount / totalParcels) * 100).toFixed(1))
+            : 0;
+        const avgRiderRating = riderStats.length
+            ? Number((riderStats.reduce((sum, r) => sum + (r.rating || 0), 0) / riderStats.length).toFixed(1))
+            : 0;
+        const totalDeliveries = riderStats.reduce((sum, r) => sum + (r.deliveries || 0), 0);
+
+        res.json({
+            totalParcels,
+            deliveredCount,
+            deliverySuccessPct,
+            totalRiders,
+            activeRidersCount,
+            avgRiderRating,
+            totalDeliveries,
+            totalSellers,
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // ── ACCOUNT ROUTES ──
 
 app.get('/api/accounts', async (req, res) => {
@@ -400,6 +439,7 @@ app.delete('/api/admin/reset-database', async (req, res) => {
                 sellers: sellersResult.deletedCount,
                 riders: ridersResult.deletedCount,
             },
+         
         });
     } catch (error) {
         res.status(500).json({ error: error.message });
