@@ -34,28 +34,25 @@ const btnStyle = (v='primary') => {
   return { padding:'9px 18px', borderRadius:8, fontSize:13, fontWeight:700, cursor:'pointer', fontFamily:'inherit', ...(m[v]||m.primary) };
 };
 
-const badgeStyle = (s='available') => {
-  const m = { available:{ background:'rgba(57,9,85,0.08)', color:'#390955' }, archived:{ background:'#f0eaf8', color:'#7b3fa0' } };
-  const c = m[s.toLowerCase()] || m.available;
-  return { display:'inline-flex', alignItems:'center', gap:5, padding:'3px 10px', borderRadius:20, fontSize:11, fontWeight:700, ...c };
-};
-
 const TabBtn = ({ active, onClick, children }) => (
   <button onClick={onClick} style={{ padding:'14px 20px', border:'none', background:'transparent', color:active?'#390955':'#666', fontSize:13, fontWeight:active?700:500, cursor:'pointer', borderBottom:active?'2.5px solid #f37021':'2.5px solid transparent', whiteSpace:'nowrap', fontFamily:'inherit' }}>
     {children}
   </button>
 );
 
+// Generate and Retrieve used to be separate tabs; merged into one (generator
+// form on top, table of generated reports below) since they're really one
+// workflow. Archive Report is removed — nothing in the app consumed
+// archived tracking reports (unlike riders/sellers, which have a real
+// Settings > Archived Records view).
 const TABS = [
-  { key:'generate', label:'Generate Report' },
-  { key:'retrieve', label:'Retrieve Report' },
-  { key:'archive',  label:'Archive Report'  },
+  { key:'generate', label:'Generate & Retrieve Reports' },
 ];
 
 const statusColor = (s) => s==='Delivered'?'#065f46':s==='In Transit'?'#f37021':'#390955';
 const statusBg    = (s) => s==='Delivered'?'#d1fae5':s==='In Transit'?'#fff4ec':'#f0eaf8';
 
-export default function GenerateTrackingInformation({ reports: externalReports, onReportsChange, onArchiveReport = () => {} }) {
+export default function GenerateTrackingInformation({ reports: externalReports, onReportsChange }) {
   const [tab,            setTab]            = useState('generate');
   const [parcels,        setParcels]        = useState([]);
   const [loadingParcels, setLoadingParcels] = useState(true);
@@ -67,7 +64,6 @@ export default function GenerateTrackingInformation({ reports: externalReports, 
   const [previewReport,  setPreviewReport]  = useState(null);
   const [generating,     setGenerating]     = useState(false);
   const [successMsg,     setSuccessMsg]     = useState('');
-  const [archiveConfirm, setArchiveConfirm] = useState(null);
 
   const [_reports, _setReports] = useState([]);
   const reports    = externalReports ?? _reports;
@@ -161,18 +157,6 @@ export default function GenerateTrackingInformation({ reports: externalReports, 
     win.document.close();
   };
 
-  const doArchive = (id) => {
-    const target = reports.find(r => r.id === id);
-    if (!target) return;
-    onArchiveReport({ ...target, status:'Archived' });
-    setReports(prev => prev.map(r => r.id===id ? { ...r, status:'Archived' } : r));
-    setArchiveConfirm(null);
-    showSuccess(`Report ${id} archived.`);
-  };
-
-  const available = reports.filter(r => r.status === 'Available');
-  const archived  = reports.filter(r => r.status === 'Archived');
-
   const content = () => {
     switch(tab) {
       case 'generate': return (
@@ -253,79 +237,38 @@ export default function GenerateTrackingInformation({ reports: externalReports, 
               )}
             </div>
           )}
-        </div>
-      );
 
-      case 'retrieve': return (
-        <div style={S.panel}>
-          <h2 style={S.ph}>Retrieve Tracking Report</h2>
-          <p style={S.ps}>All generated reports are listed here. Click Download to open the full printable report.</p>
-          {available.length === 0 ? (
-            <div style={{ textAlign:'center', padding:'48px 20px', color:'#bbb', fontSize:13 }}>No available reports yet. Generate one first!</div>
-          ) : (
-            <div style={{ overflowX:'auto' }}>
-              <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
-                <thead>
-                  <tr>{['Report ID','Tracking No.','Location','Report Type','Format','Generated Date','Action'].map(h => <th key={h} style={S.th}>{h}</th>)}</tr>
-                </thead>
-                <tbody>
-                  {available.map((r, i) => (
-                    <tr key={r.id} style={{ background:i%2===0?'white':'#faf9ff' }}>
-                      <td style={{ ...S.td, fontWeight:700, color:'#390955' }}>{r.id}</td>
-                      <td style={{ ...S.td, fontFamily:'monospace', fontSize:12 }}>{r.trackingNo}</td>
-                      <td style={S.td}>{r.location}</td>
-                      <td style={S.td}>{r.reportType}</td>
-                      <td style={S.td}><span style={{ padding:'2px 8px', borderRadius:6, fontSize:11, fontWeight:700, background:'#f0eaf8', color:'#390955' }}>{r.format}</span></td>
-                      <td style={{ ...S.td, fontSize:12, color:'#888' }}>{r.generatedDate}</td>
-                      <td style={S.td}>
-                        <button style={{ padding:'6px 14px', borderRadius:7, fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:'inherit', background:'#f37021', color:'white', border:'none' }}
-                          onClick={() => handleDownload(r)}>⬇ Download</button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      );
-
-      case 'archive': return (
-        <div style={S.panel}>
-          <h2 style={S.ph}>Archive Report</h2>
-          <p style={S.ps}>Archive reports to hide them from active operations.</p>
-          <div style={{ display:'flex', flexDirection:'column', gap:8, marginBottom:28 }}>
-            {available.length > 0 ? available.map(r => (
-              <div key={r.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'14px 16px', background:'white', borderRadius:10, border:'1px solid #e5ddf0', borderLeft:'4px solid #f37021' }}>
-                <div>
-                  <div style={{ fontSize:13, fontWeight:700, color:'#1a1a1a', marginBottom:3 }}>
-                    {r.id} <span style={{ ...badgeStyle('available'), marginLeft:10 }}>{r.status}</span>
-                  </div>
-                  <div style={{ fontSize:12, color:'#888', fontFamily:'monospace' }}>{r.trackingNo} · {r.generatedDate} · {r.reportType}</div>
-                </div>
-                <button style={{ padding:'5px 13px', borderRadius:7, fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:'inherit', background:'#f37021', color:'white', border:'none' }}
-                  onClick={() => setArchiveConfirm(r.id)}>Archive</button>
+          <div style={{ marginTop:32, paddingTop:28, borderTop:'1px solid #e5ddf0' }}>
+            <h2 style={S.ph}>Generated Reports</h2>
+            <p style={S.ps}>Every report generated above is listed here. Click Download to open the full printable report.</p>
+            {reports.length === 0 ? (
+              <div style={{ textAlign:'center', padding:'48px 20px', color:'#bbb', fontSize:13 }}>No reports generated yet.</div>
+            ) : (
+              <div style={{ overflowX:'auto' }}>
+                <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
+                  <thead>
+                    <tr>{['Report ID','Tracking No.','Location','Report Type','Format','Generated Date','Action'].map(h => <th key={h} style={S.th}>{h}</th>)}</tr>
+                  </thead>
+                  <tbody>
+                    {reports.map((r, i) => (
+                      <tr key={r.id} style={{ background:i%2===0?'white':'#faf9ff' }}>
+                        <td style={{ ...S.td, fontWeight:700, color:'#390955' }}>{r.id}</td>
+                        <td style={{ ...S.td, fontFamily:'monospace', fontSize:12 }}>{r.trackingNo}</td>
+                        <td style={S.td}>{r.location}</td>
+                        <td style={S.td}>{r.reportType}</td>
+                        <td style={S.td}><span style={{ padding:'2px 8px', borderRadius:6, fontSize:11, fontWeight:700, background:'#f0eaf8', color:'#390955' }}>{r.format}</span></td>
+                        <td style={{ ...S.td, fontSize:12, color:'#888' }}>{r.generatedDate}</td>
+                        <td style={S.td}>
+                          <button style={{ padding:'6px 14px', borderRadius:7, fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:'inherit', background:'#f37021', color:'white', border:'none' }}
+                            onClick={() => handleDownload(r)}>⬇ Download</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-            )) : (
-              <p style={{ color:'#aaa', fontSize:13, textAlign:'center', padding:'28px', background:'#faf9ff', border:'1.5px dashed #d4c8e8', borderRadius:9 }}>No active reports to archive.</p>
             )}
           </div>
-          {archived.length > 0 && (
-            <>
-              <div style={{ fontSize:12, fontWeight:700, color:'#390955', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:10 }}>Already Archived</div>
-              <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-                {archived.map(r => (
-                  <div key={r.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'14px 16px', background:'#fdfcfe', borderRadius:10, border:'1px solid #e5ddf0', borderLeft:'4px solid #c9a0e0', opacity:0.9 }}>
-                    <div>
-                      <div style={{ fontSize:13, fontWeight:700, color:'#555', marginBottom:3 }}>{r.id} <span style={{ ...badgeStyle('archived'), marginLeft:10 }}>Archived</span></div>
-                      <div style={{ fontSize:12, color:'#aaa', fontFamily:'monospace' }}>{r.trackingNo} · {r.generatedDate}</div>
-                    </div>
-                    <span style={{ fontSize:11, color:'#c9a0e0', fontWeight:600 }}>Managed in Settings</span>
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
         </div>
       );
 
@@ -360,19 +303,6 @@ export default function GenerateTrackingInformation({ reports: externalReports, 
       </div>
 
       <div style={S.content}>{content()}</div>
-
-      {archiveConfirm && (
-        <div style={S.ov}>
-          <div style={S.modal}>
-            <h3 style={S.mt}>Confirm Archive</h3>
-            <p style={S.mb}>Are you sure you want to archive report <strong>{archiveConfirm}</strong>?</p>
-            <div style={S.ma}>
-              <button style={{ ...btnStyle('secondary'), flex:1 }} onClick={() => setArchiveConfirm(null)}>Cancel</button>
-              <button style={{ ...btnStyle('orange'), flex:1 }} onClick={() => doArchive(archiveConfirm)}>Archive Report</button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

@@ -23,10 +23,6 @@ const StatusBadge = ({ val }) => {
   );
 };
 
-const TypePill = ({ val }) => (
-  <span style={{ padding:'3px 9px', borderRadius:6, fontSize:11, fontWeight:600, background:'#f5f0fc', color:'#6b21a8', border:'1px solid #e9d5ff' }}>{val}</span>
-);
-
 const Ico = {
   Pin:     () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>,
   Plus:    () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14"/></svg>,
@@ -113,13 +109,11 @@ export default function ProcessParcelLocation() {
   const [gpsError,       setGpsError]       = useState('');
   const [gpsLastRefresh, setGpsLastRefresh] = useState(nowFull());
 
-  // Form states
-  const [parcelId, setParcelId] = useState('');
-  const [lat,      setLat]      = useState('');
-  const [lng,      setLng]      = useState('');
-  const [locName,  setLocName]  = useState('');
-  const [locType,  setLocType]  = useState('Warehouse');
-  const [notes,    setNotes]    = useState('');
+  // Tracking Number → Rider ID → Rider Name, so the "Assigned Rider" column
+  // can be resolved even though ParcelLocation records themselves don't
+  // store a rider (they're just scan/coordinate logs, keyed by parcelId).
+  const [parcelRiderByTracking, setParcelRiderByTracking] = useState({});
+  const [riderNameById,         setRiderNameById]         = useState({});
 
   useEffect(() => {
     const t = setInterval(() => setClock(nowFull()), 1000);
@@ -128,6 +122,7 @@ export default function ProcessParcelLocation() {
 
   useEffect(() => {
     fetchLocations();
+    fetchRiderLinks();
   }, []);
 
   const fetchLocations = async () => {
@@ -142,14 +137,32 @@ export default function ProcessParcelLocation() {
     }
   };
 
+  const fetchRiderLinks = async () => {
+    try {
+      const [pRes, rRes] = await Promise.all([
+        fetch('https://yto-express.onrender.com/api/parcels'),
+        fetch('https://yto-express.onrender.com/api/riders'),
+      ]);
+      const [pData, rData] = await Promise.all([pRes.json(), rRes.json()]);
+      const pMap = {};
+      (Array.isArray(pData) ? pData : []).forEach(p => { if (p.trackingNumber) pMap[p.trackingNumber] = p.riderId || ''; });
+      const rMap = {};
+      (Array.isArray(rData) ? rData : []).forEach(r => { rMap[r.registrationId || r._id] = r.riderName || 'Unknown Rider'; });
+      setParcelRiderByTracking(pMap);
+      setRiderNameById(rMap);
+    } catch (err) {
+      console.error('Error fetching rider links:', err);
+    }
+  };
+
+  const assignedRiderFor = (parcelId) => {
+    const riderId = parcelRiderByTracking[parcelId];
+    return riderId ? (riderNameById[riderId] || riderId) : '';
+  };
+
   const showMessage = (msg, type = 'success') => {
     if (type === 'success') { setSuccessMessage(msg); setTimeout(() => setSuccessMessage(''), 3000); }
     else { setErrorMessage(msg); setTimeout(() => setErrorMessage(''), 3000); }
-  };
-
-  const resetForm = () => {
-    setParcelId(''); setLat(''); setLng('');
-    setLocName(''); setLocType('Warehouse'); setNotes('');
   };
 
   const handleSaveEdit = async (updates) => {
@@ -167,32 +180,6 @@ export default function ProcessParcelLocation() {
       showMessage('Location record modified successfully');
     } catch (err) {
       showMessage('Error updating location', 'error');
-    }
-  };
-
-  const handleAddLocation = async (e) => {
-    e.preventDefault();
-    if (!parcelId.trim() || !lat.trim() || !lng.trim() || !locName.trim()) {
-      showMessage('Please fill all required fields.', 'error'); return;
-    }
-    if (isNaN(parseFloat(lat)) || isNaN(parseFloat(lng))) {
-      showMessage('Latitude and Longitude must be numbers.', 'error'); return;
-    }
-    if (locations.some(r => r.parcelId === parcelId.trim())) {
-      showMessage('This Parcel ID already exists.', 'error'); return;
-    }
-    try {
-      await fetch('https://yto-express.onrender.com/api/parcel-locations', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ parcelId: parcelId.trim(), lat: lat.trim(), lng: lng.trim(), location: locName.trim(), type: locType, status: 'Active', geofence: 'Inside', notes: notes.trim() }),
-      });
-      await fetchLocations();
-      showMessage('New hub location added successfully!');
-      resetForm();
-      setActiveTab('parcel');
-    } catch (err) {
-      showMessage('Error saving location', 'error');
     }
   };
 
@@ -216,16 +203,20 @@ export default function ProcessParcelLocation() {
     showMessage('Satellite GPS telemetrics synchronized.');
   };
 
-  const filtered = locations.filter(r =>
-    r.parcelId?.toLowerCase().includes(search.toLowerCase()) ||
-    r.location?.toLowerCase().includes(search.toLowerCase()) ||
-    r.status?.toLowerCase().includes(search.toLowerCase()) ||
-    r.type?.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = locations.filter(r => {
+    const q = search.toLowerCase();
+    return (
+      r.parcelId?.toLowerCase().includes(q) ||
+      r.location?.toLowerCase().includes(q) ||
+      assignedRiderFor(r.parcelId)?.toLowerCase().includes(q)
+    );
+  });
 
+  // Add Location was a manual-entry form — removed since GPS coordinates are
+  // now captured automatically via the rider mobile app scan, not typed in
+  // by an admin. Get Parcel Info is the default view.
   const tabs = [
     { key:'parcel', label:'Get Parcel Info',  icon: <Ico.Pin/> },
-    { key:'add',    label:'Add Location',     icon: <Ico.Plus/> },
     { key:'gps',    label:'GPS Coordinates',  icon: <Ico.Map/> },
   ];
 
@@ -258,14 +249,16 @@ export default function ProcessParcelLocation() {
 
         <div className="process-parcel-location-content-area">
 
-          {/* TAB 1: PARCEL LOCATION RECORDS */}
+          {/* TAB 1: PARCEL LOCATION RECORDS — default view. Read-only scan log:
+              every row here came from a GPS ping captured automatically by the
+              rider mobile app, so there's no manual add/edit-in-place here. */}
           {activeTab === 'parcel' && (
             <div className="process-parcel-location-section">
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'20px', flexWrap:'wrap', gap:12 }}>
-                <h2 className="process-parcel-location-section-title" style={{ margin:0 }}>Parcel Location Records</h2>
+                <h2 className="process-parcel-location-section-title" style={{ margin:0 }}>Scanned Location Log</h2>
                 <div style={{ display:'flex', alignItems:'center', gap:12 }}>
                   <div style={{ position:'relative' }}>
-                    <input placeholder="Search parcel, hub, type..." value={search} onChange={e=>setSearch(e.target.value)}
+                    <input placeholder="Search tracking ID, rider, hub..." value={search} onChange={e=>setSearch(e.target.value)}
                       style={{ padding:'10px 14px 10px 36px', border:'1px solid #dcd3e8', borderRadius:8, fontSize:13, width:260, background:'white' }}/>
                     <span style={{ position:'absolute', left:12, top:'50%', transform:'translateY(-50%)', opacity:0.6 }}><Ico.Search/></span>
                   </div>
@@ -276,34 +269,30 @@ export default function ProcessParcelLocation() {
               {loading ? (
                 <div style={{ textAlign:'center', padding:48, color:'#a890c0', fontWeight:600 }}>Loading from database...</div>
               ) : filtered.length === 0 ? (
-                <div style={{ textAlign:'center', padding:48, color:'#a890c0', fontWeight:600 }}>No parcel locations yet. Add one first!</div>
+                <div style={{ textAlign:'center', padding:48, color:'#a890c0', fontWeight:600 }}>No scanned locations yet. Records appear here once a rider scans a parcel.</div>
               ) : (
                 <div style={{ overflowX:'auto', border:'1px solid #e8e2f0', borderRadius:'12px' }}>
                   <table style={{ width:'100%', borderCollapse:'collapse', background:'white' }}>
                     <thead>
                       <tr style={{ background:'#390955', color:'white' }}>
-                        {['Parcel ID','Location Name','Hub Type','Coordinates','Status','Geofence','Last Update','Actions'].map(h => (
+                        {['Tracking ID','Assigned Rider','Current Hub/City','Coordinates','Last Scan Timestamp'].map(h => (
                           <th key={h} style={{ padding:'14px 16px', textAlign:'left', fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.5px' }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
-                      {filtered.map((row, i) => (
-                        <tr key={row._id} style={{ borderBottom:'1px solid #f3eff7', background:i%2===0?'#ffffff':'#fcfbfe' }}>
-                          <td style={{ padding:'14px 16px', fontFamily:'monospace', fontSize:12, fontWeight:700, color:'#f37021' }}>{row.parcelId}</td>
-                          <td style={{ padding:'14px 16px', fontWeight:700, color:'#390955' }}>{row.location}</td>
-                          <td style={{ padding:'14px 16px' }}><TypePill val={row.type}/></td>
-                          <td style={{ padding:'14px 16px', fontFamily:'monospace', fontSize:12, color:'#6b21a8', fontWeight:600 }}>{row.lat}, {row.lng}</td>
-                          <td style={{ padding:'14px 16px' }}><StatusBadge val={row.status}/></td>
-                          <td style={{ padding:'14px 16px' }}><StatusBadge val={row.geofence}/></td>
-                          <td style={{ padding:'14px 16px', fontSize:12, color:'#8c7f9d' }}>{row.updatedAt ? new Date(row.updatedAt).toLocaleString() : '—'}</td>
-                          <td style={{ padding:'14px 16px' }}>
-                            <button className="process-parcel-location-btn process-parcel-location-btn--secondary" style={{ padding:'6px 14px', borderRadius:6 }} onClick={()=>setEditTarget(row)}>
-                              Edit
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
+                      {filtered.map((row, i) => {
+                        const rider = assignedRiderFor(row.parcelId);
+                        return (
+                          <tr key={row._id} style={{ borderBottom:'1px solid #f3eff7', background:i%2===0?'#ffffff':'#fcfbfe' }}>
+                            <td style={{ padding:'14px 16px', fontFamily:'monospace', fontSize:12, fontWeight:700, color:'#f37021' }}>{row.parcelId}</td>
+                            <td style={{ padding:'14px 16px', fontWeight:700, color: rider ? '#390955' : '#bbb' }}>{rider ? `🛵 ${rider}` : 'Unassigned'}</td>
+                            <td style={{ padding:'14px 16px', fontWeight:700, color:'#390955' }}>{row.location}</td>
+                            <td style={{ padding:'14px 16px', fontFamily:'monospace', fontSize:12, color:'#6b21a8', fontWeight:600 }}>{row.lat}, {row.lng}</td>
+                            <td style={{ padding:'14px 16px', fontSize:12, color:'#8c7f9d' }}>{row.updatedAt ? new Date(row.updatedAt).toLocaleString() : '—'}</td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -311,51 +300,7 @@ export default function ProcessParcelLocation() {
             </div>
           )}
 
-          {/* TAB 2: ADD LOCATION */}
-          {activeTab === 'add' && (
-            <div className="process-parcel-location-section">
-              <h2 className="process-parcel-location-section-title">Add New Parcel Location Node</h2>
-              <form className="process-parcel-location-form" onSubmit={handleAddLocation}>
-                <div className="process-parcel-location-form-group">
-                  <label>Parcel Anchor ID *</label>
-                  <input value={parcelId} onChange={e=>setParcelId(e.target.value)} placeholder="e.g. PRC-20240323-007" required/>
-                </div>
-                <div className="process-parcel-location-form-group">
-                  <label>Node Latitude *</label>
-                  <input value={lat} onChange={e=>setLat(e.target.value)} placeholder="e.g. 14.5995" required/>
-                </div>
-                <div className="process-parcel-location-form-group">
-                  <label>Node Longitude *</label>
-                  <input value={lng} onChange={e=>setLng(e.target.value)} placeholder="e.g. 120.9842" required/>
-                </div>
-                <div className="process-parcel-location-form-group">
-                  <label>Hub Location Station Title *</label>
-                  <input value={locName} onChange={e=>setLocName(e.target.value)} placeholder="e.g. Manila Main Warehouse" required/>
-                </div>
-                <div className="process-parcel-location-form-group">
-                  <label>Operational Hub Type</label>
-                  <select value={locType} onChange={e=>setLocType(e.target.value)}>
-                    {['Warehouse','Distribution','Branch','Depot','Delivery Point'].map(o=><option key={o}>{o}</option>)}
-                  </select>
-                </div>
-                <div className="process-parcel-location-form-group" style={{ gridColumn:'span 2' }}>
-                  <label>Internal Logistics Route Remarks</label>
-                  <textarea className="process-parcel-location-textarea" value={notes} onChange={e=>setNotes(e.target.value)} placeholder="Add optional routing notes..." rows="3" style={{ padding:'11px 14px', borderRadius:8, border:'1px solid #dcd3e8', fontFamily:'inherit', fontSize:'13px', width:'100%' }}/>
-                </div>
-                {parcelId && locName && lat && lng && (
-                  <div style={{ gridColumn:'span 2', padding:'10px 14px', borderRadius:8, border:'1.5px dashed #dcd3e8', background:'#faf9ff', fontSize:13, color:'#6b21a8', fontFamily:'monospace' }}>
-                    Preview: {parcelId} · {locName} · {lat}, {lng} · {locType}
-                  </div>
-                )}
-                <div className="process-parcel-location-form-actions">
-                  <button type="submit" className="process-parcel-location-btn process-parcel-location-btn--primary">Add Location Node</button>
-                  <button type="button" className="process-parcel-location-btn process-parcel-location-btn--secondary" onClick={resetForm}>Clear Form</button>
-                </div>
-              </form>
-            </div>
-          )}
-
-          {/* TAB 3: GPS LOOKUP */}
+          {/* TAB 2: GPS LOOKUP */}
           {activeTab === 'gps' && (
             <div className="process-parcel-location-section">
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'20px', gap:'12px', flexWrap:'wrap' }}>
