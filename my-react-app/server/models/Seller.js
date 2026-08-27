@@ -16,7 +16,11 @@ const sellerSchema = new mongoose.Schema({
     bankName: String,
     commissionRate: Number,
     paymentCycle: String,
-    status: { type: String, default: 'ACTIVE' }
+    status: { type: String, default: 'ACTIVE' },
+    // REAL = live @gmail.com signup, DEMO = @yto.com/@example.com test
+    // account — set by the bridge adapter from the mobile registration's
+    // email domain (see bridgeRoutes.js).
+    accountCategory: { type: String, enum: ['REAL', 'DEMO'], default: 'REAL' },
 });
 
 module.exports = mongoose.model('Seller', sellerSchema);

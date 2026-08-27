@@ -20,6 +20,12 @@ app.get('/', (req, res) => {
     res.send('YTO Express API Server is Running!');
 });
 
+// ── BRIDGE ROUTES ──
+// Cross-platform sync from the Android app's backend (yto_express_backend)
+// into this backend's schema — see bridgeRoutes.js for the transformation
+// logic (role routing, field renames, enterprise ID generation, etc.).
+app.use('/api/bridge', require('./bridgeRoutes'));
+
 // ── SELLER ROUTES ──
 app.post('/api/sellers', async (req, res) => {
     try {

@@ -23,6 +23,10 @@ const riderSchema = new mongoose.Schema({
     deliveries: { type: Number, default: 0 },
     rating: { type: Number, default: 5.0 },
     successRate: { type: Number, default: 100 },
+    // REAL = live @gmail.com signup, DEMO = @yto.com/@example.com test
+    // account — set by the bridge adapter from the mobile registration's
+    // email domain (see bridgeRoutes.js).
+    accountCategory: { type: String, enum: ['REAL', 'DEMO'], default: 'REAL' },
 }, { timestamps: true });
 
 module.exports = mongoose.model('Rider', riderSchema);
