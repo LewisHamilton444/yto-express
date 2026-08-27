@@ -1,4 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import {
+  PackageCheck, Bike, Truck, UserCheck,
+  TrendingUp, TrendingDown,
+  Trophy, Star, Route,
+  ClipboardList, Download, Share2,
+  Users, PackageSearch, BarChart3,
+} from 'lucide-react';
 import './AnalyticsDashboard.css';
 import yto_logo from './yto_express_logo.png';
 
@@ -156,11 +163,18 @@ const buildLastNWeeks = (parcels, n = 6) => {
   return weeks;
 };
 
-const TrendUp = () => (
-  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-    <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/>
-  </svg>
-);
+// Stylized placeholder for a chart/list with no data yet — swaps the old
+// plain "No X yet." text for a small icon + heading + helper line.
+const DashboardEmptyState = (props) => {
+  const Icon = props.icon;
+  return (
+    <div className="ed-empty-state">
+      <div className="ed-empty-icon"><Icon size={28} strokeWidth={1.75} /></div>
+      <p className="ed-empty-title">{props.title}</p>
+      {props.subtitle && <p className="ed-empty-sub">{props.subtitle}</p>}
+    </div>
+  );
+};
 
 export default function AnalyticsDashboard({ onLogout, currentUser }) {
   const [dateRange, setDateRange]           = useState('7days');
@@ -243,48 +257,56 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
   const createdVals  = last7.map(d => d.created);
   const deliveryVals = last7.map(d => d.delivered);
   const returnVals   = last7.map(d => d.returned);
-  const maxCreated  = Math.max(1, ...createdVals);
   const maxDelivery = Math.max(1, ...deliveryVals);
   const maxReturn   = Math.max(1, ...returnVals);
 
-  // Week-over-week new-parcel volume — the only KPI with enough history for a real trend.
+  // Week-over-week windows, reused below for the one primary KPI with enough
+  // history for a real trend.
   const now = new Date();
   const startThisWeek = new Date(now); startThisWeek.setDate(now.getDate() - 6);
   const startPrevWeek = new Date(now); startPrevWeek.setDate(now.getDate() - 13);
   const endPrevWeek   = new Date(now); endPrevWeek.setDate(now.getDate() - 7);
-  const thisWeekCount = parcels.filter(p => p.createdAt && new Date(p.createdAt) >= startThisWeek).length;
-  const prevWeekCount = parcels.filter(p => p.createdAt && new Date(p.createdAt) >= startPrevWeek && new Date(p.createdAt) <= endPrevWeek).length;
-  const weekChangePct = prevWeekCount > 0
-    ? (((thisWeekCount - prevWeekCount) / prevWeekCount) * 100).toFixed(1)
-    : (thisWeekCount > 0 ? '100.0' : '0.0');
 
-  const kpis = [
-    { label: 'Delivery Success',  value: `${deliverySuccessPct}%`, sub: `${deliveredCount} of ${totalParcels} parcels` },
-    { label: 'Active Riders',     value: `${activeRidersCount}/${totalRidersCount}`, sub: 'currently on duty' },
-    { label: 'Avg Rider Rating',  value: `${avgRating} / 5`, sub: `across ${totalRidersCount} rider${totalRidersCount === 1 ? '' : 's'}` },
-    { label: 'Total Parcels',     value: `${totalParcels}`, change: `${weekChangePct >= 0 ? '+' : ''}${weekChangePct}%`, sub: `${deliveredCount} delivered`, spark: createdVals },
-  ];
+  // Delivery Success is the only primary KPI with a legitimate week-over-week
+  // comparison (parcels carry real createdAt timestamps). The other three are
+  // point-in-time snapshots (live rider roster, current queue), so we don't
+  // fabricate a trend for them.
+  const thisWeekParcels = parcels.filter(p => p.createdAt && new Date(p.createdAt) >= startThisWeek);
+  const prevWeekParcels = parcels.filter(p => p.createdAt && new Date(p.createdAt) >= startPrevWeek && new Date(p.createdAt) <= endPrevWeek);
+  const thisWeekSuccessPct = thisWeekParcels.length ? (thisWeekParcels.filter(p => p.status === 'Delivered').length / thisWeekParcels.length) * 100 : null;
+  const prevWeekSuccessPct = prevWeekParcels.length ? (prevWeekParcels.filter(p => p.status === 'Delivered').length / prevWeekParcels.length) * 100 : null;
+  const successTrendPts = (thisWeekSuccessPct !== null && prevWeekSuccessPct !== null)
+    ? Number((thisWeekSuccessPct - prevWeekSuccessPct).toFixed(1))
+    : null;
 
   const topRiders   = [...riders].sort((a, b) => (b.successRate || 0) - (a.successRate || 0)).slice(0, 7);
   const riderScores = topRiders.map(r => r.successRate || 0);
   const riderLabels = topRiders.map(r => (r.riderName || 'Rider').split(' ')[0]);
   const maxRider     = Math.max(1, ...riderScores);
-  const avgRiderRate = riders.length ? (riders.reduce((s, r) => s + (r.successRate || 0), 0) / riders.length).toFixed(1) : '0.0';
   const peakRider     = topRiders[0]?.riderName || 'N/A';
 
-  // ── Additional operational KPIs (new, additive — the original 4 cards above stay untouched) ──
   const offlineRidersCount = riders.length - activeRidersCount;
   const inTransitCount = parcels.filter(p => String(p.status || '').toLowerCase().includes('transit')).length;
   const pendingVerificationsCount = pendingSellers.length + pendingRiders.length;
-  const deliveredWithDates = parcels.filter(p => p.status === 'Delivered' && p.createdAt && p.updatedAt);
-  const onTimeCount = deliveredWithDates.filter(p => (new Date(p.updatedAt) - new Date(p.createdAt)) / 86400000 <= 3).length;
-  const onTimeRatePct = deliveredWithDates.length ? ((onTimeCount / deliveredWithDates.length) * 100).toFixed(1) : '0.0';
 
-  const operationalKpis = [
-    { label: 'Active Riders', value: `${activeRidersCount} online`, sub: `${offlineRidersCount} offline`, color: '#22c55e' },
-    { label: 'In-Transit Parcels', value: `${inTransitCount}`, sub: `of ${totalParcels} total parcels` },
-    { label: 'Pending Verifications', value: `${pendingVerificationsCount}`, sub: `${pendingSellers.length} sellers, ${pendingRiders.length} riders` },
-    { label: 'On-Time Delivery Rate', value: `${onTimeRatePct}%`, sub: `${onTimeCount} of ${deliveredWithDates.length} delivered on time` },
+  // Four primary metric cards — replaces the old 8-card KPI grid.
+  const primaryKpis = [
+    {
+      key: 'delivery-success', label: 'Delivery Success', icon: PackageCheck, tone: 'purple',
+      value: `${deliverySuccessPct}%`, sub: `${deliveredCount} of ${totalParcels} parcels`, trend: successTrendPts,
+    },
+    {
+      key: 'active-riders', label: 'Active Riders', icon: Bike, tone: 'green',
+      value: `${activeRidersCount}/${totalRidersCount}`, sub: `${offlineRidersCount} offline`, trend: null,
+    },
+    {
+      key: 'in-transit', label: 'In-Transit Parcels', icon: Truck, tone: 'orange',
+      value: `${inTransitCount}`, sub: `of ${totalParcels} total parcels`, trend: null,
+    },
+    {
+      key: 'pending-verifications', label: 'Pending Verifications', icon: UserCheck, tone: 'amber',
+      value: `${pendingVerificationsCount}`, sub: `${pendingSellers.length} sellers, ${pendingRiders.length} riders`, trend: null,
+    },
   ];
 
   const weekly = useMemo(() => buildLastNWeeks(parcels, 6), [parcels]);
@@ -413,7 +435,6 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
                     <option value="30days">Last 30 Days</option>
                   </select>
                 </div>
-                <button className="ed-btn-export">Export</button>
               </div>
             </header>
 
@@ -429,40 +450,29 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
                   </div>
                 )}
                 <div className="ed-kpi-row">
-                  {kpis.map((kpi, index) => (
-                    <div className="ed-kpi-card" key={index}>
-                      <div className="ed-kpi-top">
-                        <span className="ed-kpi-label">{kpi.label}</span>
-                        {kpi.change && <span className="ed-kpi-badge"><TrendUp /> {kpi.change}</span>}
+                  {primaryKpis.map((kpi) => {
+                    const Icon = kpi.icon;
+                    const hasTrend = kpi.trend !== null && kpi.trend !== undefined;
+                    const trendUp = hasTrend && kpi.trend >= 0;
+                    return (
+                      <div className="ed-kpi-card" key={kpi.key}>
+                        <div className="ed-kpi-top">
+                          <span className={`ed-kpi-icon-wrap ${kpi.tone}`}><Icon size={20} strokeWidth={2.25} /></span>
+                          {hasTrend && (
+                            <span className={`ed-kpi-trend ${trendUp ? 'up' : 'down'}`} title="Week-over-week change in delivery success rate">
+                              {trendUp ? <TrendingUp size={12} strokeWidth={3} /> : <TrendingDown size={12} strokeWidth={3} />}
+                              {trendUp ? '+' : ''}{kpi.trend} pts
+                            </span>
+                          )}
+                        </div>
+                        <div className="ed-kpi-body">
+                          <h2>{kpi.value}</h2>
+                          <span className="ed-kpi-label">{kpi.label}</span>
+                          <p className="ed-kpi-sub">{kpi.sub}</p>
+                        </div>
                       </div>
-                      <div className="ed-kpi-middle">
-                        <h2>{kpi.value}</h2>
-                        {kpi.spark ? (
-                          <div className="ed-sparkline">
-                            {kpi.spark.map((v, sIdx) => (
-                              <div key={sIdx} className="ed-spark-bar" style={{ height: `${Math.max(4, (v / maxCreated) * 100)}%`, opacity: sIdx === kpi.spark.length - 1 ? 1 : 0.3 }} />
-                            ))}
-                          </div>
-                        ) : (
-                          <p style={{ fontSize: '11px', color: '#888', margin: '4px 0 0' }}>{kpi.sub}</p>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="ed-kpi-row" style={{ marginTop: 4 }}>
-                  {operationalKpis.map((kpi, index) => (
-                    <div className="ed-kpi-card" key={index}>
-                      <div className="ed-kpi-top">
-                        <span className="ed-kpi-label">{kpi.label}</span>
-                      </div>
-                      <div className="ed-kpi-middle">
-                        <h2 style={kpi.color ? { color: kpi.color } : undefined}>{kpi.value}</h2>
-                        <p style={{ fontSize: '11px', color: '#888', margin: '4px 0 0' }}>{kpi.sub}</p>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
                 <div className="ed-workspace-grid">
@@ -476,30 +486,44 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
                     </div>
 
                     {riders.length === 0 ? (
-                      <p style={{ padding: '32px 0', textAlign: 'center', color: '#aaa', fontSize: '13px' }}>No riders registered yet.</p>
+                      <DashboardEmptyState icon={Users} title="No riders registered yet" subtitle="Performance rankings will appear here once riders are added." />
                     ) : (
-                      <div className="ed-bar-chart">
-                        {riderScores.map((score, i) => {
-                          const isTop = score === maxRider;
-                          return (
-                            <div className="ed-bar-column" key={i}>
-                              <span className="ed-bar-score" style={{ color: isTop ? '#f37021' : '#390955' }}>{score}%</span>
-                              <div className="ed-bar-track">
-                                <div className={`ed-bar-fill ${isTop ? 'peak' : 'standard'}`} style={{ height: `${(score / maxRider) * 100}%` }} />
+                      <div className="ed-chart-axis-row">
+                        <div className="ed-axis-ticks">
+                          <span>{maxRider}%</span>
+                          <span>{Math.round(maxRider / 2)}%</span>
+                          <span>0%</span>
+                        </div>
+                        <div className="ed-bar-chart">
+                          {riderScores.map((score, i) => {
+                            const isTop = score === maxRider;
+                            return (
+                              <div className="ed-bar-column" key={i}>
+                                <span className="ed-bar-score" style={{ color: isTop ? '#f37021' : '#390955' }}>{score}%</span>
+                                <div className="ed-bar-track">
+                                  <div className={`ed-bar-fill ${isTop ? 'peak' : 'standard'}`} style={{ height: `${(score / maxRider) * 100}%` }} />
+                                </div>
+                                <span className="ed-bar-day">{riderLabels[i]}</span>
                               </div>
-                              <span className="ed-bar-day">{riderLabels[i]}</span>
-                            </div>
-                          );
-                        })}
+                            );
+                          })}
+                        </div>
                       </div>
                     )}
 
                     <div className="ed-chart-footer">
-                      <div className="ed-footer-stat"><label>Avg. Rate</label><strong>{avgRiderRate}%</strong></div>
-                      <div className="ed-footer-divider" />
-                      <div className="ed-footer-stat"><label>Top Rider</label><strong style={{ color: '#f37021' }}>{peakRider}</strong></div>
-                      <div className="ed-footer-divider" />
-                      <div className="ed-footer-stat"><label>Total Rides</label><strong>{totalRides.toLocaleString()}</strong></div>
+                      <div className="ed-footer-badge">
+                        <span className="ed-footer-badge-icon"><Trophy size={14} /></span>
+                        <div><label>Top Performing Rider</label><strong>{peakRider}</strong></div>
+                      </div>
+                      <div className="ed-footer-badge">
+                        <span className="ed-footer-badge-icon"><Star size={14} /></span>
+                        <div><label>Average Delivery Rating</label><strong>{avgRating} / 5</strong></div>
+                      </div>
+                      <div className="ed-footer-badge">
+                        <span className="ed-footer-badge-icon"><Route size={14} /></span>
+                        <div><label>Total Completed Rides</label><strong>{totalRides.toLocaleString()}</strong></div>
+                      </div>
                     </div>
                   </section>
 
@@ -542,9 +566,16 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
                       </div>
                     </div>
 
-                    <div className="ed-action-footer">
-                      <button className="ed-btn-primary" onClick={() => handleMenuClick('manage-parcels')}>Generate Full Report</button>
-                      <button className="ed-btn-secondary">Download PDF</button>
+                    <div className="ed-action-bar">
+                      <button className="ed-action-btn primary" onClick={() => handleMenuClick('manage-parcels')}>
+                        <ClipboardList size={15} /> Generate Full Report
+                      </button>
+                      <button className="ed-action-btn secondary">
+                        <Download size={15} /> Download PDF
+                      </button>
+                      <button className="ed-action-btn secondary">
+                        <Share2 size={15} /> Export
+                      </button>
                     </div>
                   </section>
                 </div>
@@ -575,25 +606,37 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
                     </div>
 
                     {volumeVals.every(v => v === 0) ? (
-                      <p style={{ padding: '32px 0', textAlign: 'center', color: '#aaa', fontSize: '13px' }}>No parcel volume data yet.</p>
+                      <DashboardEmptyState icon={PackageSearch} title="No parcel volume data yet" subtitle="New parcel activity will populate this chart automatically." />
                     ) : (
-                      <div className="ed-bar-chart">
-                        {volumeVals.map((v, i) => (
-                          <div className="ed-bar-column" key={i}>
-                            <span className="ed-bar-score" style={{ color: v === maxVolume ? '#f37021' : '#390955' }}>{v}</span>
-                            <div className="ed-bar-track">
-                              <div className={`ed-bar-fill ${v === maxVolume ? 'peak' : 'standard'}`} style={{ height: `${Math.max(4, (v / maxVolume) * 100)}%` }} />
+                      <div className="ed-chart-axis-row">
+                        <div className="ed-axis-ticks">
+                          <span>{maxVolume}</span>
+                          <span>{Math.round(maxVolume / 2)}</span>
+                          <span>0</span>
+                        </div>
+                        <div className="ed-bar-chart">
+                          {volumeVals.map((v, i) => (
+                            <div className="ed-bar-column" key={i}>
+                              <span className="ed-bar-score" style={{ color: v === maxVolume ? '#f37021' : '#390955' }}>{v}</span>
+                              <div className="ed-bar-track">
+                                <div className={`ed-bar-fill ${v === maxVolume ? 'peak' : 'standard'}`} style={{ height: `${Math.max(4, (v / maxVolume) * 100)}%` }} />
+                              </div>
+                              <span className="ed-bar-day">{volumeLabels[i]}</span>
                             </div>
-                            <span className="ed-bar-day">{volumeLabels[i]}</span>
-                          </div>
-                        ))}
+                          ))}
+                        </div>
                       </div>
                     )}
 
                     <div className="ed-chart-footer">
-                      <div className="ed-footer-stat"><label>Total ({volumeView})</label><strong>{volumeVals.reduce((a, b) => a + b, 0)}</strong></div>
-                      <div className="ed-footer-divider" />
-                      <div className="ed-footer-stat"><label>Peak</label><strong style={{ color: '#f37021' }}>{maxVolume}</strong></div>
+                      <div className="ed-footer-badge">
+                        <span className="ed-footer-badge-icon"><BarChart3 size={14} /></span>
+                        <div><label>Total ({volumeView})</label><strong>{volumeVals.reduce((a, b) => a + b, 0)}</strong></div>
+                      </div>
+                      <div className="ed-footer-badge">
+                        <span className="ed-footer-badge-icon"><TrendingUp size={14} /></span>
+                        <div><label>Peak</label><strong>{maxVolume}</strong></div>
+                      </div>
                     </div>
                   </section>
 
@@ -606,7 +649,7 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
                     </div>
 
                     {activityRiders.length === 0 ? (
-                      <p style={{ padding: '32px 0', textAlign: 'center', color: '#aaa', fontSize: '13px' }}>No riders registered yet.</p>
+                      <DashboardEmptyState icon={Users} title="No riders registered yet" subtitle="Delivery activity per rider will show up here once riders are added." />
                     ) : (
                       <div className="ed-mini-histogram-block">
                         <div className="ed-mini-head"><h6>Deliveries per Rider (Top 7)</h6><span>{activityVals.reduce((a, b) => a + b, 0)} total</span></div>

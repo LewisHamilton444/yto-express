@@ -116,19 +116,6 @@ html, body, #root {
   background-repeat: no-repeat;
   background-position: calc(100% - 14px) center;
 }
-.ed-btn-export {
-  background: #390955;
-  color: white;
-  border: none;
-  padding: 10px 20px;
-  border-radius: 8px;
-  font-weight: 600;
-  font-size: 13px;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-.ed-btn-export:hover { background: #27043b; }
-
 /* Dashboard Card Grid Metrics */
 .ed-kpi-row {
   display: grid;
@@ -137,52 +124,67 @@ html, body, #root {
 }
 .ed-kpi-card {
   background: white;
-  border-radius: 12px;
-  padding: 18px;
-  box-shadow: 0 2px 8px rgba(57, 9, 85, 0.04);
+  border-radius: 14px;
+  padding: 24px;
+  box-shadow: 0 1px 2px rgba(57, 9, 85, 0.04);
   border: 1px solid #edeaf2;
+  transition: box-shadow 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
+}
+.ed-kpi-card:hover {
+  box-shadow: 0 10px 24px rgba(57, 9, 85, 0.10);
+  transform: translateY(-2px);
+  border-color: #ded4ec;
 }
 .ed-kpi-top {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
+  margin-bottom: 16px;
+}
+.ed-kpi-icon-wrap {
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.ed-kpi-icon-wrap.purple { background: rgba(57, 9, 85, 0.08);   color: #390955; }
+.ed-kpi-icon-wrap.green  { background: rgba(34, 197, 94, 0.12); color: #16a34a; }
+.ed-kpi-icon-wrap.orange { background: rgba(243, 112, 33, 0.1); color: #f37021; }
+.ed-kpi-icon-wrap.amber  { background: rgba(245, 158, 11, 0.12); color: #b45309; }
+.ed-kpi-trend {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11.5px;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 20px;
+}
+.ed-kpi-trend.up   { color: #16a34a; background: rgba(34, 197, 94, 0.12); }
+.ed-kpi-trend.down { color: #dc2626; background: rgba(239, 68, 68, 0.10); }
+.ed-kpi-body h2 {
+  margin: 0;
+  font-size: 27px;
+  font-weight: 800;
+  color: #390955;
+  letter-spacing: -0.3px;
 }
 .ed-kpi-label {
+  display: block;
+  margin-top: 5px;
   font-size: 12px;
   font-weight: 700;
   color: #8c7f9d;
   text-transform: uppercase;
+  letter-spacing: 0.3px;
 }
-.ed-kpi-badge {
-  font-size: 12px;
-  font-weight: 700;
-  color: #f37021;
-  background: rgba(243, 112, 33, 0.1);
-  padding: 2px 6px;
-  border-radius: 4px;
-}
-.ed-kpi-middle {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-}
-.ed-kpi-middle h2 {
-  margin: 0;
-  font-size: 26px;
-  font-weight: 800;
-  color: #390955;
-}
-.ed-sparkline {
-  display: flex;
-  align-items: flex-end;
-  gap: 3px;
-  height: 24px;
-}
-.ed-spark-bar {
-  width: 4px;
-  background: #390955;
-  border-radius: 1px;
+.ed-kpi-sub {
+  margin: 5px 0 0;
+  font-size: 11.5px;
+  color: #a698ba;
 }
 
 /* Two-Panel Layout Core Workspace */
@@ -195,8 +197,13 @@ html, body, #root {
   background: white;
   border-radius: 14px;
   padding: 24px;
-  box-shadow: 0 2px 8px rgba(57, 9, 85, 0.04);
+  box-shadow: 0 1px 2px rgba(57, 9, 85, 0.04);
   border: 1px solid #edeaf2;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+.ed-panel:hover {
+  box-shadow: 0 8px 20px rgba(57, 9, 85, 0.08);
+  border-color: #ded4ec;
 }
 .ed-panel-head {
   display: flex;
@@ -236,12 +243,30 @@ html, body, #root {
 }
 
 /* Data Analysis Visualization Chart Elements */
+.ed-chart-axis-row {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.ed-axis-ticks {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  width: 30px;
+  flex-shrink: 0;
+  margin-top: 20px;
+  margin-bottom: 23px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #b7abc9;
+  text-align: right;
+}
 .ed-bar-chart {
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
+  flex: 1;
   height: 180px;
-  margin-bottom: 24px;
 }
 .ed-bar-column {
   display: flex;
@@ -258,17 +283,18 @@ html, body, #root {
   width: 32px;
   height: 130px;
   background-color: #f7f5fa;
-  border-radius: 6px;
+  background-image: linear-gradient(to top, transparent calc(50% - 1px), #ece5f4 calc(50% - 1px), #ece5f4 50%, transparent 50%);
+  border-radius: 8px;
   display: flex;
   align-items: flex-end;
   overflow: hidden;
 }
 .ed-bar-fill {
   width: 100%;
-  border-radius: 4px;
+  border-radius: 8px 8px 3px 3px;
 }
-.ed-bar-fill.standard { background: linear-gradient(to top, #390955, #5a1285); }
-.ed-bar-fill.peak { background: linear-gradient(to top, #f37021, #ff8c46); }
+.ed-bar-fill.standard { background: linear-gradient(180deg, #5a1285 0%, #390955 55%, #2c073f 100%); }
+.ed-bar-fill.peak { background: linear-gradient(180deg, #ff9a5c 0%, #f37021 55%, #d85a12 100%); }
 .ed-bar-day {
   margin-top: 8px;
   font-size: 12px;
@@ -276,29 +302,51 @@ html, body, #root {
   color: #8c7f9d;
 }
 
-/* Summary Layout Metrics Info */
+/* Summary Layout Metrics Info — quick-stat footer badges */
 .ed-chart-footer {
   display: flex;
-  justify-content: space-around;
-  background: #fbf9fe;
-  padding: 14px;
-  border-radius: 10px;
+  flex-wrap: wrap;
+  gap: 10px;
 }
-.ed-footer-stat label {
+.ed-footer-badge {
+  flex: 1;
+  min-width: 140px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #fbf9fe;
+  border: 1px solid #f0ecf7;
+  border-radius: 10px;
+  padding: 10px 14px;
+}
+.ed-footer-badge-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: rgba(243, 112, 33, 0.1);
+  color: #f37021;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.ed-footer-badge label {
   display: block;
-  font-size: 11px;
+  font-size: 10.5px;
   color: #8c7f9d;
   font-weight: 700;
   text-transform: uppercase;
+  letter-spacing: 0.2px;
 }
-.ed-footer-stat strong {
-  font-size: 15px;
+.ed-footer-badge strong {
+  display: block;
+  margin-top: 2px;
+  font-size: 14px;
   color: #390955;
   font-weight: 800;
-}
-.ed-footer-divider {
-  width: 1px;
-  background: #edeaf2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Information Container Side Grid Splits */
@@ -347,32 +395,83 @@ html, body, #root {
   border-radius: 1px;
 }
 
-/* Side Box Call-to-Actions */
-.ed-action-footer {
+/* Side Box Call-to-Actions — sleek unified action bar */
+.ed-action-bar {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-top: 12px;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #f0ecf7;
 }
-.ed-btn-primary {
+.ed-action-btn {
+  flex: 1;
+  min-width: 130px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 11px 14px;
+  border-radius: 9px;
+  font-weight: 700;
+  font-size: 12.5px;
+  font-family: inherit;
+  cursor: pointer;
+  border: 1.5px solid transparent;
+  transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
+}
+.ed-action-btn.primary {
   background: #390955;
   color: white;
-  border: none;
-  padding: 12px;
-  border-radius: 8px;
-  font-weight: 700;
-  font-size: 13px;
-  cursor: pointer;
 }
-.ed-btn-secondary {
-  background: transparent;
+.ed-action-btn.primary:hover {
+  background: #2c073f;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 14px rgba(57, 9, 85, 0.25);
+}
+.ed-action-btn.secondary {
+  background: white;
   color: #390955;
-  border: 1.5px solid #e1dbec;
-  padding: 11px;
-  border-radius: 8px;
-  font-weight: 700;
+  border-color: #e1dbec;
+}
+.ed-action-btn.secondary:hover {
+  border-color: #390955;
+  background: #faf7fd;
+  transform: translateY(-1px);
+}
+
+/* Empty / zero-data states — stylized placeholder instead of plain text */
+.ed-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 40px 20px;
+  gap: 4px;
+}
+.ed-empty-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(57, 9, 85, 0.08), rgba(243, 112, 33, 0.08));
+  color: #390955;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 8px;
+}
+.ed-empty-title {
+  margin: 0;
   font-size: 13px;
-  cursor: pointer;
+  font-weight: 700;
+  color: #6b5f7d;
+}
+.ed-empty-sub {
+  margin: 0;
+  font-size: 11.5px;
+  color: #a698ba;
+  max-width: 240px;
 }
 
 /* System Monitor Query Adjustments */
