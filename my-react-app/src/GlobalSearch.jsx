@@ -1,7 +1,6 @@
 'use client';
 import React, { useEffect, useRef, useState } from 'react';
-
-const API = 'https://yto-express.onrender.com/api';
+import { parcelsApi, ridersApi, sellersApi } from './services/api';
 
 const s = {
   wrap:     { position: 'relative', width: 340 },
@@ -40,10 +39,9 @@ export default function GlobalSearch({ onNavigate }) {
     debounceRef.current = setTimeout(async () => {
       setLoading(true);
       try {
-        const [pRes, rRes, sRes] = await Promise.all([
-          fetch(`${API}/parcels`), fetch(`${API}/riders`), fetch(`${API}/sellers`),
+        const [pData, rData, sData] = await Promise.all([
+          parcelsApi.list(), ridersApi.list(), sellersApi.list(),
         ]);
-        const [pData, rData, sData] = await Promise.all([pRes.json(), rRes.json(), sRes.json()]);
 
         const parcels = (Array.isArray(pData) ? pData : [])
           .filter(p => (p.trackingNumber || '').toLowerCase().includes(q))

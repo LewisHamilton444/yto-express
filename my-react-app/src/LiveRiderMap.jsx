@@ -6,6 +6,7 @@ import { CITY_COORDS, LUZON_FALLBACK_COORDS } from './luzonCityCoords';
 import { MOCK_LUZON_RIDERS, MOCK_LUZON_PARCELS } from './luzonMockData';
 import { useRouteAnimation } from './useRouteAnimation';
 import { buildLiveAlerts } from './alertsFeed';
+import { ridersApi, parcelsApi } from './services/api';
 
 const TILE_LAYERS = {
   street: { url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', attribution: '© OpenStreetMap contributors' },
@@ -22,9 +23,6 @@ function congestionColor(rider) {
   if (speed < 36) return '#f59e0b';
   return '#22c55e';
 }
-
-const RIDERS_API  = 'https://yto-express.onrender.com/api/riders';
-const PARCELS_API = 'https://yto-express.onrender.com/api/parcels';
 
 const vehicleEmoji = (v) => {
   const t = String(v).toLowerCase();
@@ -160,8 +158,7 @@ export default function LiveRiderMap() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [rRes, pRes] = await Promise.all([fetch(RIDERS_API), fetch(PARCELS_API)]);
-      const [rData, pData] = await Promise.all([rRes.json(), pRes.json()]);
+      const [rData, pData] = await Promise.all([ridersApi.list(), parcelsApi.list()]);
 
       const activeRiders = rData
         .filter(r => {

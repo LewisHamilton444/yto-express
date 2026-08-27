@@ -1,5 +1,7 @@
 'use client';
 import React, { useState, useEffect } from 'react';
+import { apiFetch, parcelLocationsApi, parcelsApi, ridersApi } from './services/api';
+import Modal from './components/ui/Modal';
 import './ManageParcelLocation.css';
 
 const now = () => new Date().toISOString().slice(0,16).replace('T',' ');
@@ -43,8 +45,7 @@ function EditModal({ row, onSave, onClose }) {
   const valid = lat && lng && loc && !isNaN(parseFloat(lat)) && !isNaN(parseFloat(lng));
 
   return (
-    <div style={{ position:'fixed', top:0, left:0, width:'100vw', height:'100vh', backgroundColor:'rgba(0,0,0,0.4)', backdropFilter:'blur(4px)', zIndex:99999, display:'flex', alignItems:'center', justifyContent:'center' }} onClick={onClose}>
-      <div style={{ maxWidth:'520px', width:'90%', backgroundColor:'#fff', borderRadius:'16px', padding:'24px', boxShadow:'0 20px 25px -5px rgba(0,0,0,0.1)' }} onClick={e=>e.stopPropagation()}>
+    <Modal onBackdropClick={onClose} zIndex={99999} maxWidth={520} tint="rgba(0,0,0,0.4)" cardStyle={{ borderRadius: 16, boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
         <h3 style={{ color:'#390955', margin:'0 0 4px 0', fontSize:'18px', fontWeight:700 }}>Edit Location Parameters</h3>
         <p style={{ fontFamily:'monospace', margin:'0 0 20px 0', fontSize:'13px', color:'#f37021', fontWeight:600 }}>{row.parcelId}</p>
         <div style={{ display:'flex', flexDirection:'column', gap:'14px' }}>
@@ -90,8 +91,7 @@ function EditModal({ row, onSave, onClose }) {
             <Ico.Check/> Save Changes
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -103,7 +103,6 @@ export default function ProcessParcelLocation() {
   const [search,         setSearch]         = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage,   setErrorMessage]   = useState('');
-  const [clock,          setClock]          = useState(nowFull());
   const [gpsQuery,       setGpsQuery]       = useState('');
   const [gpsResult,      setGpsResult]      = useState(null);
   const [gpsError,       setGpsError]       = useState('');
@@ -116,19 +115,13 @@ export default function ProcessParcelLocation() {
   const [riderNameById,         setRiderNameById]         = useState({});
 
   useEffect(() => {
-    const t = setInterval(() => setClock(nowFull()), 1000);
-    return () => clearInterval(t);
-  }, []);
-
-  useEffect(() => {
     fetchLocations();
     fetchRiderLinks();
   }, []);
 
   const fetchLocations = async () => {
     try {
-      const res = await fetch('https://yto-express.onrender.com/api/parcel-locations');
-      const data = await res.json();
+      const data = await parcelLocationsApi.list();
       setLocations(data);
     } catch (err) {
       console.error('Error fetching locations:', err);
@@ -139,11 +132,7 @@ export default function ProcessParcelLocation() {
 
   const fetchRiderLinks = async () => {
     try {
-      const [pRes, rRes] = await Promise.all([
-        fetch('https://yto-express.onrender.com/api/parcels'),
-        fetch('https://yto-express.onrender.com/api/riders'),
-      ]);
-      const [pData, rData] = await Promise.all([pRes.json(), rRes.json()]);
+      const [pData, rData] = await Promise.all([parcelsApi.list(), ridersApi.list()]);
       const pMap = {};
       (Array.isArray(pData) ? pData : []).forEach(p => { if (p.trackingNumber) pMap[p.trackingNumber] = p.riderId || ''; });
       const rMap = {};
@@ -167,7 +156,7 @@ export default function ProcessParcelLocation() {
 
   const handleSaveEdit = async (updates) => {
     try {
-      await fetch(`https://yto-express.onrender.com/api/parcel-locations/${editTarget._id}`, {
+      await apiFetch(`/parcel-locations/${editTarget._id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...updates, updatedAt: now() }),
@@ -178,7 +167,7 @@ export default function ProcessParcelLocation() {
       }
       setEditTarget(null);
       showMessage('Location record modified successfully');
-    } catch (err) {
+    } catch {
       showMessage('Error updating location', 'error');
     }
   };

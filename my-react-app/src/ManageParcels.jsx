@@ -1,5 +1,9 @@
 'use client';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { apiFetch } from './services/api';
+import StatusBadge from './components/ui/StatusBadge';
+import { PARCEL_STATUS_COLORS } from './components/ui/statusColors';
+import Modal from './components/ui/Modal';
 
 /**
  * ManageParcels.jsx
@@ -34,18 +38,6 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 // returned/failed (see ProcessParcelInformation.jsx's status options) — those
 // two extra values were added to represent that real vocabulary faithfully.
 const STATUSES = ['Pending', 'Picked Up', 'In Transit', 'Out for Delivery', 'Delivered', 'Returned', 'Failed'];
-
-// Exact palette from GenerateParcelMovement.jsx's STATUS_COLORS, extended
-// with Returned/Failed (real values the backend actually produces).
-const STATUS_COLORS = {
-  'Pending':          { bg: '#f3f4f6', color: '#374151' },
-  'Picked Up':        { bg: '#ede9fe', color: '#4c1d95' },
-  'In Transit':       { bg: '#e0f2fe', color: '#075985' },
-  'Out for Delivery': { bg: '#fef3c7', color: '#92400e' },
-  'Delivered':        { bg: '#d1fae5', color: '#065f46' },
-  'Returned':         { bg: '#f3f4f6', color: '#6b7280' },
-  'Failed':           { bg: '#fee2e2', color: '#991b1b' },
-};
 
 // Real parcel documents store status as lowercase-hyphenated
 // ('pending' | 'in-transit' | 'delivered' | 'returned' | 'failed' — see
@@ -246,9 +238,6 @@ const FALLBACK_PARCELS = RAW_PARCELS.map((p) => {
 // this page's display shape. Fields the real schema doesn't have yet
 // (sender/receiver phone & email, dimensions, service tier, free-text
 // instructions) get an honest placeholder rather than a fabricated value.
-const PARCELS_API = 'https://yto-express.onrender.com/api/parcels';
-const RIDERS_API  = 'https://yto-express.onrender.com/api/riders';
-
 function normalizeParcel(raw, riderNameById) {
   const city = raw.destination || raw.origin || '';
   const base = PH_CITY_COORDS[city] || NCR_FALLBACK_CENTER;
@@ -339,15 +328,6 @@ function exportPDF(rows) {
 }
 
 // ── Small presentational pieces ─────────────────────────────────────────────
-
-function StatusBadge({ status }) {
-  const c = STATUS_COLORS[status] || STATUS_COLORS.Pending;
-  return (
-    <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20, background: c.bg, color: c.color, whiteSpace: 'nowrap', display: 'inline-block' }}>
-      {status}
-    </span>
-  );
-}
 
 // Small reusable rider glyph — used in the table's Assigned Rider column,
 // the modal header chip, and the icon action buttons.
@@ -533,8 +513,14 @@ function ParcelModal({ parcel, onClose, allParcels }) {
   const svc = SERVICE_CONFIG[parcel.service] || SERVICE_CONFIG.Standard;
 
   return (
-    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(20,5,35,0.55)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, backdropFilter: 'blur(3px)' }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ background: 'white', borderRadius: 18, width: '100%', maxWidth: 720, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 32px 80px rgba(57,9,85,0.25)', animation: 'mp-modal-in 0.22s cubic-bezier(0.34,1.56,0.64,1) both' }}>
+    <Modal
+      onBackdropClick={onClose}
+      zIndex={1000}
+      maxWidth={720}
+      padding={0}
+      overlayStyle={{ padding: 24 }}
+      cardStyle={{ borderRadius: 18, width: '100%', animation: 'mp-modal-in 0.22s cubic-bezier(0.34,1.56,0.64,1) both', boxShadow: '0 32px 80px rgba(57,9,85,0.25)' }}
+    >
 
         {/* Header */}
         <div style={{ padding: '22px 24px 16px', borderBottom: '1.5px solid #f5f0ff', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', position: 'sticky', top: 0, background: 'white', zIndex: 1, borderRadius: '18px 18px 0 0' }}>
@@ -609,9 +595,9 @@ function ParcelModal({ parcel, onClose, allParcels }) {
           {activeTab === 'timeline' && (
             <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 0.9fr', gap: 24 }}>
               <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px', background: STATUS_COLORS[parcel.status]?.bg, borderRadius: 8, marginBottom: 18 }}>
-                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: STATUS_COLORS[parcel.status]?.color, flexShrink: 0 }} />
-                  <span style={{ fontSize: 12, fontWeight: 800, color: STATUS_COLORS[parcel.status]?.color }}>{parcel.status}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px', background: PARCEL_STATUS_COLORS[parcel.status]?.bg, borderRadius: 8, marginBottom: 18 }}>
+                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: PARCEL_STATUS_COLORS[parcel.status]?.color, flexShrink: 0 }} />
+                  <span style={{ fontSize: 12, fontWeight: 800, color: PARCEL_STATUS_COLORS[parcel.status]?.color }}>{parcel.status}</span>
                 </div>
                 <Timeline events={parcel.timeline} />
               </div>
@@ -746,8 +732,7 @@ function ParcelModal({ parcel, onClose, allParcels }) {
             </div>
           )}
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -866,7 +851,7 @@ export default function ManageParcels() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [parcelsRes, ridersRes] = await Promise.all([fetch(PARCELS_API), fetch(RIDERS_API)]);
+      const [parcelsRes, ridersRes] = await Promise.all([apiFetch('/parcels'), apiFetch('/riders')]);
       if (!parcelsRes.ok) throw new Error(`Parcels endpoint responded ${parcelsRes.status}`);
       const [parcelsData, ridersData] = await Promise.all([
         parcelsRes.json(),
@@ -920,7 +905,7 @@ export default function ManageParcels() {
 
     if (usingFallback || !parcel._id) return;
     try {
-      const res = await fetch(`${PARCELS_API}/${parcel._id}`, {
+      const res = await apiFetch(`/parcels/${parcel._id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ riderId: rider.riderId }),
@@ -1047,7 +1032,7 @@ export default function ManageParcels() {
             <span style={{ fontSize: 11, color: '#aaa' }}>Showing {filtered.length} result{filtered.length !== 1 ? 's' : ''}</span>
             <div style={{ display: 'flex', gap: 6 }}>
               {['Delivered', 'In Transit', 'Pending'].map((s) => (
-                <span key={s} style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 10, background: STATUS_COLORS[s]?.bg, color: STATUS_COLORS[s]?.color }}>
+                <span key={s} style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 10, background: PARCEL_STATUS_COLORS[s]?.bg, color: PARCEL_STATUS_COLORS[s]?.color }}>
                   {s}: {parcels.filter((p) => p.status === s).length}
                 </span>
               ))}

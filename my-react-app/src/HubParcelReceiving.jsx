@@ -1,24 +1,14 @@
 import React, { useState, useEffect } from 'react';
+import { apiFetch, parcelsApi } from './services/api';
+import StatusBadge from './components/ui/StatusBadge';
+import { PARCEL_STATUS_COLORS } from './components/ui/statusColors';
 
-const API = 'https://yto-express.onrender.com/api/parcels';
-
-const STATUS_COLORS = {
-  'Received at Hub':  { bg: '#d1fae5', color: '#065f46' },
+// Hub receiving adds two statuses on top of the shared parcel-status
+// vocabulary — this is the only screen that ever sets them.
+const HUB_STATUS_COLORS = {
+  ...PARCEL_STATUS_COLORS,
+  'Received at Hub': { bg: '#d1fae5', color: '#065f46' },
   'Returned to Hub':  { bg: '#fee2e2', color: '#991b1b' },
-  'Delivered':        { bg: '#d1fae5', color: '#065f46' },
-  'In Transit':       { bg: '#e0f2fe', color: '#075985' },
-  'Out for Delivery': { bg: '#fef3c7', color: '#92400e' },
-  'Picked Up':        { bg: '#ede9fe', color: '#4c1d95' },
-  'Pending':          { bg: '#f3f4f6', color: '#374151' },
-};
-
-const StatusBadge = ({ status }) => {
-  const c = STATUS_COLORS[status] || STATUS_COLORS['Pending'];
-  return (
-    <span style={{ fontSize: '11px', fontWeight: 700, padding: '3px 10px', borderRadius: '20px', background: c.bg, color: c.color, whiteSpace: 'nowrap', display: 'inline-block' }}>
-      {status}
-    </span>
-  );
 };
 
 export default function HubParcelReceiving() {
@@ -36,10 +26,9 @@ export default function HubParcelReceiving() {
   const fetchParcels = async () => {
     setLoading(true);
     try {
-      const res = await fetch(API);
-      const data = await res.json();
+      const data = await parcelsApi.list();
       setParcels(data);
-    } catch (err) {
+    } catch {
       flash('Failed to load parcels. Is the server running?', 'error');
     } finally {
       setLoading(false);
@@ -54,7 +43,7 @@ export default function HubParcelReceiving() {
   const markStatus = async (parcel, status) => {
     setUpdatingId(parcel._id);
     try {
-      const res = await fetch(`${API}/${parcel._id}`, {
+      const res = await apiFetch(`/parcels/${parcel._id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -66,7 +55,7 @@ export default function HubParcelReceiving() {
       const updated = await res.json();
       setParcels(prev => prev.map(p => (p._id === updated._id ? updated : p)));
       flash(`Marked ${parcel.trackingNumber} as "${status}".`, 'success');
-    } catch (err) {
+    } catch {
       flash('Failed to update parcel status.', 'error');
     } finally {
       setUpdatingId(null);
@@ -138,7 +127,7 @@ export default function HubParcelReceiving() {
                     <td style={{ padding: '12px 16px', color: '#1a1a1a', fontWeight: 600, whiteSpace: 'nowrap', borderBottom: '1px solid #f3f0f8' }}>{p.senderName}</td>
                     <td style={{ padding: '12px 16px', color: '#374151', whiteSpace: 'nowrap', borderBottom: '1px solid #f3f0f8' }}>{p.receiverName}</td>
                     <td style={{ padding: '12px 16px', color: '#666', whiteSpace: 'nowrap', borderBottom: '1px solid #f3f0f8' }}>{p.item}</td>
-                    <td style={{ padding: '12px 16px', whiteSpace: 'nowrap', borderBottom: '1px solid #f3f0f8' }}><StatusBadge status={p.status} /></td>
+                    <td style={{ padding: '12px 16px', whiteSpace: 'nowrap', borderBottom: '1px solid #f3f0f8' }}><StatusBadge status={p.status} colorMap={HUB_STATUS_COLORS} /></td>
                     <td style={{ padding: '12px 16px', whiteSpace: 'nowrap', borderBottom: '1px solid #f3f0f8' }}>
                       <div style={{ display: 'flex', gap: '6px' }}>
                         <button

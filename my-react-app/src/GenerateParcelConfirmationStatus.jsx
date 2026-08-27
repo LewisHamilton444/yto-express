@@ -1,5 +1,6 @@
   'use client';
   import React, { useState, useRef } from 'react';
+  import Modal from './components/ui/Modal';
 
   const now = new Date();
   const daysAgo = (n) => new Date(now - n * 864e5);
@@ -92,8 +93,7 @@
   function ParcelModal({ parcel, onClose, onSelect }) {
     const svc = SERVICE_STYLE[parcel.service] || SERVICE_STYLE.Standard;
     return (
-      <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(20,5,35,0.55)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px', backdropFilter: 'blur(3px)' }}>
-        <div onClick={e => e.stopPropagation()} style={{ background: 'white', borderRadius: '18px', width: '100%', maxWidth: '580px', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 32px 80px rgba(57,9,85,0.25)', animation: 'gpcs-modal-in 0.22s cubic-bezier(0.34,1.56,0.64,1) both' }}>
+      <Modal onBackdropClick={onClose} zIndex={1000} maxWidth={580} overlayStyle={{ padding: 24 }} cardStyle={{ borderRadius: 18, width: '100%', animation: 'gpcs-modal-in 0.22s cubic-bezier(0.34,1.56,0.64,1) both', boxShadow: '0 32px 80px rgba(57,9,85,0.25)' }} padding={0}>
           <div style={{ padding: '22px 24px 16px', borderBottom: '1.5px solid #f5f0ff', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', position: 'sticky', top: 0, background: 'white', zIndex: 1, borderRadius: '18px 18px 0 0' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '13px' }}>
               <div style={{ width: '44px', height: '44px', background: '#390955', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -152,8 +152,7 @@
               Select &amp; Load GPS Confirmation
             </button>
           </div>
-        </div>
-      </div>
+      </Modal>
     );
   }
 

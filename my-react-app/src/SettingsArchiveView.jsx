@@ -1,8 +1,8 @@
 'use client';
 import React, { useEffect, useState } from 'react';
 import { normalizeSeller, normalizeRider, SELLER_STATUS, RIDER_STATUS } from './sellerRiderData';
-
-const API = 'https://yto-express.onrender.com';
+import { apiFetch, sellersApi, ridersApi } from './services/api';
+import Modal from './components/ui/Modal';
 
 // Archiving/Restoring/Permanently-Deleting sellers & riders all live here now
 // — the seller/rider ledger pages (View Seller, Generate Rider Data Report)
@@ -27,11 +27,7 @@ export default function SettingsArchiveView({ onCountsChange = () => {} }) {
   const fetchAll = async () => {
     setLoading(true);
     try {
-      const [sRes, rRes] = await Promise.all([
-        fetch(`${API}/api/sellers`),
-        fetch(`${API}/api/riders`),
-      ]);
-      const [sData, rData] = await Promise.all([sRes.json(), rRes.json()]);
+      const [sData, rData] = await Promise.all([sellersApi.list(), ridersApi.list()]);
       const sellers = sData.map(normalizeSeller);
       const riders  = rData.map(normalizeRider);
       setAllSellers(sellers);
@@ -60,7 +56,7 @@ export default function SettingsArchiveView({ onCountsChange = () => {} }) {
 
   const handleArchiveSeller = async (seller) => {
     try {
-      const res = await fetch(`${API}/api/sellers/${seller._id}`, {
+      const res = await apiFetch(`/sellers/${seller._id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: SELLER_STATUS.ARCHIVED }),
@@ -78,7 +74,7 @@ export default function SettingsArchiveView({ onCountsChange = () => {} }) {
 
   const handleArchiveRider = async (rider) => {
     try {
-      const res = await fetch(`${API}/api/riders/${rider._id}`, {
+      const res = await apiFetch(`/riders/${rider._id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: RIDER_STATUS.ARCHIVED }),
@@ -96,7 +92,7 @@ export default function SettingsArchiveView({ onCountsChange = () => {} }) {
 
   const handleRestoreSeller = async (seller) => {
     try {
-      const res = await fetch(`${API}/api/sellers/${seller._id}`, {
+      const res = await apiFetch(`/sellers/${seller._id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: SELLER_STATUS.ACTIVE }),
@@ -112,7 +108,7 @@ export default function SettingsArchiveView({ onCountsChange = () => {} }) {
 
   const handleRestoreRider = async (rider) => {
     try {
-      const res = await fetch(`${API}/api/riders/${rider._id}`, {
+      const res = await apiFetch(`/riders/${rider._id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: RIDER_STATUS.ACTIVE }),
@@ -131,7 +127,7 @@ export default function SettingsArchiveView({ onCountsChange = () => {} }) {
     const { kind, record } = confirmDelete;
     const endpoint = kind === 'seller' ? 'sellers' : 'riders';
     try {
-      const res = await fetch(`${API}/api/${endpoint}/${record._id}`, { method: 'DELETE' });
+      const res = await apiFetch(`/${endpoint}/${record._id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Failed');
       showNotice(`${record.fullName} permanently deleted.`);
       setConfirmDelete(null);
@@ -158,8 +154,6 @@ export default function SettingsArchiveView({ onCountsChange = () => {} }) {
     btnDelete:  { padding: '6px 14px', background: '#fee2e2', color: '#991b1b', border: '1px solid #fca5a5', borderRadius: 7, fontWeight: 700, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' },
     emptyState: { textAlign: 'center', padding: '36px 24px', color: '#bbb', fontSize: 13, background: '#fdfcfe', borderRadius: 10, border: '1.5px dashed #e0d0f0' },
     notice:     (type) => ({ padding: '10px 16px', borderRadius: 8, marginBottom: 14, fontWeight: 600, fontSize: 13, background: type === 'error' ? '#fde8f0' : '#e8f5e9', color: type === 'error' ? '#c0392b' : '#2e7d32', border: `1px solid ${type === 'error' ? '#f5c6d0' : '#a5d6a7'}` }),
-    modalOverlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 },
-    modal:      { background: 'white', borderRadius: 12, padding: 28, maxWidth: 420, width: '90%', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' },
     archivedBadge: { display: 'inline-block', padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: '#ede4f5', color: '#6d1a9c', border: '1px solid rgba(109,26,156,0.2)' },
     activeBadge:   { display: 'inline-block', padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: '#d1fae5', color: '#065f46', border: '1px solid rgba(6,95,70,0.2)' },
   };
@@ -278,33 +272,29 @@ export default function SettingsArchiveView({ onCountsChange = () => {} }) {
       )}
 
       {confirmArchive && (
-        <div style={s.modalOverlay}>
-          <div style={s.modal}>
-            <h2 style={{ fontSize: 18, fontWeight: 700, margin: '0 0 12px', color: '#390955' }}>Archive this {confirmArchive.kind}?</h2>
-            <p style={{ fontSize: 14, color: '#666', margin: '0 0 24px' }}>
-              <strong>{confirmArchive.record.fullName}</strong> will be removed from {confirmArchive.kind === 'seller' ? 'View Seller' : 'the live map and rider report'}. You can restore them from here any time.
-            </p>
-            <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
-              <button style={{ padding: '10px 20px', background: 'white', color: '#390955', border: '2px solid #390955', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }} onClick={() => setConfirmArchive(null)}>Cancel</button>
-              <button style={{ padding: '10px 20px', background: '#c0392b', color: 'white', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }} onClick={() => confirmArchive.kind === 'seller' ? handleArchiveSeller(confirmArchive.record) : handleArchiveRider(confirmArchive.record)}>Archive</button>
-            </div>
+        <Modal tint="rgba(0,0,0,0.5)" blur={false} zIndex={9999}>
+          <h2 style={{ fontSize: 18, fontWeight: 700, margin: '0 0 12px', color: '#390955' }}>Archive this {confirmArchive.kind}?</h2>
+          <p style={{ fontSize: 14, color: '#666', margin: '0 0 24px' }}>
+            <strong>{confirmArchive.record.fullName}</strong> will be removed from {confirmArchive.kind === 'seller' ? 'View Seller' : 'the live map and rider report'}. You can restore them from here any time.
+          </p>
+          <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+            <button style={{ padding: '10px 20px', background: 'white', color: '#390955', border: '2px solid #390955', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }} onClick={() => setConfirmArchive(null)}>Cancel</button>
+            <button style={{ padding: '10px 20px', background: '#c0392b', color: 'white', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }} onClick={() => confirmArchive.kind === 'seller' ? handleArchiveSeller(confirmArchive.record) : handleArchiveRider(confirmArchive.record)}>Archive</button>
           </div>
-        </div>
+        </Modal>
       )}
 
       {confirmDelete && (
-        <div style={s.modalOverlay}>
-          <div style={s.modal}>
-            <h2 style={{ fontSize: 18, fontWeight: 700, margin: '0 0 12px', color: '#c0392b' }}>Permanently Delete Record?</h2>
-            <p style={{ fontSize: 14, color: '#666', margin: '0 0 24px' }}>
-              This deletes <strong>{confirmDelete.record.fullName}</strong>'s {confirmDelete.kind} record from MongoDB forever. This cannot be undone.
-            </p>
-            <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
-              <button style={{ padding: '10px 20px', background: 'white', color: '#390955', border: '2px solid #390955', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }} onClick={() => setConfirmDelete(null)}>Cancel</button>
-              <button style={{ padding: '10px 20px', background: '#c0392b', color: 'white', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }} onClick={handlePermanentDelete}>Permanently Delete</button>
-            </div>
+        <Modal tint="rgba(0,0,0,0.5)" blur={false} zIndex={9999}>
+          <h2 style={{ fontSize: 18, fontWeight: 700, margin: '0 0 12px', color: '#c0392b' }}>Permanently Delete Record?</h2>
+          <p style={{ fontSize: 14, color: '#666', margin: '0 0 24px' }}>
+            This deletes <strong>{confirmDelete.record.fullName}</strong>'s {confirmDelete.kind} record from MongoDB forever. This cannot be undone.
+          </p>
+          <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+            <button style={{ padding: '10px 20px', background: 'white', color: '#390955', border: '2px solid #390955', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }} onClick={() => setConfirmDelete(null)}>Cancel</button>
+            <button style={{ padding: '10px 20px', background: '#c0392b', color: 'white', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }} onClick={handlePermanentDelete}>Permanently Delete</button>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

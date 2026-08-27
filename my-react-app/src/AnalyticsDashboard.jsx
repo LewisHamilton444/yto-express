@@ -6,6 +6,7 @@ import {
   ClipboardList, Download, Share2,
   Users, PackageSearch, BarChart3,
 } from 'lucide-react';
+import { apiFetch, parcelsApi, ridersApi } from './services/api';
 import './AnalyticsDashboard.css';
 import yto_logo from './yto_express_logo.png';
 
@@ -120,10 +121,6 @@ icons['manage-parcels'] = icons.parcel;
 
 const getIcon = (key) => icons[key] || icons.sub;
 
-const PARCELS_API  = 'https://yto-express.onrender.com/api/parcels';
-const RIDERS_API   = 'https://yto-express.onrender.com/api/riders';
-const DASHBOARD_STATS_API = 'https://yto-express.onrender.com/api/dashboard/stats';
-
 const isReturnStatus = (status) => /return/i.test(status || '');
 const toDayKey = (isoString) => (isoString ? isoString.slice(0, 10) : null);
 
@@ -225,15 +222,15 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
     let cancelled = false;
     setDashboardLoading(true);
     Promise.all([
-      fetch(PARCELS_API).then(r => r.json()).catch(() => []),
-      fetch(RIDERS_API).then(r => r.json()).catch(() => []),
+      parcelsApi.list().catch(() => []),
+      ridersApi.list().catch(() => []),
     ]).then(([parcelsData, ridersData]) => {
       if (cancelled) return;
       setParcels(Array.isArray(parcelsData) ? parcelsData : []);
       setRiders(Array.isArray(ridersData) ? ridersData : []);
       setDashboardLoading(false);
     });
-    fetch(DASHBOARD_STATS_API)
+    apiFetch('/dashboard/stats')
       .then(r => { if (!r.ok) throw new Error(`Stats endpoint responded ${r.status}`); return r.json(); })
       .then(data => { if (!cancelled) setDashboardStats(data); })
       .catch(() => { if (!cancelled) setStatsError(true); });

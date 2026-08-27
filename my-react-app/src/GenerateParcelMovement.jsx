@@ -1,5 +1,7 @@
 'use client';
 import React, { useState } from 'react';
+import StatusBadge from './components/ui/StatusBadge';
+import { PARCEL_STATUS_COLORS } from './components/ui/statusColors';
 
 const SELLER_PARCELS = [
   { id: 'PKG-S-2025-001', sender: 'Tech Store Pro',       receiver: 'Maria Santos',  address: '123 Rizal St, Manila',      weight: '2.5 kg', service: 'Express',   registeredDate: '2025-02-15', status: 'In Transit' },
@@ -15,23 +17,6 @@ const CUSTOMER_PARCELS = [
   { id: 'PKG-C-2025-003', sender: 'Roberto Flores',    receiver: 'Diana Castillo',  address: '101 Katipunan Ave, QC',    weight: '2.1 kg', service: 'Overnight', registeredDate: '2025-02-14', status: 'Delivered' },
   { id: 'PKG-C-2025-004', sender: 'Marivic Santos',    receiver: 'Paolo Gutierrez', address: '77 EDSA, Mandaluyong',     weight: '0.8 kg', service: 'Standard',  registeredDate: '2025-02-13', status: 'Out for Delivery' },
 ];
-
-const STATUS_COLORS = {
-  'Delivered':        { bg: '#d1fae5', color: '#065f46' },
-  'In Transit':       { bg: '#e0f2fe', color: '#075985' },
-  'Out for Delivery': { bg: '#fef3c7', color: '#92400e' },
-  'Picked Up':        { bg: '#ede9fe', color: '#4c1d95' },
-  'Pending':          { bg: '#f3f4f6', color: '#374151' },
-};
-
-const StatusBadge = ({ status }) => {
-  const c = STATUS_COLORS[status] || STATUS_COLORS['Pending'];
-  return (
-    <span style={{ fontSize: '11px', fontWeight: 700, padding: '3px 10px', borderRadius: '20px', background: c.bg, color: c.color, whiteSpace: 'nowrap', display: 'inline-block' }}>
-      {status}
-    </span>
-  );
-};
 
 const ParcelTable = ({ parcels, type }) => {
   const [search, setSearch] = useState('');
@@ -131,7 +116,7 @@ const ParcelTable = ({ parcels, type }) => {
         <span style={{ fontSize: '11px', color: '#aaa' }}>Showing {filtered.length} result{filtered.length !== 1 ? 's' : ''}</span>
         <div style={{ display: 'flex', gap: '6px' }}>
           {['Delivered', 'In Transit', 'Pending'].map(s => (
-            <span key={s} style={{ fontSize: '10px', fontWeight: 700, padding: '2px 8px', borderRadius: '10px', background: STATUS_COLORS[s]?.bg, color: STATUS_COLORS[s]?.color }}>
+            <span key={s} style={{ fontSize: '10px', fontWeight: 700, padding: '2px 8px', borderRadius: '10px', background: PARCEL_STATUS_COLORS[s]?.bg, color: PARCEL_STATUS_COLORS[s]?.color }}>
               {s}: {parcels.filter(p => p.status === s).length}
             </span>
           ))}

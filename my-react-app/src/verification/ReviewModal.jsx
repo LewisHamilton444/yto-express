@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
+import Modal from '../components/ui/Modal';
 
 const s = {
-  overlay:     { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(26,6,40,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000, padding: '20px' },
-  modal:       { background: 'white', borderRadius: '16px', width: '100%', maxWidth: '560px', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)', fontFamily: "'DM Sans', sans-serif" },
   header:      { background: '#390955', padding: '18px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0 },
   title:       { color: 'white', margin: 0, fontSize: '16px', fontWeight: 700 },
   subtitle:    { color: 'rgba(255,255,255,0.65)', margin: '2px 0 0', fontSize: '12px' },
@@ -40,8 +39,7 @@ const ReviewModal = ({ item, type, onClose, onApprove, onReject }) => {
   };
 
   return (
-    <div style={s.overlay} onClick={handleClose}>
-      <div style={s.modal} onClick={(e) => e.stopPropagation()}>
+    <Modal onBackdropClick={handleClose} blur={false} tint="rgba(26,6,40,0.5)" maxWidth={560} padding={0} cardStyle={{ borderRadius: 16, boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)', fontFamily: "'DM Sans', sans-serif" }}>
         <div style={s.header}>
           <div>
             <h3 style={s.title}>Review {type === 'rider' ? 'Rider' : 'Seller'} Application</h3>
@@ -143,8 +141,7 @@ const ReviewModal = ({ item, type, onClose, onApprove, onReject }) => {
             <button style={s.btnPrimary} onClick={() => onApprove(item)}>Approve &amp; Send Credentials</button>
           </div>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 };
 

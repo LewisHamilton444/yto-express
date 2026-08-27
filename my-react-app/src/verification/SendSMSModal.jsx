@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
+import Modal from '../components/ui/Modal';
 
 const s = {
-  overlay:    { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(26,6,40,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2100, padding: '20px' },
-  modal:      { background: 'white', borderRadius: '16px', width: '100%', maxWidth: '460px', overflow: 'hidden', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)', fontFamily: "'DM Sans', sans-serif" },
   header:     { background: '#390955', padding: '18px 24px' },
   title:      { color: 'white', margin: 0, fontSize: '16px', fontWeight: 700 },
   subtitle:   { color: 'rgba(255,255,255,0.65)', margin: '2px 0 0', fontSize: '12px' },
@@ -44,8 +43,7 @@ const SendSMSModal = ({ item, credentials, message, onCancel, onConfirm, sending
   };
 
   return (
-    <div style={s.overlay} onClick={onCancel}>
-      <div style={s.modal} onClick={(e) => e.stopPropagation()}>
+    <Modal onBackdropClick={onCancel} blur={false} tint="rgba(26,6,40,0.5)" zIndex={2100} maxWidth={460} padding={0} cardStyle={{ borderRadius: 16, overflow: 'hidden', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)', fontFamily: "'DM Sans', sans-serif" }}>
         <div style={s.header}>
           <h3 style={s.title}>Approve &amp; Email Credentials</h3>
           <p style={s.subtitle}>Confirm before emailing login details to {item.fullName}</p>
@@ -101,8 +99,7 @@ const SendSMSModal = ({ item, credentials, message, onCancel, onConfirm, sending
             </button>
           </div>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 };
 

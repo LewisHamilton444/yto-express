@@ -1,11 +1,6 @@
 import React, { useState, useEffect } from 'react';
-
-// Vite exposes env vars via import.meta.env (not process.env — that's a
-// Create React App convention and would be undefined here). Set
-// VITE_API_URL in a .env file to point at a different backend (e.g. local
-// dev); otherwise this falls back to the live Render API.
-const API_BASE = import.meta.env.VITE_API_URL || 'https://yto-express.onrender.com/api';
-const API = `${API_BASE}/accounts`;
+import { apiFetch } from './services/api';
+import Modal from './components/ui/Modal';
 
 const ROLE_LABELS = {
   super_admin:  'Super Admin',
@@ -30,7 +25,7 @@ const MOCK_ACCOUNTS = [
   { _id: 'mock-3', name: 'Jane Dela Cruz',      email: 'jane.delacruz@ytoexpress.ph',phone: '09051112222', role: 'staff',        status: 'Deactivated', createdDate: '2025-11-20' },
 ];
 
-export default function ManageAccounts({ currentUser }) {
+export default function ManageAccounts() {
   const [accounts,     setAccounts]     = useState([]);
   const [loading,      setLoading]      = useState(true);
   const [searchTerm,   setSearchTerm]   = useState('');
@@ -55,7 +50,7 @@ export default function ManageAccounts({ currentUser }) {
   const fetchAccounts = async () => {
     setLoading(true);
     try {
-      const res = await fetch(API);
+      const res = await apiFetch('/accounts');
       if (!res.ok) throw new Error(`Server responded ${res.status}`);
       const data = await res.json();
       if (Array.isArray(data) && data.length > 0) {
@@ -67,7 +62,7 @@ export default function ManageAccounts({ currentUser }) {
         setAccounts(MOCK_ACCOUNTS);
         setUsingMockData(true);
       }
-    } catch (err) {
+    } catch {
       setAccounts(MOCK_ACCOUNTS);
       setUsingMockData(true);
       flash('Could not reach the server — showing sample data instead.', 'error');
@@ -115,7 +110,7 @@ export default function ManageAccounts({ currentUser }) {
         // PUT update
         const body = { name: formData.name, email: formData.email, phone: formData.phone, role: formData.role };
         if (formData.password.trim()) body.password = formData.password;
-        const res = await fetch(`${API}/${editingAccount._id}`, {
+        const res = await apiFetch(`/accounts/${editingAccount._id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
@@ -126,7 +121,7 @@ export default function ManageAccounts({ currentUser }) {
         flash('Account updated successfully.', 'success');
       } else {
         // POST create
-        const res = await fetch(API, {
+        const res = await apiFetch('/accounts', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(formData),
@@ -137,7 +132,7 @@ export default function ManageAccounts({ currentUser }) {
         flash('Account created successfully.', 'success');
       }
       setShowModal(false);
-    } catch (err) {
+    } catch {
       flash('Server error. Please try again.', 'error');
     }
   };
@@ -154,12 +149,12 @@ export default function ManageAccounts({ currentUser }) {
 
   const confirmToggle = async (account) => {
     try {
-      const res = await fetch(`${API}/${account._id}/status`, { method: 'PATCH' });
+      const res = await apiFetch(`/accounts/${account._id}/status`, { method: 'PATCH' });
       const data = await res.json();
       if (!res.ok) { flash(data.error || 'Failed to update status.', 'error'); return; }
       setAccounts(prev => prev.map(a => a._id === data._id ? data : a));
       flash(data.status === 'Active' ? 'Account reactivated.' : 'Account deactivated.', 'success');
-    } catch (err) {
+    } catch {
       flash('Server error. Please try again.', 'error');
     }
     setShowDeactivateConfirm(null);
@@ -191,8 +186,6 @@ export default function ManageAccounts({ currentUser }) {
     btnOutline:  { padding: '7px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', background: 'white', color: '#390955', border: '1.5px solid #e4d8f2', fontFamily: 'inherit' },
     btnDanger:   { padding: '7px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', background: '#fee2e2', color: '#991b1b', border: '1px solid #fca5a5', fontFamily: 'inherit' },
     btnSuccess:  { padding: '7px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', background: '#d1fae5', color: '#065f46', border: '1px solid #6ee7b7', fontFamily: 'inherit' },
-    modalOverlay:{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(26,6,40,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000, padding: '20px' },
-    modalBox:    { background: 'white', borderRadius: '16px', width: '100%', maxWidth: '480px', overflow: 'hidden', boxShadow: '0 20px 40px rgba(0,0,0,0.18)' },
     modalHead:   { background: '#390955', padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
     label:       { fontSize: '11px', fontWeight: 700, color: '#7b6d8d', textTransform: 'uppercase', letterSpacing: '0.6px', display: 'block', marginBottom: '6px' },
   };
@@ -342,8 +335,7 @@ export default function ManageAccounts({ currentUser }) {
 
       {/* Add / Edit Modal */}
       {showModal && (
-        <div style={s.modalOverlay}>
-          <div style={s.modalBox}>
+        <Modal tint="rgba(26,6,40,0.55)" blur={false} maxWidth={480} padding={0} cardStyle={{ borderRadius: 16, overflow: 'hidden', boxShadow: '0 20px 40px rgba(0,0,0,0.18)' }}>
             <div style={s.modalHead}>
               <h3 style={{ color: 'white', margin: 0, fontSize: '15px', fontWeight: 700 }}>{editingAccount ? 'Edit Account' : 'Add New Account'}</h3>
               <button onClick={() => setShowModal(false)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', fontSize: '20px', lineHeight: 1 }}>&times;</button>
@@ -393,14 +385,12 @@ export default function ManageAccounts({ currentUser }) {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
+        </Modal>
       )}
 
       {/* Deactivate Confirm Modal */}
       {showDeactivateConfirm && (
-        <div style={s.modalOverlay}>
-          <div style={{ ...s.modalBox, maxWidth: '400px' }}>
+        <Modal tint="rgba(26,6,40,0.55)" blur={false} maxWidth={400} padding={0} cardStyle={{ borderRadius: 16, overflow: 'hidden', boxShadow: '0 20px 40px rgba(0,0,0,0.18)' }}>
             <div style={s.modalHead}>
               <h3 style={{ color: 'white', margin: 0, fontSize: '15px', fontWeight: 700 }}>Deactivate Account</h3>
               <button onClick={() => setShowDeactivateConfirm(null)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', fontSize: '20px', lineHeight: 1 }}>&times;</button>
@@ -417,8 +407,7 @@ export default function ManageAccounts({ currentUser }) {
                 <button style={{ ...s.btnDanger, padding: '9px 18px', fontSize: '13px' }} onClick={() => confirmToggle(showDeactivateConfirm)}>Yes, Deactivate</button>
               </div>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

@@ -4,6 +4,9 @@ import './ViewSeller.css';
 import { normalizeSeller, mockSellers, formatStatusLabel, SELLER_STATUS } from './sellerRiderData';
 import PaginationControls from './PaginationControls';
 import { exportToCSV, exportToExcel } from './exportUtils';
+import { apiFetch } from './services/api';
+import StatusBadge from './components/ui/StatusBadge';
+import Modal from './components/ui/Modal';
 
 const SELLER_EXPORT_COLUMNS = [
   { key: 'sellerId', label: 'Seller ID' },
@@ -15,7 +18,7 @@ const SELLER_EXPORT_COLUMNS = [
   { key: 'status', label: 'Status' },
 ];
 
-const STATUS_COLORS = {
+const SELLER_STATUS_COLORS = {
   ACTIVE:                { bg: '#d1fae5', color: '#065f46' },
   PENDING_VERIFICATION:  { bg: '#fef3c7', color: '#92400e' },
   ARCHIVED:              { bg: '#fee2e2', color: '#991b1b' },
@@ -28,7 +31,7 @@ const GenerateSellerReport = ({ sellers: externalSellers, onUpdateSellers }) => 
   useEffect(() => {
     const fetchSellers = async () => {
       try {
-        const response = await fetch('https://yto-express.onrender.com/api/sellers');
+        const response = await apiFetch('/sellers');
         if (!response.ok) throw new Error('Failed to fetch');
         const data = await response.json();
         const normalized = data.map(normalizeSeller);
@@ -100,7 +103,7 @@ const GenerateSellerReport = ({ sellers: externalSellers, onUpdateSellers }) => 
         commissionRate: editingSeller.commissionRate,
       };
 
-      const response = await fetch(`https://yto-express.onrender.com/api/sellers/${editingSeller._id}`, {
+      const response = await apiFetch(`/sellers/${editingSeller._id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updateData),
@@ -141,7 +144,6 @@ const GenerateSellerReport = ({ sellers: externalSellers, onUpdateSellers }) => 
     btnOutline:  { padding: '8px 16px', borderRadius: '8px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', background: 'white', color: '#390955', border: '1.5px solid #e4d8f2', fontFamily: 'inherit' },
     btnDanger:   { padding: '8px 16px', borderRadius: '8px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', background: '#fee2e2', color: '#991b1b', border: '1px solid #fca5a5', fontFamily: 'inherit' },
     btnSuccess:  { padding: '8px 16px', borderRadius: '8px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', background: '#d1fae5', color: '#065f46', border: '1px solid #6ee7b7', fontFamily: 'inherit' },
-    modalOverlay:{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(26,6,40,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000, padding: '20px' },
     paginationBar: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '16px', paddingTop: '8px' },
     paginationInfo:{ fontSize: '13px', fontWeight: 500, color: '#a890c0' },
     paginationBtns:{ display: 'inline-flex', gap: '8px' },
@@ -214,7 +216,6 @@ const GenerateSellerReport = ({ sellers: externalSellers, onUpdateSellers }) => 
                   </tr>
                 ) : (
                   currentRecords.map((seller, idx) => {
-                    const statusStyle = STATUS_COLORS[seller.status] || STATUS_COLORS.ACTIVE;
                     return (
                       <tr key={seller._id || idx} style={{ background: idx % 2 === 0 ? 'white' : '#faf7fd' }}>
                         <td style={{ ...s.td, fontFamily: "'DM Mono', monospace", fontWeight: 600, fontSize: '12px' }}>{seller.sellerId}</td>
@@ -228,12 +229,7 @@ const GenerateSellerReport = ({ sellers: externalSellers, onUpdateSellers }) => 
                           <div style={{ fontSize: '11.5px', color: '#a890c0', marginTop: '2px' }}>{seller.commissionRate}% commission</div>
                         </td>
                         <td style={s.td}>
-                          <span style={{
-                            fontSize: '11px', fontWeight: 700, padding: '4px 10px', borderRadius: '100px',
-                            background: statusStyle.bg, color: statusStyle.color,
-                          }}>
-                            {formatStatusLabel(seller.status)}
-                          </span>
+                          <StatusBadge status={seller.status} label={formatStatusLabel(seller.status)} colorMap={SELLER_STATUS_COLORS} fallback="ACTIVE" />
                         </td>
                         <td style={{ ...s.td, textAlign: 'right' }}>
                           <div style={{ display: 'inline-flex', gap: '8px' }}>
@@ -265,8 +261,7 @@ const GenerateSellerReport = ({ sellers: externalSellers, onUpdateSellers }) => 
 
       {/* DETAIL VIEW MODAL — full bank + address info */}
       {detailSeller && (
-        <div style={s.modalOverlay} onClick={() => setDetailSeller(null)}>
-          <div onClick={e => e.stopPropagation()} style={{ background: 'white', borderRadius: '16px', width: '100%', maxWidth: '480px', overflow: 'hidden', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)' }}>
+        <Modal tint="rgba(26,6,40,0.5)" blur={false} maxWidth={480} padding={0} onBackdropClick={() => setDetailSeller(null)} cardStyle={{ borderRadius: 16, overflow: 'hidden', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)' }}>
             <div style={{ background: '#390955', padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <h3 style={{ color: 'white', margin: 0, fontSize: '15px', fontWeight: 700 }}>{detailSeller.fullName || 'Seller'}</h3>
@@ -300,13 +295,11 @@ const GenerateSellerReport = ({ sellers: externalSellers, onUpdateSellers }) => 
                 <button style={s.btnOutline} onClick={() => setDetailSeller(null)}>Close</button>
               </div>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
 
       {showEditModal && editingSeller && (
-        <div style={s.modalOverlay}>
-          <div style={{ background: 'white', borderRadius: '16px', width: '100%', maxWidth: '500px', overflow: 'hidden', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
+        <Modal tint="rgba(26,6,40,0.5)" blur={false} maxWidth={500} padding={0} cardStyle={{ borderRadius: 16, overflow: 'hidden', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
             <div style={{ background: '#390955', padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ color: 'white', margin: 0, fontSize: '15px', fontWeight: 700 }}>Update Profile Details</h3>
               <button onClick={() => { setShowEditModal(false); setEditingSeller(null); setSaveError(''); setSaveSuccess(''); }} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', fontSize: '20px', lineHeight: 1 }}>&times;</button>
@@ -392,8 +385,7 @@ const GenerateSellerReport = ({ sellers: externalSellers, onUpdateSellers }) => 
                 <button type="submit" style={s.btnPrimary}>Save Changes</button>
               </div>
             </form>
-          </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

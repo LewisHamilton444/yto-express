@@ -1,6 +1,7 @@
 'use client';
 import React, { useState, useEffect, useRef } from 'react';
 import { normalizeRider, mockRiders, RIDER_STATUS } from './sellerRiderData';
+import { ridersApi } from './services/api';
 
 const vehicleIcon = (v) => {
   const type = String(v).toLowerCase();
@@ -159,8 +160,7 @@ export default function MonitorRiderStatus() {
 
   const fetchRiders = async () => {
     try {
-      const response = await fetch('https://yto-express.onrender.com/api/riders');
-      const data = await response.json();
+      const data = await ridersApi.list();
 
       const normalized  = data.map(normalizeRider);
       // ── ONLY show active riders on the live map, hide archived/pending ──

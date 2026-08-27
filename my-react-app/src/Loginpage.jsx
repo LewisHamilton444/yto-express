@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
+import { apiFetch } from './services/api';
 import './Loginpage.css';
-
-const API = 'https://yto-express.onrender.com/api/accounts';
 
 const LoginPage = ({ onLogin }) => {
   const [email,    setEmail]    = useState('');
@@ -15,7 +14,7 @@ const LoginPage = ({ onLogin }) => {
     setError('');
     setLoading(true);
     try {
-      const res = await fetch(`${API}/login`, {
+      const res = await apiFetch('/accounts/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
@@ -28,7 +27,7 @@ const LoginPage = ({ onLogin }) => {
       }
       setLoading(false);
       onLogin(data);
-    } catch (err) {
+    } catch {
       setError('Cannot connect to server. Make sure the backend is running.');
       setLoading(false);
     }

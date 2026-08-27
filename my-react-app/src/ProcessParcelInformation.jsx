@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { apiFetch, parcelsApi, ridersApi, sellersApi } from './services/api';
 import './ProcessParcelInformation.css';
 
 const generateTrackingNumber = () => {
@@ -60,15 +61,10 @@ export default function ProcessParcelInformation() {
   // ── Fetch all data from MongoDB ──
   const fetchAll = async () => {
     try {
-      const [parcelsRes, ridersRes, sellersRes] = await Promise.all([
-        fetch('https://yto-express.onrender.com/api/parcels'),
-        fetch('https://yto-express.onrender.com/api/riders'),
-        fetch('https://yto-express.onrender.com/api/sellers'),
-      ]);
       const [parcelsData, ridersData, sellersData] = await Promise.all([
-        parcelsRes.json(),
-        ridersRes.json(),
-        sellersRes.json(),
+        parcelsApi.list(),
+        ridersApi.list(),
+        sellersApi.list(),
       ]);
       setParcels(parcelsData);
       setRiders(ridersData);
@@ -99,7 +95,7 @@ export default function ProcessParcelInformation() {
         }],
       };
 
-      const response = await fetch('https://yto-express.onrender.com/api/parcels', {
+      const response = await apiFetch('/parcels', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(parcelData),
@@ -133,7 +129,7 @@ export default function ProcessParcelInformation() {
       };
       const updatedEvents = [...(selectedParcel.events || []), newEvent];
 
-      await fetch(`https://yto-express.onrender.com/api/parcels/${selectedParcel._id}`, {
+      await apiFetch(`/parcels/${selectedParcel._id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...updateForm, events: updatedEvents }),
@@ -152,7 +148,7 @@ export default function ProcessParcelInformation() {
   // ── Delete Parcel from MongoDB ──
   const handleDeleteConfirm = async () => {
     try {
-      await fetch(`https://yto-express.onrender.com/api/parcels/${deleteConfirm._id}`, {
+      await apiFetch(`/parcels/${deleteConfirm._id}`, {
         method: 'DELETE',
       });
       await fetchAll();

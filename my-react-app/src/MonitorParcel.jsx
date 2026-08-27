@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import LiveRiderMap from './LiveRiderMap';
 import { CITY_COORDS } from './luzonCityCoords';
+import { ridersApi, parcelsApi } from './services/api';
 
 const vehicleIcon = (v) => {
   const t = String(v).toLowerCase();
@@ -18,11 +19,7 @@ export default function MonitorGeofenceBoundary() {
 
   const fetchData = async () => {
     try {
-      const [rRes, pRes] = await Promise.all([
-        fetch('https://yto-express.onrender.com/api/riders'),
-        fetch('https://yto-express.onrender.com/api/parcels'),
-      ]);
-      const [rData, pData] = await Promise.all([rRes.json(), pRes.json()]);
+      const [rData, pData] = await Promise.all([ridersApi.list(), parcelsApi.list()]);
 
       // Only active riders
       const activeRiders = rData

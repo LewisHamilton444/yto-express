@@ -1,5 +1,6 @@
 'use client';
 import React, { useState, useEffect } from 'react';
+import { parcelsApi } from './services/api';
 
 const S = {
   wrap:    { display:'flex', flexDirection:'column', minHeight:'100vh', background:'#f5f5f5', fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif" },
@@ -18,11 +19,6 @@ const S = {
   fa:      { display:'flex', gap:10, marginTop:22, paddingTop:18, borderTop:'1px solid #e5ddf0' },
   th:      { padding:'11px 14px', textAlign:'left', fontSize:10, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.5px', color:'white', background:'#390955', whiteSpace:'nowrap' },
   td:      { padding:'12px 14px', borderBottom:'1px solid #f0eaf8', color:'#333', fontSize:13, verticalAlign:'middle' },
-  ov:      { position:'fixed', inset:0, background:'rgba(0,0,0,0.45)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:2000 },
-  modal:   { background:'white', borderRadius:14, padding:'30px', maxWidth:420, width:'90%', boxShadow:'0 16px 48px rgba(57,9,85,0.2)' },
-  mt:      { fontSize:17, fontWeight:800, color:'#1a1a1a', margin:'0 0 10px' },
-  mb:      { fontSize:13, color:'#666', margin:'0 0 24px', lineHeight:1.6 },
-  ma:      { display:'flex', gap:10 },
 };
 
 const btnStyle = (v='primary') => {
@@ -79,8 +75,7 @@ export default function GenerateTrackingInformation({ reports: externalReports, 
   useEffect(() => {
     const fetchParcels = async () => {
       try {
-        const res = await fetch('https://yto-express.onrender.com/api/parcels');
-        const data = await res.json();
+        const data = await parcelsApi.list();
         setParcels(data);
         if (data.length > 0) setSelectedParcel(data[0].trackingNumber);
       } catch (err) {

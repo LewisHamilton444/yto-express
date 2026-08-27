@@ -4,6 +4,8 @@ import { normalizeRider, mockRiders, formatStatusLabel, RIDER_STATUS } from './s
 import PaginationControls from './PaginationControls';
 import { exportToCSV, exportToExcel } from './exportUtils';
 import ParcelProgressTimeline from './ParcelProgressTimeline';
+import { apiFetch, ridersApi, parcelsApi } from './services/api';
+import Modal from './components/ui/Modal';
 
 const RIDER_EXPORT_COLUMNS = [
   { key: 'riderId', label: 'Rider ID' },
@@ -95,8 +97,7 @@ export default function GenerateRiderDataReport() {
 
   const fetchRiders = async () => {
     try {
-      const response = await fetch('https://yto-express.onrender.com/api/riders');
-      const data = await response.json();
+      const data = await ridersApi.list();
       setRiders(data.map(normalizeRider));
     } catch (err) {
       console.error('Error fetching riders:', err);
@@ -108,8 +109,7 @@ export default function GenerateRiderDataReport() {
 
   const fetchParcels = async () => {
     try {
-      const response = await fetch('https://yto-express.onrender.com/api/parcels');
-      const data = await response.json();
+      const data = await parcelsApi.list();
       setParcels(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Error fetching parcels:', err);
@@ -155,7 +155,7 @@ export default function GenerateRiderDataReport() {
         payoutCycle:   editingRider.payoutCycle,
       };
 
-      const response = await fetch(`https://yto-express.onrender.com/api/riders/${editingRider._id}`, {
+      const response = await apiFetch(`/riders/${editingRider._id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updateData),
@@ -562,7 +562,10 @@ export default function GenerateRiderDataReport() {
 
       {/* EDIT MODAL */}
       {editingRider && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(26,10,36,0.5)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
+        <Modal
+          zIndex={9999} blur={false} tint="rgba(26,10,36,0.5)" overlayStyle={{ backdropFilter: 'blur(4px)' }}
+          padding={0} cardStyle={{ background: 'transparent', boxShadow: 'none', width: 'auto', maxWidth: 'none', maxHeight: 'none', overflowY: 'visible' }}
+        >
           <form onSubmit={handleSaveEdit} style={{ width: 460, background: 'white', borderRadius: 14, overflow: 'hidden', boxShadow: '0 12px 36px rgba(57,9,85,0.25)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '18px 24px', borderBottom: '1px solid #f0eaf8', background: '#390955' }}>
               <h3 style={{ fontSize: 16, fontWeight: 800, color: 'white', margin: 0 }}>Edit Rider Profile</h3>
@@ -647,13 +650,16 @@ export default function GenerateRiderDataReport() {
               </button>
             </div>
           </form>
-        </div>
+        </Modal>
       )}
 
       {/* PARCEL INFO MODAL */}
       {viewParcel && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(26,10,36,0.5)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }} onClick={() => setViewParcel(null)}>
-          <div onClick={e => e.stopPropagation()} style={{ width: 460, background: 'white', borderRadius: 14, overflow: 'hidden', boxShadow: '0 12px 36px rgba(57,9,85,0.25)', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}>
+        <Modal
+          zIndex={9999} blur={false} tint="rgba(26,10,36,0.5)" overlayStyle={{ backdropFilter: 'blur(4px)' }}
+          onBackdropClick={() => setViewParcel(null)}
+          padding={0} cardStyle={{ width: 460, borderRadius: 14, overflow: 'hidden', boxShadow: '0 12px 36px rgba(57,9,85,0.25)', maxHeight: '85vh', maxWidth: 'none', display: 'flex', flexDirection: 'column' }}
+        >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '18px 24px', borderBottom: '1px solid #f0eaf8', background: '#390955' }}>
               <div>
                 <h3 style={{ fontSize: 16, fontWeight: 800, color: 'white', margin: 0 }}>{viewParcel.trackingNumber}</h3>
@@ -705,8 +711,7 @@ export default function GenerateRiderDataReport() {
                 Close
               </button>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

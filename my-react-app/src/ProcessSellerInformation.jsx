@@ -8,6 +8,7 @@ import ReviewModal from './verification/ReviewModal';
 import SendSMSModal from './verification/SendSMSModal';
 import Toast from './verification/Toast';
 import { useToasts } from './verification/useToasts';
+import { apiFetch, notificationsApi } from './services/api';
 import { buildSellerPayloadFromPendingRegistration } from './sellerRiderData';
 
 const ProcessSellerInformation = ({ pendingSellers: sellersProp, setPendingSellers: setSellersProp }) => {
@@ -53,7 +54,7 @@ const ProcessSellerInformation = ({ pendingSellers: sellersProp, setPendingSelle
     // Phase 1: create the real seller record — only once, even across a resend.
     if (!created) {
       try {
-        const createResponse = await fetch('https://yto-express.onrender.com/api/sellers', {
+        const createResponse = await apiFetch('/sellers', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(buildSellerPayloadFromPendingRegistration(item)),
@@ -75,13 +76,7 @@ const ProcessSellerInformation = ({ pendingSellers: sellersProp, setPendingSelle
     // Phase 2: email the credentials via Gmail — this is the part that can be
     // resent. (SMS stays dormant until a paid PH provider is configured.)
     try {
-      const emailResponse = await fetch('https://yto-express.onrender.com/api/email/send', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ to: targetEmail, subject: 'Your YTO Express account has been approved', message }),
-      });
-      const emailResult = await emailResponse.json();
-      if (!emailResponse.ok) throw new Error(emailResult.error || 'Email delivery failed');
+      await notificationsApi.sendEmail({ to: targetEmail, subject: 'Your YTO Express account has been approved', message });
 
       setSmsPayload(null);
       pushToast(`Account Approved & Credentials Emailed to ${targetEmail}`, 'success');
