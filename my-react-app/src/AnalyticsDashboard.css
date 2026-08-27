@@ -150,10 +150,8 @@ html, body, #root {
   justify-content: center;
   flex-shrink: 0;
 }
-.ed-kpi-icon-wrap.purple { background: rgba(57, 9, 85, 0.08);   color: #390955; }
-.ed-kpi-icon-wrap.green  { background: rgba(34, 197, 94, 0.12); color: #16a34a; }
+.ed-kpi-icon-wrap.purple { background: rgba(57, 9, 85, 0.08); color: #390955; }
 .ed-kpi-icon-wrap.orange { background: rgba(243, 112, 33, 0.1); color: #f37021; }
-.ed-kpi-icon-wrap.amber  { background: rgba(245, 158, 11, 0.12); color: #b45309; }
 .ed-kpi-trend {
   display: inline-flex;
   align-items: center;
@@ -258,7 +256,7 @@ html, body, #root {
   margin-bottom: 23px;
   font-size: 10px;
   font-weight: 700;
-  color: #b7abc9;
+  color: #390955;
   text-align: right;
 }
 .ed-bar-chart {
@@ -299,7 +297,7 @@ html, body, #root {
   margin-top: 8px;
   font-size: 12px;
   font-weight: 600;
-  color: #8c7f9d;
+  color: #390955;
 }
 
 /* Summary Layout Metrics Info — quick-stat footer badges */
@@ -318,6 +316,11 @@ html, body, #root {
   border: 1px solid #f0ecf7;
   border-radius: 10px;
   padding: 10px 14px;
+}
+/* Primary callout — the standout stat in a footer row (top rider, peak volume) */
+.ed-footer-badge.highlight {
+  border: 1px solid rgba(243, 112, 33, 0.25);
+  border-left: 3px solid #f37021;
 }
 .ed-footer-badge-icon {
   width: 28px;
@@ -432,11 +435,10 @@ html, body, #root {
 .ed-action-btn.secondary {
   background: white;
   color: #390955;
-  border-color: #e1dbec;
+  border-color: #390955;
 }
 .ed-action-btn.secondary:hover {
-  border-color: #390955;
-  background: #faf7fd;
+  background: rgba(57, 9, 85, 0.1);
   transform: translateY(-1px);
 }
 

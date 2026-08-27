@@ -296,7 +296,7 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
       value: `${deliverySuccessPct}%`, sub: `${deliveredCount} of ${totalParcels} parcels`, trend: successTrendPts,
     },
     {
-      key: 'active-riders', label: 'Active Riders', icon: Bike, tone: 'green',
+      key: 'active-riders', label: 'Active Riders', icon: Bike, tone: 'orange',
       value: `${activeRidersCount}/${totalRidersCount}`, sub: `${offlineRidersCount} offline`, trend: null,
     },
     {
@@ -304,7 +304,7 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
       value: `${inTransitCount}`, sub: `of ${totalParcels} total parcels`, trend: null,
     },
     {
-      key: 'pending-verifications', label: 'Pending Verifications', icon: UserCheck, tone: 'amber',
+      key: 'pending-verifications', label: 'Pending Verifications', icon: UserCheck, tone: 'purple',
       value: `${pendingVerificationsCount}`, sub: `${pendingSellers.length} sellers, ${pendingRiders.length} riders`, trend: null,
     },
   ];
@@ -512,7 +512,7 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
                     )}
 
                     <div className="ed-chart-footer">
-                      <div className="ed-footer-badge">
+                      <div className="ed-footer-badge highlight">
                         <span className="ed-footer-badge-icon"><Trophy size={14} /></span>
                         <div><label>Top Performing Rider</label><strong>{peakRider}</strong></div>
                       </div>
@@ -633,7 +633,7 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
                         <span className="ed-footer-badge-icon"><BarChart3 size={14} /></span>
                         <div><label>Total ({volumeView})</label><strong>{volumeVals.reduce((a, b) => a + b, 0)}</strong></div>
                       </div>
-                      <div className="ed-footer-badge">
+                      <div className="ed-footer-badge highlight">
                         <span className="ed-footer-badge-icon"><TrendingUp size={14} /></span>
                         <div><label>Peak</label><strong>{maxVolume}</strong></div>
                       </div>
@@ -660,7 +660,7 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
                           {activityLabels.map((label, i) => (
-                            <span key={i} style={{ fontSize: 10, color: '#aaa', flex: 1, textAlign: 'center' }}>{label}</span>
+                            <span key={i} style={{ fontSize: 10, color: '#390955', flex: 1, textAlign: 'center' }}>{label}</span>
                           ))}
                         </div>
                       </div>
