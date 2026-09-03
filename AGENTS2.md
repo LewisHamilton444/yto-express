@@ -171,6 +171,7 @@ Bidirectional REST bridge with the Android backend (`yto_express_backend`). Ever
 - `server/clean_web_db.js` — wipes test records while **preserving** `seller@gmail.com`, `customer@gmail.com`, `rider@gmail.com`.
 - `scripts/dev.cjs` — `npm run dev:all` launcher (frontend + server).
 - `package.json` scripts: `dev` (vite), `dev:server`, `dev:all`, `start` (dev.cjs), `build` (`vite build`), `lint`, `preview`.
+- `scripts/qa/` — `npm run qa:layout` runs the headless layout sweep: boots a seeded API + Vite dev server + headless Chrome, logs in with an offline demo JWT, and asserts zero horizontal overflow / zero crashes / zero console errors across every sidebar page x viewport width (catches runtime-only crashes `vite build` cannot see).
 - Skills specs live in `my-react-app/skills/` (9 SKILL.md files: authentication, cross-device, geofence-delivery, map-location-picker, notifications, package-booking, profile-management, rider-delivery, seller-dashboard).
 
 ---
