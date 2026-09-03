@@ -17,6 +17,9 @@
 //  - POST/PUT/DELETE answer { ok: true } so stray mutations never crash.
 
 import http from 'node:http';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 // ── Deterministic pseudo-random rows ────────────────────────────────────
 function lcg(seed) {
@@ -204,6 +207,59 @@ const collectionRoutes = {
   '/events/history': [],
 };
 
+// Object-shaped (non-collection) routes.
+const objectRoutes = {
+  '/dashboard/stats': STATS,
+  '/events/stats': { threshold: 5, concurrent: 0 },
+};
+
+// ── Optional real-data fixtures ─────────────────────────────────────────
+// Drop MongoDB exports into scripts/qa/fixtures/ as JSON files named after
+// the route they feed (parcels.json, riders.json, issues.json,
+// dashboard-stats.json, ...). When present they REPLACE the synthetic
+// generator for that route so the sweep runs against real record shapes
+// and volumes. See fixtures/README.md for the full name table. The folder
+// may be empty or absent — the synthetic fallback below always applies.
+const FIXTURE_ROUTES = {
+  'parcels': '/parcels',
+  'riders': '/riders',
+  'sellers': '/sellers',
+  'accounts': '/accounts',
+  'customers': '/customers',
+  'issues': '/issues',
+  'parcel-locations': '/parcel-locations',
+  'notifications': '/notifications',
+  'activity-log': '/activity-log',
+  'events-alerts': '/events/alerts',
+  'events-history': '/events/history',
+  'dashboard-stats': '/dashboard/stats',
+  'events-stats': '/events/stats',
+};
+const FIXTURES_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures');
+if (fs.existsSync(FIXTURES_DIR)) {
+  for (const file of fs.readdirSync(FIXTURES_DIR).filter((f) => f.endsWith('.json'))) {
+    const base = file.slice(0, -5);
+    const route = FIXTURE_ROUTES[base];
+    if (!route) { console.warn('[seed] ignoring unknown fixture ' + file); continue; }
+    let payload;
+    try { payload = JSON.parse(fs.readFileSync(path.join(FIXTURES_DIR, file), 'utf8')); }
+    catch (e) { console.warn('[seed] skipping unparseable fixture ' + file + ': ' + e.message); continue; }
+    if (route === '/dashboard/stats' || route === '/events/stats') {
+      if (payload && typeof payload === 'object' && !Array.isArray(payload)) {
+        objectRoutes[route] = payload;
+        console.log('[seed] fixture ' + file + ' -> ' + route + ' (object)');
+      } else {
+        console.warn('[seed] fixture ' + file + ' must be a JSON object, skipped');
+      }
+    } else if (Array.isArray(payload)) {
+      collectionRoutes[route] = payload;
+      console.log('[seed] fixture ' + file + ' -> ' + route + ' (' + payload.length + ' rows)');
+    } else {
+      console.warn('[seed] fixture ' + file + ' must be a JSON array, skipped');
+    }
+  }
+}
+
 function json(res, code, body) {
   const payload = JSON.stringify(body);
   res.writeHead(code, {
@@ -265,10 +321,9 @@ export function startSeedServer() {
     }
 
     if (req.method === 'GET') {
-      if (api === '/dashboard/stats') { json(res, 200, STATS); return; }
-      if (api === '/events/stats')   { json(res, 200, { threshold: 5, concurrent: 0 }); return; }
       // /customers/:id/orders and similar detail reads -> empty array.
       const suffix = '/' + api.split('/').filter(Boolean).slice(-1)[0];
+      if (objectRoutes[api]) { json(res, 200, objectRoutes[api]); return; }
       if (collectionRoutes[api]) { json(res, 200, collectionRoutes[api]); return; }
       if (collectionRoutes[suffix]) { json(res, 200, collectionRoutes[suffix]); return; }
       json(res, 200, []);
