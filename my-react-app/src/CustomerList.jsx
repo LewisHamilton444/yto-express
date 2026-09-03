@@ -140,7 +140,8 @@ const CustomerList = ({ currentUser }) => {
       try {
         const res = await apiFetch(`/customers/${customer.customerId}/orders`);
         if (res.ok) {
-          const parcels = await res.json();
+          const parcelsRaw = await res.json();
+          const parcels = Array.isArray(parcelsRaw) ? parcelsRaw : [];
           parcels.forEach(parcel => {
             events.push({
               type: 'order',

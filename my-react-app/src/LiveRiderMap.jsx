@@ -157,7 +157,9 @@ export default function LiveRiderMap() {
     try {
       const [rData, pData] = await Promise.all([ridersApi.list(), parcelsApi.list()]);
 
-      const activeRiders = rData
+      const safeRiders = Array.isArray(rData) ? rData : [];
+      const safeParcels = Array.isArray(pData) ? pData : [];
+      const activeRiders = safeRiders
         .filter(r => {
           const st = String(r.status || 'active').toLowerCase();
           return st !== 'archived' && st !== 'inactive';
@@ -182,7 +184,7 @@ export default function LiveRiderMap() {
           };
         });
 
-      const activeParcels = pData
+      const activeParcels = safeParcels
         .filter(p => !['delivered', 'returned', 'failed'].includes(p.status))
         .map((p, i) => {
           const coords = CITY_COORDS[p.destination] || CITY_COORDS[p.origin] || LUZON_FALLBACK_COORDS;

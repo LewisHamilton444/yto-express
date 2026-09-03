@@ -27,8 +27,9 @@ export default function SettingsArchiveView({ onCountsChange = () => {} }) {
     setLoading(true);
     try {
       const [sData, rData] = await Promise.all([sellersApi.list(), ridersApi.list()]);
-      const sellers = sData.map(normalizeSeller);
-      const riders  = rData.map(normalizeRider);
+      // Guard against non-array responses before mapping.
+      const sellers = (Array.isArray(sData) ? sData : []).map(normalizeSeller);
+      const riders  = (Array.isArray(rData) ? rData : []).map(normalizeRider);
       setAllSellers(sellers);
       setAllRiders(riders);
       onCountsChange({

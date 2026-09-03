@@ -9,6 +9,7 @@
     "dev:all": "node scripts/dev.cjs",
     "start": "node scripts/dev.cjs",
     "build": "vite build",
+    "qa:layout": "node scripts/qa/layoutSweep.mjs",
     "lint": "eslint .",
     "preview": "vite preview"
   },

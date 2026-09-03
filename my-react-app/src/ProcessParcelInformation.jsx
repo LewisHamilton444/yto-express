@@ -69,9 +69,11 @@ export default function ProcessParcelInformation() {
         ridersApi.list(),
         sellersApi.list(),
       ]);
-      setParcels(parcelsData);
-      setRiders(ridersData);
-      setSellers(sellersData);
+      // Guard against non-array responses — downstream counts call
+      // .filter()/.map() on these arrays.
+      setParcels(Array.isArray(parcelsData) ? parcelsData : []);
+      setRiders(Array.isArray(ridersData) ? ridersData : []);
+      setSellers(Array.isArray(sellersData) ? sellersData : []);
     } catch (err) {
       console.error('Error fetching data:', err);
     } finally {

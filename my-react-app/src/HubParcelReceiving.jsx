@@ -28,7 +28,7 @@ export default function HubParcelReceiving() {
     setLoading(true);
     try {
       const data = await parcelsApi.list();
-      setParcels(data);
+      setParcels(Array.isArray(data) ? data : []);
     } catch {
       flash('Failed to load parcels. Is the server running?', 'error');
     } finally {

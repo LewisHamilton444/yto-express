@@ -88,7 +88,9 @@ export default function GenerateRiderDataReport() {
   const fetchRiders = async () => {
     try {
       const data = await ridersApi.list();
-      setRiders(data.map(normalizeRider));
+      // Guard: a non-array response would crash data.map below — fall back
+      // to the mock roster the same way the catch path does.
+      setRiders((Array.isArray(data) ? data : []).map(normalizeRider));
     } catch (err) {
       console.error('Error fetching riders:', err);
       setRiders(mockRiders);

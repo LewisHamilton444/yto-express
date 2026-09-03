@@ -123,7 +123,7 @@ export default function ProcessParcelLocation() {
   const fetchLocations = async () => {
     try {
       const data = await parcelLocationsApi.list();
-      setLocations(data);
+      setLocations(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Error fetching locations:', err);
     } finally {

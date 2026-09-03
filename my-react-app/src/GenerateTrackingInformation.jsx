@@ -82,8 +82,9 @@ export default function GenerateTrackingInformation({ reports: externalReports, 
     const fetchParcels = async () => {
       try {
         const data = await parcelsApi.list();
-        setParcels(data);
-        if (data.length > 0) setSelectedParcel(data[0].trackingNumber);
+        const list = Array.isArray(data) ? data : [];
+        setParcels(list);
+        if (list.length > 0 && list[0].trackingNumber) setSelectedParcel(list[0].trackingNumber);
       } catch (err) {
         console.error('Error fetching parcels:', err);
         setParcels([]);

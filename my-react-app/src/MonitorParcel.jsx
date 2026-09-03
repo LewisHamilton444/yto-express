@@ -17,7 +17,7 @@ export default function MonitorGeofenceBoundary() {
       const [rData, pData] = await Promise.all([ridersApi.list(), parcelsApi.list()]);
 
       // Only active riders
-      const activeRiders = rData
+      const activeRiders = (Array.isArray(rData) ? rData : [])
         .filter(r => {
           const s = (r.status||'active').toLowerCase();
           return s!=='archived' && s!=='inactive';
@@ -43,7 +43,7 @@ export default function MonitorGeofenceBoundary() {
         });
 
       // Only active parcels
-      const activeParcels = pData
+      const activeParcels = (Array.isArray(pData) ? pData : [])
         .filter(p => p.status!=='delivered'&&p.status!=='returned'&&p.status!=='failed')
         .map((p, i) => {
           const destCoords = CITY_COORDS[p.destination];

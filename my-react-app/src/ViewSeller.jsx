@@ -33,6 +33,7 @@ const GenerateSellerReport = ({ sellers: externalSellers, onUpdateSellers, curre
         if (!response.ok) throw new Error('Failed to fetch');
         const data = await response.json();
         if (Array.isArray(data) && data.length > 0) {
+
           const normalized = data.map(normalizeSeller);
           setSellers(normalized);
           sellersRef.current = normalized;

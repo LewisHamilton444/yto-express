@@ -17,15 +17,16 @@ const PeakAlertBanner = () => {
                 const res = await apiFetch('/events/alerts');
                 if (res.ok) {
                     const data = await res.json();
-                    setAlerts(data);
-                    if (data.length > 0) {
-                        setLatestAlert(data[data.length - 1]);
+                    const list = Array.isArray(data) ? data : [];
+                    setAlerts(list);
+                    if (list.length > 0) {
+                        setLatestAlert(list[list.length - 1]);
                     }
                 }
                 const statsRes = await apiFetch('/events/stats');
                 if (statsRes.ok) {
                     const stats = await statsRes.json();
-                    setThreshold(stats.threshold || 5);
+                    setThreshold(stats?.threshold || 5);
                 }
             } catch {}
         };
@@ -35,6 +36,7 @@ const PeakAlertBanner = () => {
     // Listen for real-time peak alerts via SSE
     useEffect(() => {
         const unsubscribe = on('peak-alert', (data) => {
+            if (!data || typeof data !== 'object') return;
             setLatestAlert(data);
             setAlerts(prev => [...prev.slice(-49), data]); // keep last 50
             setShowBanner(true);
