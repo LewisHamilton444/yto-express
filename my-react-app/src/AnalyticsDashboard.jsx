@@ -258,6 +258,9 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
   });
   const [sidebarHover, setSidebarHover] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  // Which parent group's children are shown as a flyout next to the icon rail
+  // (collapsed mode only). Closed on mouse-leave or navigation.
+  const [railFlyout, setRailFlyout] = useState(null);
 
   const toggleSidebar = () => {
     setSidebarCollapsed(prev => {
@@ -267,7 +270,11 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
     });
   };
 
+  // Collapsed mode is a pure icon rail: hovering a top-level item shows a
+  // small tooltip; parent groups (like GPS-Based Parcel Tracking) show their
+  // children in an instant flyout panel so no hover-pause is needed.
   const sidebarExpanded = !sidebarCollapsed || sidebarHover;
+  const closeRailFlyout = () => setRailFlyout(null);
 
   const [sharedSellers, setSharedSellers] = useState([
     { id: 1, companyName: 'Fresh Express Store', displayName: 'Fresh Express Store', registrationId: 'SH-20220101-12345', status: 'Active', sellerType: 'Business', email: 'info@freshexpress.com', phone: '13823456789', totalParcels: 0 }
@@ -489,9 +496,8 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
       </button>
 
       <aside
-        className={`ad-sidebar ${mobileNavOpen ? 'ad-sidebar--mobile-open' : ''} ${sidebarCollapsed && sidebarHover ? 'ad-sidebar--hover-expanded' : ''}`}
-        onMouseEnter={() => setSidebarHover(true)}
-        onMouseLeave={() => setSidebarHover(false)}
+        className={`ad-sidebar ${mobileNavOpen ? 'ad-sidebar--mobile-open' : ''}`}
+        onMouseLeave={closeRailFlyout}
         aria-label="Main navigation"
       >
         <div className="ad-sidebar-header">
@@ -523,11 +529,14 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
               {visibleMenuItems.map(item => (
                 <li key={item.key}>
                   {item.children ? (
-                    <div className="ad-sidebar-dropdown">
-                      <button className={`ad-sidebar-nav-item ad-sidebar-nav-parent ${item.children.some(c => c.key === activeMenuItem) ? 'ad-sidebar-nav-parent--active' : ''}`} onClick={() => toggleSection(item.key)} type="button" aria-expanded={openSection === item.key}>
+                    <div className="ad-sidebar-dropdown"
+                      onMouseEnter={() => sidebarCollapsed && setRailFlyout(item.key)}
+                      onMouseLeave={closeRailFlyout}
+                    >
+                      <button data-tooltip={item.label} className={`ad-sidebar-nav-item ad-sidebar-nav-parent ${item.children.some(c => c.key === activeMenuItem) ? 'ad-sidebar-nav-parent--active' : ''}`} onClick={() => { if (sidebarCollapsed) setRailFlyout(prev => (prev === item.key ? null : item.key)); else toggleSection(item.key); }} type="button" aria-expanded={sidebarCollapsed ? railFlyout === item.key : openSection === item.key}>
                         {getIcon(item.key)}
                         <span className="ad-sidebar-nav-text">{item.label}</span>
-                        <svg className={`ad-sidebar-chevron ${openSection === item.key ? 'ad-sidebar-chevron--rotated' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"/></svg>
+                        <svg className={`ad-sidebar-chevron ${(sidebarCollapsed ? railFlyout === item.key : openSection === item.key) ? 'ad-sidebar-chevron--rotated' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"/></svg>
                       </button>
                       <ul className={`ad-sidebar-submenu ${openSection === item.key ? 'ad-sidebar-submenu--open' : ''}`}>
                         {item.children.map(child => (
@@ -539,9 +548,24 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
                           </li>
                         ))}
                       </ul>
+                      {/* Flyout shown only when the sidebar is a collapsed rail */}
+                      {sidebarCollapsed && (
+                        <div className={`ad-rail-flyout ${railFlyout === item.key ? 'ad-rail-flyout--open' : ''}`}
+                          onMouseEnter={() => setRailFlyout(item.key)}
+                          onMouseLeave={closeRailFlyout}
+                        >
+                          <div className="ad-rail-flyout-title">{item.label}</div>
+                          {item.children.map(child => (
+                            <button key={child.key} type="button" className={`ad-rail-flyout-link ${activeMenuItem === child.key ? 'ad-rail-flyout-link--active' : ''}`} onClick={() => handleMenuClick(child.key)}>
+                              {icons.sub}
+                              <span>{child.label}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   ) : (
-                    <button type="button" className={`ad-sidebar-nav-item ${activeMenuItem === item.key ? 'ad-sidebar-nav-item--active' : ''}`} onClick={() => handleMenuClick(item.key)}>
+                    <button type="button" data-tooltip={item.label} className={`ad-sidebar-nav-item ${activeMenuItem === item.key ? 'ad-sidebar-nav-item--active' : ''}`} onClick={() => handleMenuClick(item.key)}>
                       {getIcon(item.key)}
                       <span className="ad-sidebar-nav-text">{item.label}</span>
                     </button>

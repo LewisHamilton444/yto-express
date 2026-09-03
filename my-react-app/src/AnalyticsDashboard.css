@@ -31,7 +31,9 @@ html, body, #root {
   flex-shrink: 0;
   transition: width 0.22s ease;
 }
-/* Collapsed rail — icons only, text fades out, expands again on hover */
+/* Collapsed rail — icon-only. Text is hidden; top-level items reveal their
+   label as a right-side tooltip on hover. Parent groups additionally expand
+   the rail while hovered so their dropdown children stay reachable. */
 .ad-wrapper.ad-sidebar--collapsed .ad-sidebar { width: 72px; }
 .ad-wrapper.ad-sidebar--collapsed .ad-sidebar .ad-sidebar-nav-text,
 .ad-wrapper.ad-sidebar--collapsed .ad-sidebar .ad-sidebar-logo-text,
@@ -42,17 +44,97 @@ html, body, #root {
   pointer-events: none;
   transition: opacity 0.12s ease;
 }
-.ad-wrapper.ad-sidebar--collapsed .ad-sidebar.ad-sidebar--hover-expanded { width: 256px; box-shadow: 12px 0 32px rgba(57,9,85,0.35); }
-.ad-wrapper.ad-sidebar--collapsed .ad-sidebar.ad-sidebar--hover-expanded .ad-sidebar-nav-text,
-.ad-wrapper.ad-sidebar--collapsed .ad-sidebar.ad-sidebar--hover-expanded .ad-sidebar-logo-text,
-.ad-wrapper.ad-sidebar--collapsed .ad-sidebar.ad-sidebar--hover-expanded .ad-sidebar-nav-section-label,
-.ad-wrapper.ad-sidebar--collapsed .ad-sidebar.ad-sidebar--hover-expanded .ad-sidebar-chevron {
-  opacity: 1;
-  pointer-events: auto;
-}
 .ad-wrapper.ad-sidebar--collapsed .ad-sidebar-nav-item,
 .ad-wrapper.ad-sidebar--collapsed .ad-sidebar-submenu-link { justify-content: center; }
 .ad-wrapper.ad-sidebar--collapsed .ad-sidebar-header { justify-content: center; padding: 16px 12px; }
+
+/* Icon-rail tooltips (collapsed only): a small dark pill to the right of
+   the icon for top-level items, revealed after a short hover delay. */
+.ad-wrapper.ad-sidebar--collapsed .ad-sidebar .ad-sidebar-nav-item[data-tooltip] { position: relative; }
+.ad-wrapper.ad-sidebar--collapsed .ad-sidebar .ad-sidebar-nav-item[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: calc(100% + 10px);
+  top: 50%;
+  transform: translateY(-50%);
+  background: #1c0530;
+  color: white;
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  padding: 6px 11px;
+  border-radius: 7px;
+  box-shadow: 0 4px 16px rgba(20, 2, 38, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease 0.25s;
+  z-index: 1200;
+}
+.ad-wrapper.ad-sidebar--collapsed .ad-sidebar .ad-sidebar-nav-item[data-tooltip]:hover::after,
+.ad-wrapper.ad-sidebar--collapsed .ad-sidebar .ad-sidebar-nav-item[data-tooltip]:focus-visible::after {
+  opacity: 1;
+  transition-delay: 0.15s;
+}
+/* Collapsed rail parent: hide tooltip when the dropdown is open above it. */
+.ad-wrapper.ad-sidebar--collapsed .ad-sidebar .ad-sidebar-dropdown:has(.ad-rail-flyout--open) > .ad-sidebar-nav-item[data-tooltip]::after { display: none; }
+
+/* ── Collapsed-rail group flyout: children shown beside the rail so the
+   collapsed sidebar never needs to re-expand just to reach a sub-page. ── */
+.ad-rail-flyout {
+  position: absolute;
+  left: calc(100% + 10px);
+  top: -6px;
+  min-width: 210px;
+  max-width: 240px;
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 8px;
+  box-shadow: 0 14px 40px rgba(20, 2, 38, 0.22);
+  border: 1px solid #ede4f5;
+  z-index: 1250;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateX(-6px);
+  transition: opacity 0.16s ease, transform 0.16s ease, visibility 0s linear 0.16s;
+}
+.ad-rail-flyout--open { opacity: 1; visibility: visible; transform: translateX(0); transition-delay: 0s; }
+.ad-rail-flyout-title {
+  padding: 6px 12px 8px;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: #a890c0;
+}
+.ad-rail-flyout-link {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  text-align: left;
+  padding: 9px 12px;
+  border: none;
+  background: transparent;
+  border-radius: 7px;
+  color: #3d2b55;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+}
+.ad-rail-flyout-link:hover { background: #f5f0fc; color: #390955; }
+.ad-rail-flyout-link--active { background: #f37021; color: white; }
+.ad-rail-flyout-link svg { flex-shrink: 0; }
+/* The flyout anchors to its parent button inside the collapsed rail. */
+.ad-wrapper.ad-sidebar--collapsed .ad-sidebar-dropdown { position: relative; }
+.ad-wrapper.ad-sidebar--collapsed .ad-sidebar-nav-parent { position: relative; }
+/* Don't clip the flyout if the nav ever scrolls — keep it above the rail. */
+.ad-wrapper.ad-sidebar--collapsed .ad-sidebar { overflow: visible; }
+.ad-wrapper.ad-sidebar--collapsed .ad-sidebar-nav { overflow: visible; }
 
 /* Sidebar collapse toggle — sits top-right inside the header */
 .ad-sidebar-collapse-btn {
@@ -111,8 +193,11 @@ html, body, #root {
     transform: translateX(-100%);
     transition: transform 0.24s ease;
     box-shadow: none;
+    overflow-y: auto !important; /* mobile drawer scrolls like the full menu */
   }
   .ad-sidebar--mobile-open { transform: translateX(0); box-shadow: 16px 0 40px rgba(20,2,38,0.35); }
+  /* Collapsed preferences are irrelevant on mobile — the drawer is always the
+     full-width menu, so restore text/icons and hide rail-only affordances. */
   .ad-wrapper.ad-sidebar--collapsed .ad-sidebar .ad-sidebar-nav-text,
   .ad-wrapper.ad-sidebar--collapsed .ad-sidebar .ad-sidebar-logo-text,
   .ad-wrapper.ad-sidebar--collapsed .ad-sidebar .ad-sidebar-nav-section-label,
@@ -120,12 +205,15 @@ html, body, #root {
   .ad-wrapper.ad-sidebar--collapsed .ad-sidebar-nav-item,
   .ad-wrapper.ad-sidebar--collapsed .ad-sidebar-submenu-link { justify-content: flex-start; }
   .ad-wrapper.ad-sidebar--collapsed .ad-sidebar-header { justify-content: flex-start; padding: 24px; }
+  .ad-wrapper.ad-sidebar--collapsed .ad-sidebar-nav-item[data-tooltip]::after { display: none; }
+  .ad-rail-flyout { display: none; }
 }
 
 @media (max-width: 900px) {
   .ad-main { margin-left: 0 !important; }
 }
-.ad-sidebar-header { padding: 24px; border-bottom: 1px solid rgba(255,255,255,0.15); }
+
+.ad-sidebar-header { position: relative; padding: 24px; border-bottom: 1px solid rgba(255,255,255,0.15); }
 .ad-sidebar-logo { display: flex; align-items: center; gap: 12px; }
 .ad-sidebar-logo-circle { width: 44px; height: 44px; border-radius: 50%; border: 2px solid #f37021; background: white; display: flex; align-items: center; justify-content: center; overflow: hidden; }
 .ad-sidebar-logo-img { width: 100%; height: 100%; object-fit: cover; }
@@ -135,7 +223,7 @@ html, body, #root {
 .ad-sidebar-nav-section { display: flex; flex-direction: column; gap: 6px; }
 .ad-sidebar-nav-section-label { padding-left: 8px; font-size: 11px; font-weight: 700; text-transform: uppercase; color: rgba(255,255,255,0.4); letter-spacing: 0.5px; }
 .ad-sidebar-nav-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
-.ad-sidebar-nav-item { display: flex; align-items: center; gap: 12px; padding: 11px 14px; border-radius: 8px; color: rgba(255,255,255,0.75); text-decoration: none; font-size: 14px; font-weight: 500; cursor: pointer; border: none; background: none; width: 100%; text-align: left; }
+.ad-sidebar-nav-item { display: flex; align-items: center; gap: 12px; padding: 11px 14px; border-radius: 8px; color: rgba(255,255,255,0.75); text-decoration: none; font-size: 14px; font-weight: 500; cursor: pointer; border: none; background: none; width: 100%; text-align: left; position: relative; }
 .ad-sidebar-nav-item:hover { background: rgba(255,255,255,0.08); color: white; }
 .ad-sidebar-nav-item--active { background: #f37021 !important; color: white !important; font-weight: 600; }
 .ad-sidebar-nav-parent { justify-content: space-between; }
@@ -149,6 +237,7 @@ html, body, #root {
 .ad-sidebar-submenu--open { max-height: 240px; }
 .ad-sidebar-submenu-link { display: flex; align-items: center; gap: 10px; padding: 8px 12px 8px 32px; border-radius: 6px; text-decoration: none; color: rgba(255,255,255,0.6); font-size: 13px; }
 .ad-sidebar-submenu-link:hover { color: white; background: rgba(255,255,255,0.05); }
+.ad-sidebar-submenu-link--active { background: #f37021 !important; color: white !important; font-weight: 600; }
 .ad-sidebar-submenu-link--active { background: #f37021 !important; color: white !important; font-weight: 600; }
 
 .ad-main {

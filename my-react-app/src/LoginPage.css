@@ -830,3 +830,25 @@
   .login-form-col { padding: 26px 16px; }
   .login-card-title { font-size: 19px; }
 }
+
+/* Short viewports (laptops < ~720px tall, landscape phones): the locked card
+   height + 64px of root padding would overflow the fold. Shrink the padding
+   and let the form column scroll internally so every field stays reachable. */
+@media (max-height: 720px) and (min-width: 861px) {
+  .login-root { padding: 20px 16px; }
+  .login-card { min-height: calc(100vh - 40px); }
+  .login-form-col, .login-hero-col { padding: 34px 40px; }
+  .login-form-inner { overflow-y: auto; max-height: calc(100vh - 108px); padding-right: 4px; }
+}
+
+/* Ultra-short (e.g. 1366x600, browser chrome docked): tighten further. */
+@media (max-height: 640px) and (min-width: 861px) {
+  .login-root { padding: 14px 16px; }
+  .login-form-col, .login-hero-col { padding: 24px 40px; }
+  .login-form-inner { max-height: calc(100vh - 76px); }
+  .login-card-header { margin-bottom: 18px; }
+  .login-form { gap: 14px; }
+  .login-hero-brand { margin-bottom: 14px; }
+  .login-hero-lead { margin-bottom: 12px; }
+  .login-health-pill { margin-bottom: 12px; }
+}
