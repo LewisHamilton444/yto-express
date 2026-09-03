@@ -1,117 +1,287 @@
-import React, { useState } from 'react';
-import { apiFetch } from './services/api';
-import './Loginpage.css';
+import React, { useState, useEffect, useCallback } from 'react';
+import { adminLogin, API_ROOT } from './services/api';
+import './LoginPage.css';
 
 const LoginPage = ({ onLogin }) => {
-  const [email,    setEmail]    = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
-  const [error,    setError]    = useState('');
-  const [loading,  setLoading]  = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
+  const [capsLock, setCapsLock] = useState(false);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
+  const [shaking, setShaking] = useState(false);
+  const [apiHealth, setApiHealth] = useState('checking');
 
+  // Carousel state
+  // Caps Lock detection
+  const detectCapsLock = useCallback((e) => {
+    try {
+      setCapsLock(!!(e.getModifierState && e.getModifierState('CapsLock')));
+    } catch {
+      setCapsLock(false);
+    }
+  }, []);
+
+  // Card shake reset on error
+  useEffect(() => {
+    if (!error) return;
+    const timer = setTimeout(() => setShaking(false), 520);
+    return () => clearTimeout(timer);
+  }, [error]);
+
+  // Live backend health probe
+  useEffect(() => {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 6000);
+    fetch(API_ROOT, { signal: ctrl.signal })
+      .then((res) => setApiHealth(res.ok ? 'online' : 'offline'))
+      .catch(() => setApiHealth('offline'))
+      .finally(() => clearTimeout(timer));
+    return () => {
+      clearTimeout(timer);
+      ctrl.abort();
+    };
+  }, []);
+
+  // Carousel auto-play
+  // Form submission
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (loading || success) return;
     setError('');
     setLoading(true);
     try {
-      const res = await apiFetch('/accounts/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error || 'Invalid email or password.');
-        setLoading(false);
-        return;
-      }
+      const data = await adminLogin(email.trim().toLowerCase(), password, rememberMe);
       setLoading(false);
-      onLogin(data);
-    } catch {
-      setError('Cannot connect to server. Make sure the backend is running.');
+      setSuccess(true);
+      window.setTimeout(() => {
+        if (onLogin) onLogin(data);
+      }, 450);
+    } catch (err) {
+      setError(err.message || 'Cannot connect to server.');
       setLoading(false);
+      setShaking(true);
     }
   };
 
+  const healthText =
+    apiHealth === 'online'
+      ? 'System Operational'
+      : apiHealth === 'offline'
+      ? 'API Offline'
+      : 'Connecting...';
+
+  const cardClasses = [
+    'login-card',
+    shaking ? 'shaking' : '',
+    success ? 'success' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+
   return (
-    <div className="login-root">
-      <div className="login-brand">
-        <div className="login-brand-inner">
-          <div className="login-logo-wrap">
-            <div className="login-logo-circle">
-              <span className="login-logo-text">YX</span>
+    <div className="login-root" role="main" aria-label="YTO Express Admin Login">
+      <div className={cardClasses}>
+        {/* ── LEFT COLUMN: Standard Authentication Form (50%) ── */}
+        <div className="login-form-col" role="region" aria-label="Sign in form">
+          <div className="login-form-inner">
+            <div className="login-card-header anim-fade-up anim-d1">
+              <h2 className="login-card-title">Welcome back</h2>
+              <p className="login-card-subtitle">Sign in to your admin account</p>
             </div>
-          </div>
-          <h1 className="login-brand-name">YTO <span>EXPRESS</span></h1>
-          <p className="login-brand-tagline">Logistics Management System</p>
-          <div className="login-brand-divider" />
-          <p className="login-brand-desc">
-            Admin portal for managing sellers, parcels, riders, and deliveries across the network.
-          </p>
-          <div className="login-role-pills">
-            <span className="login-role-pill">Super Admin</span>
-            <span className="login-role-pill">Staff</span>
-            <span className="login-role-pill">Hub Receiver</span>
+
+            {error && (
+              <div className="login-error" role="alert" aria-live="assertive">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" y1="8" x2="12" y2="12" />
+                  <line x1="12" y1="16" x2="12.01" y2="16" />
+                </svg>
+                {error}
+              </div>
+            )}
+
+            <form className="login-form" onSubmit={handleSubmit} noValidate>
+              <div className="login-field anim-fade-up anim-d2">
+                <label className="login-label" htmlFor="login-email">
+                  Email Address
+                </label>
+                <div className="login-input-wrap">
+                  <svg className="login-input-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+                    <polyline points="22,6 12,13 2,6" />
+                  </svg>
+                  <input
+                    id="login-email"
+                    type="email"
+                    className="login-input"
+                    placeholder="Enter your email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    autoComplete="email"
+                    aria-required="true"
+                  />
+                </div>
+              </div>
+
+              <div className="login-field anim-fade-up anim-d3">
+                <label className="login-label" htmlFor="login-password">
+                  Password
+                </label>
+                <div className="login-input-wrap">
+                  <svg className="login-input-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                  </svg>
+                  <input
+                    id="login-password"
+                    className="login-input"
+                    type={showPass ? 'text' : 'password'}
+                    placeholder="Enter your password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    onKeyDown={detectCapsLock}
+                    onKeyUp={detectCapsLock}
+                    required
+                    autoComplete="current-password"
+                    aria-required="true"
+                  />
+                  <button
+                    type="button"
+                    className="login-show-pass"
+                    onClick={() => setShowPass((p) => !p)}
+                    tabIndex={0}
+                    aria-label={showPass ? 'Hide password' : 'Show password'}
+                    aria-pressed={showPass}
+                  >
+                    {showPass ? (
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                        <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
+                        <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
+                        <line x1="1" y1="1" x2="23" y2="23" />
+                      </svg>
+                    ) : (
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                        <circle cx="12" cy="12" r="3" />
+                      </svg>
+                    )}
+                  </button>
+                </div>
+                {capsLock && (
+                  <span className="login-capslock" role="status" aria-live="polite">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
+                      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                      <line x1="12" y1="9" x2="12" y2="13" />
+                      <line x1="12" y1="17" x2="12.01" y2="17" />
+                    </svg>
+                    Caps Lock is on
+                  </span>
+                )}
+              </div>
+
+              <div className="login-options anim-fade-up anim-d4">
+                <label className="login-remember" htmlFor="login-remember">
+                  <span className="login-checkbox-wrap">
+                    <input
+                      id="login-remember"
+                      type="checkbox"
+                      className="login-checkbox-input"
+                      checked={rememberMe}
+                      onChange={(e) => setRememberMe(e.target.checked)}
+                    />
+                    <span className="login-checkbox-custom" aria-hidden="true">
+                      <svg className="login-checkbox-check" viewBox="0 0 12 10" fill="none">
+                        <polyline
+                          points="1.5 5 4.5 8 10.5 2"
+                          stroke="#ffffff"
+                          strokeWidth="2.2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    </span>
+                  </span>
+                  <span>Remember me</span>
+                </label>
+              </div>
+
+              {/* ── BRAND ORANGE SUBMIT BUTTON (#F37021) ── */}
+              <button
+                type="submit"
+                className="login-btn anim-fade-up anim-d5"
+                disabled={loading || success}
+                aria-busy={loading}
+                aria-label={loading ? 'Signing in' : success ? 'Signed in' : 'Sign in'}
+              >
+                {loading ? (
+                  <span className="login-spinner" aria-hidden="true" />
+                ) : success ? (
+                  <span className="login-btn-success">
+                    <svg className="login-btn-check" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                    Signed In
+                  </span>
+                ) : (
+                  <React.Fragment>
+                    Sign In
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
+                      <line x1="5" y1="12" x2="19" y2="12" />
+                      <polyline points="12 5 19 12 12 19" />
+                    </svg>
+                  </React.Fragment>
+                )}
+              </button>
+            </form>
           </div>
         </div>
-      </div>
 
-      <div className="login-form-side">
-        <div className="login-card">
-          <div className="login-card-header">
-            <h2 className="login-card-title">Welcome back</h2>
-            <p className="login-card-subtitle">Sign in to your account to continue</p>
+        {/* ── RIGHT COLUMN: Atmospheric Courier Hero & Text Carousel (50%) ── */}
+        <div
+          className="login-hero-col"
+
+        >
+          <div className="login-hero-bg">
+            <div className="login-orb login-orb--violet" />
+            <div className="login-orb login-orb--orange" />
           </div>
 
-          {error && (
-            <div className="login-error">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-              </svg>
-              {error}
-            </div>
-          )}
-
-          <form className="login-form" onSubmit={handleSubmit}>
-            <div className="login-field">
-              <label htmlFor="email">Email Address</label>
-              <div className="login-input-wrap">
-                <svg className="login-input-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>
-                </svg>
-                <input id="email" type="email" placeholder="Enter your email"
-                  value={email} onChange={e => setEmail(e.target.value)} required autoComplete="email" />
+          <div className="login-hero-content">
+            {/* Brand header badge with rounded orange logo */}
+            <div className="login-hero-brand anim-fade-up anim-d1">
+              <div className="login-logo-badge">
+                <img src="/assets/yto_express_logo.png" alt="YTO Express" className="login-official-logo" />
               </div>
+              <h1 className="login-brand-name">
+                YTO <span>EXPRESS</span>
+              </h1>
+              <p className="login-brand-tagline">Logistics Management System</p>
+              <div className="login-brand-divider" />
             </div>
 
-            <div className="login-field">
-              <label htmlFor="password">Password</label>
-              <div className="login-input-wrap">
-                <svg className="login-input-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-                </svg>
-                <input id="password" type={showPass ? 'text' : 'password'} placeholder="Enter your password"
-                  value={password} onChange={e => setPassword(e.target.value)} required autoComplete="current-password" />
-                <button type="button" className="login-show-pass" onClick={() => setShowPass(p => !p)} tabIndex={-1}>
-                  {showPass ? (
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/>
-                    </svg>
-                  ) : (
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
-                    </svg>
-                  )}
-                </button>
-              </div>
+            {/* Left-aligned lead text */}
+            <p className="login-hero-lead anim-fade-up anim-d2">
+              Enterprise Logistics Management Portal for monitoring nationwide parcel telemetry, hub routing, and fleet dispatching across Luzon.
+            </p>
+
+            {/* Live backend health status pill */}
+            <div className="login-health-pill anim-fade-up anim-d3" role="status" aria-live="polite" aria-label={`Server status: ${healthText}`}>
+              <span className={`login-health-dot ${apiHealth}`} aria-hidden="true" />
+              {healthText}
             </div>
 
-            <button type="submit" className="login-btn" disabled={loading}>
-              {loading ? <span className="login-spinner" /> : (
-                <>Sign In <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></>
-              )}
-            </button>
-          </form>
+            {/* Role access tags */}
+            <div className="login-role-tags anim-fade-up anim-d4">
+              <span className="login-role-tag">Super Admin</span>
+              <span className="login-role-tag">Operations Staff</span>
+              <span className="login-role-tag">Hub Receiver</span>
+            </div>
+
+          </div>
         </div>
       </div>
     </div>

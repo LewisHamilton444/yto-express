@@ -1,0 +1,44 @@
+/*
+ * Scoped Tailwind entry point.
+ *
+ * The rest of the app (~30 screens) is styled with inline `style={{}}`
+ * objects and a handful of hand-written .css files — there is no global
+ * reset built for Tailwind's `preflight` layer to slot into. Pulling in
+ * the full `tailwindcss` import (theme + preflight + utilities) would
+ * silently reset margins/borders/form-control appearance app-wide and
+ * risk regressing every screen that was never touched here.
+ *
+ * So: theme + utilities only, no preflight. Tailwind classes become
+ * available anywhere they're used, without changing how unstyled
+ * elements render elsewhere in the app.
+ *
+ * Deliberately NOT using `layer(theme)` / `layer(utilities)` here. Under
+ * the CSS Cascade Layers spec, ANY unlayered rule beats ANY layered rule
+ * regardless of specificity — and index.css's `* { margin: 0; padding: 0;
+ * box-sizing: border-box; }` reset is unlayered plain CSS. With Tailwind's
+ * utilities wrapped in a named layer, that bare `*` selector was silently
+ * winning over classes like `.p-8`/`.mx-auto`/`.mb-6` even though a class
+ * selector should out-specificity a universal one — every margin/padding
+ * utility in CustomerList/ManageIssues/ActivityLog was being zeroed out.
+ * Importing unlayered instead restores normal specificity rules, where a
+ * one-class selector correctly beats a bare `*`.
+ */
+@import "tailwindcss/theme";
+@import "tailwindcss/utilities";
+
+/* Brand tokens — matches the hex values already hand-rolled across
+   AnalyticsDashboard/CustomerList/ManageIssues/ActivityLog/ManageAccounts
+   inline styles, exposed here as reusable utility classes (bg-brand-*,
+   text-brand-*, border-brand-*, ...). */
+@theme {
+  --color-brand-purple:      #390955;
+  --color-brand-purple-dark: #2a0640;
+  --color-brand-orange:      #f37021;
+
+  --color-brand-purple-50:  #faf7fd;
+  --color-brand-purple-100: #f0eaf8;
+  --color-brand-purple-200: #e8e2f0;
+  --color-brand-purple-300: #d1c4e9;
+  --color-brand-muted:      #7b6d8d;
+  --color-brand-muted-2:    #a890c0;
+}

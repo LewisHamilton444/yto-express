@@ -1,4 +1,5 @@
 'use client';
+import { isDemoEmail } from './demoUtils';
 
 // ── Shared Seller/Rider data shapes ──────────────────────────────────────────
 // The MongoDB documents (see server/models/Seller.js and server/models/Rider.js)
@@ -74,6 +75,8 @@ export function normalizeSeller(raw = {}) {
     paymentCycle: raw.paymentCycle || 'Weekly',
     commissionRate: raw.commissionRate ?? 0,
     status: normalizeStatus(raw.status),
+    accountCategory: raw.accountCategory || (isDemoEmail(raw.email) || String(raw.sellerId || raw.registrationId || '').startsWith('SEL-') ? 'DEMO' : 'REAL'),
+    raw: raw,
   };
 }
 
@@ -107,23 +110,25 @@ function generateAccountNumber() {
 // service area.
 const PH_PROVINCES_NEAR_METRO = new Set([
   'Metro Manila', 'Cavite', 'Laguna', 'Batangas', 'Rizal', 'Bulacan',
-  'Pampanga', 'Bataan', 'Nueva Ecija', 'Zambales', 'Tarlac',
+  'Pampanga', 'Bataan', 'Zambales', 'Nueva Ecija', 'Tarlac', 'Pangasinan',
 ]);
 
-export function extractCityFromAddress(address) {
-  if (!address || typeof address !== 'string') return { city: '', province: '' };
-  const parts = address.split(',').map(s => s.trim()).filter(Boolean);
+function extractCityFromAddress(addrString = '') {
+  if (!addrString || typeof addrString !== 'string') return { city: '', province: '' };
+  const parts = addrString.split(',').map((p) => p.trim()).filter(Boolean);
   if (parts.length === 0) return { city: '', province: '' };
+
   const last = parts[parts.length - 1];
-  if (parts.length >= 2 && PH_PROVINCES_NEAR_METRO.has(last)) {
+  if (PH_PROVINCES_NEAR_METRO.has(last) && parts.length >= 2) {
     return { city: parts[parts.length - 2], province: last };
   }
-  return { city: last, province: '' };
+  return { city: last, province: 'Metro Manila' };
 }
 
 export function buildSellerPayloadFromPendingRegistration(item) {
+  const { city, province } = extractCityFromAddress(item.address);
   return {
-    registrationId: generateRegistrationId('SH'),
+    registrationId: generateRegistrationId('SEL'),
     accountNumber: generateAccountNumber(),
     fullName: item.fullName,
     idType: item.governmentId?.type || 'National ID',
@@ -131,9 +136,9 @@ export function buildSellerPayloadFromPendingRegistration(item) {
     email: item.email,
     phone: item.contactNumber,
     address: item.address || '',
-    city: '',
-    state: '',
-    country: '',
+    city,
+    state: province,
+    country: 'Philippines',
     postalCode: '',
     bankName: '',
     commissionRate: 10,
@@ -194,11 +199,13 @@ export function normalizeRider(raw = {}) {
     accountNumber: raw.accountNumber || '',
     payoutCycle: raw.payoutCycle || 'Weekly',
     status: normalizeStatus(raw.status),
+    accountCategory: raw.accountCategory || (isDemoEmail(raw.email) || String(raw.riderId || raw.registrationId || '').startsWith('RD-') ? 'DEMO' : 'REAL'),
     performance: {
       deliveriesCount: raw.deliveries ?? 0,
       rating: raw.rating ?? 5.0,
     },
     joined: raw.createdAt ? raw.createdAt.split('T')[0] : 'N/A',
+    raw: raw,
   };
 }
 

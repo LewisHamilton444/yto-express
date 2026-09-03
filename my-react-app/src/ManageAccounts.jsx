@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { apiFetch } from './services/api';
 import Modal from './components/ui/Modal';
+import { isDemoEmail } from './demoUtils';
 
 const ROLE_LABELS = {
   super_admin:  'Super Admin',
@@ -25,12 +26,13 @@ const MOCK_ACCOUNTS = [
   { _id: 'mock-3', name: 'Jane Dela Cruz',      email: 'jane.delacruz@ytoexpress.ph',phone: '09051112222', role: 'staff',        status: 'Deactivated', createdDate: '2025-11-20' },
 ];
 
-export default function ManageAccounts() {
+export default function ManageAccounts({ currentUser }) {
   const [accounts,     setAccounts]     = useState([]);
   const [loading,      setLoading]      = useState(true);
   const [searchTerm,   setSearchTerm]   = useState('');
   const [roleFilter,   setRoleFilter]   = useState('All');
   const [statusFilter, setStatusFilter] = useState('All');
+  const [categoryFilter, setCategoryFilter] = useState('All');
   const [showModal,    setShowModal]    = useState(false);
   const [editingAccount, setEditingAccount] = useState(null);
   const [successMsg,   setSuccessMsg]   = useState('');
@@ -56,16 +58,24 @@ export default function ManageAccounts() {
       if (Array.isArray(data) && data.length > 0) {
         setAccounts(data);
         setUsingMockData(false);
-      } else {
-        // Backend reachable but empty — fall back so the layout stays
-        // testable, but say so rather than pretending it's real data.
+      } else if (currentUser?.isDemo) {
+        // Backend empty but in Demo Admin mode: provide test fixture rows
         setAccounts(MOCK_ACCOUNTS);
         setUsingMockData(true);
+      } else {
+        // Real non-demo admin: strict clean empty state
+        setAccounts([]);
+        setUsingMockData(false);
       }
     } catch {
-      setAccounts(MOCK_ACCOUNTS);
-      setUsingMockData(true);
-      flash('Could not reach the server — showing sample data instead.', 'error');
+      if (currentUser?.isDemo) {
+        setAccounts(MOCK_ACCOUNTS);
+        setUsingMockData(true);
+      } else {
+        setAccounts([]);
+        setUsingMockData(false);
+        flash('Could not reach the server.', 'error');
+      }
     } finally {
       setLoading(false);
     }
@@ -164,7 +174,9 @@ export default function ManageAccounts() {
     const matchSearch = a.name.toLowerCase().includes(searchTerm.toLowerCase()) || a.email.toLowerCase().includes(searchTerm.toLowerCase());
     const matchRole   = roleFilter   === 'All' || a.role   === roleFilter;
     const matchStatus = statusFilter === 'All' || a.status === statusFilter;
-    return matchSearch && matchRole && matchStatus;
+    const cat = a.accountCategory || (isDemoEmail(a.email) ? 'DEMO' : 'REAL');
+    const matchCategory = categoryFilter === 'All' || cat === categoryFilter;
+    return matchSearch && matchRole && matchStatus && matchCategory;
   });
 
   // ── Styles ────────────────────────────────────────────────────────────────
@@ -200,6 +212,21 @@ export default function ManageAccounts() {
       {status}
     </span>
   );
+
+  const CategoryBadge = ({ category, email }) => {
+    const isDemo = category === 'DEMO' || isDemoEmail(email);
+    return (
+      <span style={{
+        fontSize: '10px', fontWeight: 800, padding: '3px 8px', borderRadius: '6px',
+        background: isDemo ? '#f3f4f6' : '#ecfdf5',
+        color: isDemo ? '#6b7280' : '#059669',
+        border: `1px solid ${isDemo ? '#d1d5db' : '#a7f3d0'}`,
+        textTransform: 'uppercase',
+      }}>
+        {isDemo ? 'DEMO' : 'REAL'}
+      </span>
+    );
+  };
 
   return (
     <div style={s.main}>
@@ -251,7 +278,7 @@ export default function ManageAccounts() {
       <div style={s.panel}>
         <div style={s.panelHeader}><h2 style={s.panelHeading}>Search & Filter</h2></div>
         <div style={s.panelBody}>
-          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: '16px' }}>
             <div><label style={s.label}>Search Name or Email</label><input style={s.input} placeholder="Type to search..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} /></div>
             <div><label style={s.label}>Role</label>
               <select style={s.select} value={roleFilter} onChange={e => setRoleFilter(e.target.value)}>
@@ -266,6 +293,13 @@ export default function ManageAccounts() {
                 <option value="All">All Statuses</option>
                 <option value="Active">Active</option>
                 <option value="Deactivated">Deactivated</option>
+              </select>
+            </div>
+            <div><label style={s.label}>Category</label>
+              <select style={s.select} value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}>
+                <option value="All">All Categories</option>
+                <option value="REAL">Real Accounts</option>
+                <option value="DEMO">Demo Accounts</option>
               </select>
             </div>
           </div>
@@ -285,6 +319,7 @@ export default function ManageAccounts() {
                 <tr>
                   <th style={s.th}>Name</th>
                   <th style={s.th}>Email</th>
+                  <th style={s.th}>Category</th>
                   <th style={s.th}>Phone</th>
                   <th style={s.th}>Role</th>
                   <th style={s.th}>Status</th>
@@ -294,9 +329,9 @@ export default function ManageAccounts() {
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan="7" style={{ ...s.td, textAlign: 'center', padding: '48px', color: '#a890c0' }}>Loading accounts...</td></tr>
+                  <tr><td colSpan="8" style={{ ...s.td, textAlign: 'center', padding: '48px', color: '#a890c0' }}>Loading accounts...</td></tr>
                 ) : filtered.length === 0 ? (
-                  <tr><td colSpan="7" style={{ ...s.td, textAlign: 'center', padding: '48px', color: '#a890c0', fontWeight: 500 }}>No accounts found.</td></tr>
+                  <tr><td colSpan="8" style={{ ...s.td, textAlign: 'center', padding: '48px', color: '#a890c0', fontWeight: 500 }}>No accounts found in this category.</td></tr>
                 ) : filtered.map((account, idx) => (
                   <tr key={account._id} style={{ background: idx % 2 === 0 ? 'white' : '#faf7fd' }}>
                     <td style={{ ...s.td, fontWeight: 700 }}>
@@ -309,6 +344,7 @@ export default function ManageAccounts() {
                       </div>
                     </td>
                     <td style={{ ...s.td, fontSize: '12px' }}>{account.email}</td>
+                    <td style={s.td}><CategoryBadge category={account.accountCategory} email={account.email} /></td>
                     <td style={{ ...s.td, color: '#a890c0', fontSize: '12px' }}>{account.phone || '—'}</td>
                     <td style={s.td}><RoleBadge role={account.role} /></td>
                     <td style={s.td}><StatusBadge status={account.status} /></td>

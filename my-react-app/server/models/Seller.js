@@ -2,12 +2,12 @@ const mongoose = require('mongoose');
 
 const sellerSchema = new mongoose.Schema({
     registrationId: { type: String, required: true },
-    accountNumber: { type: String, required: true },
+    accountNumber: { type: String, default: '' },
     fullName: String,
     idNumber: String,
     idType: String,
     email: { type: String, required: true },
-    phone: { type: String, required: true },
+    phone: { type: String, default: '' },
     address: String,
     city: String,
     state: String,
@@ -17,10 +17,12 @@ const sellerSchema = new mongoose.Schema({
     commissionRate: Number,
     paymentCycle: String,
     status: { type: String, default: 'ACTIVE' },
-    // REAL = live @gmail.com signup, DEMO = @yto.com/@example.com test
-    // account — set by the bridge adapter from the mobile registration's
-    // email domain (see bridgeRoutes.js).
     accountCategory: { type: String, enum: ['REAL', 'DEMO'], default: 'REAL' },
-});
+    statusHistory: [{
+        status: String,
+        changedAt: { type: Date, default: Date.now },
+        reason:    { type: String, default: '' },
+    }],
+}, { timestamps: true });
 
 module.exports = mongoose.model('Seller', sellerSchema);

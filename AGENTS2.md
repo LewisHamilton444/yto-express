@@ -1,8 +1,12 @@
-# AGENTS2.md — YTO Express Platform Architecture & Engineering Reference
+# AGENTS2.md — YTO Express Web Admin Platform — Architecture & Engineering Reference
 
-## 1. Project Overview & System Architecture
+> *Complete architecture, file mappings, and engineering rules for the Web Admin portal (React frontend + Node/Express backend), including the real-time SSE layer and the cross-platform bridge to the Android app.*
 
-**YTO Express** is a comprehensive logistics and supply-chain management web application paired with a mobile backend bridge. It provides real-time tracking, rider dispatching, seller and rider onboarding/verification, hub parcel intake, geo-fencing, analytics reporting, and enterprise-grade role-based account management.
+---
+
+## 1. Overview & System Architecture
+
+**YTO Express Web Admin** is a logistics and supply-chain management portal paired with the Android mobile app via a bidirectional REST bridge. It provides real-time tracking, rider dispatching, seller/rider onboarding & verification, hub parcel intake, geo-fencing, analytics, customer dispute tickets, and role-based account management.
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
@@ -10,144 +14,192 @@
 ├──────────────────────────────────┬─────────────────────────────────────┤
 │        Frontend (React 19)       │          Backend (Node / Express)   │
 │  - Vite 7 + React 19             │  - Express 5 + MongoDB (Mongoose 9) │
-│  - Lucide Icons + Leaflet Maps   │  - REST API + Twilio / Semaphore    │
-│  - Multi-view Single-Page App    │  - Cross-Platform Android Bridge    │
-│  - Dynamic Global Search & Feed  │  - Role-based Access Control (RBAC) │
+│  - Lucide Icons + Leaflet Maps   │  - REST API + SSE Event Stream      │
+│  - Tailwind CSS design system    │  - Twilio / Semaphore / Gmail SMTP  │
+│  - Multi-view Single-Page App    │  - Role-based Access Control (RBAC) │
+│  - JWT auth (local/session)      │  - Cross-Platform Android Bridge    │
 └──────────────────────────────────┴─────────────────────────────────────┘
 ```
 
----
-
-## 2. Directory Structure & File Mappings
-
-### Root Workspace: `c:\Users\ADMIN\React_Projects\YTO\YTO\`
-- `.gitignore` — Global ignore rules
-- `AGENTS2.md` — Complete architecture, file mappings, and engineering rules reference
-- `my-react-app/` — Main project root (Frontend + Backend)
+- **Production backend**: `https://yto-express.onrender.com` (or `VITE_API_URL`)
+- **Local dev backend**: `http://localhost:3001` (port **3001**, not 5001)
+- Workspace: `C:\Users\ADMIN\React_Projects\YTO Latest\` — the Android side (`AGENTS.md`) references this project; do not confuse it with the stale internal mirror at `...\AndroidStudioProjects\YTO_Express_App\React_Projects\YTO Latest`.
 
 ---
 
-### Frontend: `my-react-app/` & `my-react-app/src/`
+## 2. Frontend Architecture
 
-#### Core App Configuration & Entry Points
-- `package.json` — Frontend dependencies (`react` v19.2, `lucide-react`, `vite` v7.2)
-- `vite.config.js` — Vite build and dev server configuration
-- `index.html` — HTML shell
-- `src/main.jsx` — React DOM entry point
-- `src/App.jsx` — Primary application shell, authentication state router, and view switcher
-- `src/index.css` — Global typography and reset styles
+### Entry & routing
+- `src/main.jsx` — React DOM entry; imports `index.css` + `tailwind.css`.
+- `src/App.jsx` — auth-state router. Restores `currentUser` from the JWT (parses `payload.isDemo ?? isDemoEmail(payload.email)`); listens for `yto:auth_expired`; renders `LoginPage` when logged out; otherwise routes via `PAGE_MAP` and passes `activePage`/`setActivePage`/`currentUser`/`onLogout`.
 
-#### Page Views & Modules (`src/`)
-- `AnalyticsDashboard.jsx` / `.css` — Primary dashboard with live KPIs, parcel volume charts, status breakdown, and recent activity
-- `ProcessSellerInformation.jsx` / `.css` — Seller registration and onboarding management
-- `ViewSeller.jsx` / `.css` — Seller listing, detail modals, verification status, and export utilities
-- `ProcessParcelInformation.jsx` / `.css` — Parcel registration, origin/destination assignments, weight & billing
-- `ManageParcels.jsx` — Comprehensive parcel dispatch table, status transitions, batch updates, and filters
-- `ProcessRiderInformation.jsx` / `.css` — Rider registration, license details, and payout settings
-- `MonitorRiderStatus.jsx` / `.css` — Real-time rider workload, active/inactive toggling, delivery metrics
-- `GenerateRiderDataReport.jsx` / `.css` — Performance analytics, commission/payout calculations, and exportable rider summaries
-- `ManageParcelLocation.jsx` / `.css` — Hub location assignments, live transit coordinates, waypoint management
-- `MonitorParcel.jsx` / `.css` — Luzon hub geofence tracker and route boundaries
-- `GenerateTrackingInformation.jsx` / `.css` — Waybill and tracking lookup with timeline visualization
-- `HubParcelReceiving.jsx` — Inbound hub scanner and receipt processing
-- `LiveRiderMap.jsx` — Real-time Leaflet map of active riders, Luzon coordinates, and delivery routes
-- `ManageAccounts.jsx` — Enterprise user account management, role allocation, and activation toggles
-- `Settings.jsx` / `.css` — System preferences, database backup/reset utilities, and environment configurations
-- `SettingsArchiveView.jsx` — Archived seller/rider/parcel audit logs and historical snapshots
-- `Loginpage.jsx` / `.css` — Enterprise authentication screen with credential validation
-- `Logout.jsx` / `.css` — Secure session termination confirmation screen
+### `PAGE_MAP` (18 views)
+`dashboard` → AnalyticsDashboard · `process-seller` → ProcessSellerInformation · `seller-report` → ViewSeller · `process-parcel` → ProcessParcelInformation · `manage-parcels` → ManageParcels · `process-rider` → ProcessRiderInformation · `monitor-rider` → MonitorRiderStatus · `rider-report` → GenerateRiderDataReport · `customer-list` → CustomerList · `activity-log` → ActivityLog · `manage-accounts` → ManageAccounts · `hub-parcels` → HubParcelReceiving · `manage-issues` → ManageIssues · `parcel-location` → ManageParcelLocation · `geofence` → MonitorParcel · `tracking-info` → GenerateTrackingInformation · `settings` → Settings · `logout` → Logout
 
-#### Shared Components & Utilities (`src/`)
-- `GlobalHeader.jsx` — Top navigation bar with branding, user profile, and quick actions
-- `GlobalSearch.jsx` — Global search overlay indexing parcels, riders, and sellers
-- `NotificationBell.jsx` — Notification center for status changes and verification alerts
-- `AdminProfileDropdown.jsx` — Admin profile actions and role badges
-- `PaginationControls.jsx` — Reusable table pagination component
-- `ParcelProgressTimeline.jsx` — Step-by-step parcel milestone tracker
-- `exportUtils.js` — CSV / Excel data export helpers
-- `leafletLoader.js` — Dynamic Leaflet map injector
-- `luzonCityCoords.js` — Luzon geographic coordinates lookup table
-- `luzonMockData.js` — Seed data for Luzon hubs and transit points
-- `sellerRiderData.js` — Reference mock/fallback dataset for sellers and riders
-- `alertsFeed.js` — Live simulation and feed generators for operations alerts
-- `useRouteAnimation.js` — Custom hook for pathing and transit animations
+### Design system (`src/components/ui/`)
+`Badge`, `Modal`, `AlertBanner`, `EmptyState`, `ListSkeleton`, `TableSkeleton`, `StatCard`, `PageHeader`, `CardSectionHeader`, `CardFooter`, `StatusBadge`, `statusColors.js` (canonical palettes: `PARCEL_STATUS_COLORS`, **`ACCOUNT_CATEGORY_TONE` = REAL green / DEMO slate gray**, `ACCOUNT_CATEGORY_LABEL`).
 
-#### Verification Subsystem (`src/verification/`)
-- `PendingVerificationsTable.jsx` — Review queue for new seller and rider applicants
-- `ReviewModal.jsx` — Document inspection and approval/rejection dialog
-- `SendSMSModal.jsx` — Manual SMS notification dispatch to applicants
-- `Toast.jsx` — Toast alert component
-- `useToasts.js` — Hook for managing toast lifecycles
-- `mockPendingRegistrations.js` — Pending registration fixtures
+### Services
+- `src/services/api.js` — centralized client: `API_ROOT = import.meta.env.VITE_API_URL || 'https://yto-express.onrender.com'`; `apiFetch(path, opts)` attaches `Authorization: Bearer`; on 401 with token-expiry errors clears the token and dispatches `yto:auth_expired`. **Token key: `yto_token`** — `remember=true` → `localStorage`, `remember=false` → `sessionStorage` (session storage wins on read). `adminLogin(email, password, remember)`; `notificationsApi.sendEmail`; collection helpers (`sellersApi`, `ridersApi`, `parcelsApi`, `parcelLocationsApi`, `accountsApi`, `dashboardApi`).
+- `src/services/localApi.js` — same API shape but defaults to `http://localhost:3001`; used by the newer views (`ManageIssues`, `CustomerList`, `ActivityLog`) whose routes are not yet deployed to production.
+- `src/services/useSSE.js` — real-time hook (see §5).
+- `src/demoUtils.js` — `isDemoEmail()`: demo if domain ∈ `['yto.com','example.com','ytoexpress.com']` OR email starts with `demo`.
 
-#### Services (`src/services/`)
-- `api.js` — Centralized Axios/Fetch API client for all backend endpoints
+### Auth screens
+- `LoginPage.jsx` / `LoginPage.css` — enterprise login, remember-me checkbox (session vs persistent token), server health pill, role tags. `Logout.jsx` / `Logout.css` — secure session termination.
 
 ---
 
-### Backend: `my-react-app/server/`
+## 3. Backend & API (`server/Server.js`)
 
-#### Core Server Files
-- `package.json` — Backend dependencies (`express` v5.2, `mongoose` v9.7, `cors`, `dotenv`, `nodemailer`, `twilio`)
-- `Server.js` — Express server initialization, DB connection, CRUD routes, SMS/Email engines, analytics aggregates
-- `bridgeRoutes.js` — Cross-platform Android backend REST synchronization adapter (`/api/bridge/*`)
-- `.env` — Environment configurations (`MONGO_URI`, `PORT`, `TWILIO_*`, `SEMAPHORE_*`, `EMAIL_*`, `BRIDGE_API_KEY`)
+- Express 5 + Mongoose; `cors({ origin: '*' })`; JSON body; dotenv anchored to `server/.env`; **`MONGO_URI` required at startup**; listens on `process.env.PORT || 3001`.
+- DNS pinned to `8.8.8.8`/`8.8.4.4` at boot.
 
-#### Mongoose Database Models (`server/models/`)
-- `Account.js` — Admin accounts (`name`, `email`, `password`, `role`: `super_admin` | `admin` | `operator`, `status`)
-- `Seller.js` — Merchant profiles (`registrationId`, `fullName`, `email`, `phone`, `idType`, `idNumber`, `status`, `accountCategory`)
-- `Rider.js` — Delivery rider profiles (`registrationId`, `riderName`, `email`, `phone`, `vehicleType`, `vehiclePlate`, `status`, `deliveries`, `rating`)
-- `Customer.js` — Recipient/Customer profiles (`customerId`, `fullName`, `email`, `phone`, `address`)
-- `Parcel.js` — Shipment records (`trackingNumber`, `senderName`, `receiverName`, `item`, `weight`, `origin`, `destination`, `status`, `events`)
-- `ParcelLocation.js` — Geographic waypoints and hub coordinates (`trackingNumber`, `latitude`, `longitude`, `hubName`, `timestamp`)
+### JWT & category partition
+- `authenticateToken` middleware: Bearer token → `req.user = { id, email, role, isDemo, ... }`; sets `req.category = decoded.isDemo ? 'DEMO' : 'REAL'`; 401 on missing/expired, 403 on invalid.
+- `getCategoryFilter(req)`: `?category=ALL` → no filter; `REAL`/`DEMO` → that partition; **default = the authenticated admin's own realm** (`req.category`).
+- `isDemoEmail()` mirrors `demoUtils.js` (yto.com / example.com / ytoexpress.com / `demo` prefix).
 
----
-
-## 3. Data & API Architecture
-
-### REST API Endpoints Overview
-
-| Endpoint | Method | Description |
+### Route table
+| Endpoint | Methods | Notes |
 |---|---|---|
-| `/` | `GET` | Server health check |
-| `/api/sellers` | `GET`, `POST` | List all sellers / Create new seller |
-| `/api/sellers/:id` | `PUT`, `DELETE` | Update seller / Remove seller |
-| `/api/riders` | `GET`, `POST` | List all riders / Create new rider |
-| `/api/riders/:id` | `PUT`, `DELETE` | Update rider / Remove rider |
-| `/api/parcels` | `GET`, `POST` | List all parcels / Create new parcel |
-| `/api/parcels/:id` | `PUT`, `DELETE` | Update parcel status & details / Remove parcel |
-| `/api/parcel-locations` | `GET`, `POST` | Real-time parcel coordinates and route log |
-| `/api/dashboard/stats` | `GET` | Real-time aggregate operational KPIs |
-| `/api/accounts` | `GET`, `POST` | List accounts / Create new admin account |
-| `/api/accounts/:id` | `PUT` | Edit account details/password |
-| `/api/accounts/:id/status` | `PATCH` | Toggle active/deactivated status |
-| `/api/accounts/login` | `POST` | Authenticate user credentials |
-| `/api/sms/send` | `POST` | Dispatch SMS (Twilio -> Semaphore -> Simulated fallback) |
-| `/api/email/send` | `POST` | Dispatch Email (Gmail SMTP -> Simulated fallback) |
-| `/api/admin/reset-database` | `DELETE` | Purge operational data with explicit `RESET` token |
-
-### Android Bridge Synchronization (`/api/bridge/`)
-- `POST /api/bridge/sync-user` — Accepts Android mobile app user registrations, categorizes email (`REAL` vs `DEMO`), auto-generates Enterprise IDs (`YTO-SELL-YYYY-XXXXX`, `YTO-RIDE-YYYY-XXXXX`, `YTO-CUST-YYYY-XXXXX`), and synchronizes into Seller/Rider/Customer collections.
-- `POST /api/bridge/sync-parcel` — Flattens nested sender/recipient shipment payloads from mobile into standard web parcel schema.
-- `POST /api/bridge/sync-location` — Ingests live rider GPS telemetry.
+| `/` | GET | Server banner |
+| `/api/events/stream` | GET | SSE (no JWT required) |
+| `/api/events/stats`, `/api/events/history`, `/api/events/alerts` | GET | SSE broadcaster metrics (auth) |
+| `/api/events/threshold` | PUT | Peak-alert threshold (auth) |
+| `/api/bridge/*` | POST | See §6 |
+| `/api/sellers`, `/api/riders`, `/api/customers` | GET/POST | Category-filtered; sellers/riders also PUT/DELETE (`sendApproval` on status change) |
+| `/api/customers/stats`, `/api/customers/:id/orders` | GET | Customer aggregates + order history by `customerId` |
+| `/api/activity-log` | GET | Audit trail from registration/statusHistory across roles; `limit` ≤ 200, `role` filter |
+| `/api/parcels`, `/api/parcel-locations` | GET/POST/PUT/DELETE | Parcel status PUT pushes `BridgeClient.sendStatus` + SSE `parcel-updated` |
+| `/api/dashboard/stats` | GET | Category-filtered KPIs: parcels, delivered %, riders, active riders, avg rating, total deliveries, sellers |
+| `/api/accounts` | GET/POST | Admin accounts; POST derives `accountCategory` from email |
+| `/api/accounts/:id` | PUT | bcrypt-hashes new passwords; re-derives category on email change |
+| `/api/accounts/:id/status` | PATCH | Toggle Active/Deactivated; **super_admin cannot be deactivated** |
+| `/api/accounts/login` | POST | JWT 24h embedding `isDemo`; rejects Deactivated |
+| `/api/issues` | GET | Support tickets, category-filtered |
+| `/api/issues/:id/status` | PUT | Sets status/adminNotes → `BridgeClient.sendIssueStatus` + SSE `issue-status-updated` |
+| `/api/sms/send` | POST | Twilio → Semaphore → **simulated fallback** (toE164PH) |
+| `/api/email/send` | POST | Gmail SMTP → **simulated fallback** (approval flows) |
+| `/api/admin/reset-database` | DELETE | **super_admin only** + body `confirm: 'RESET'`; purges sellers/riders |
 
 ---
 
-## 4. Engineering Rules & Best Practices
+## 4. Data Models (`server/models/`)
 
-1. **State Isolation & Navigation**
-   - The frontend routes views via `PAGE_MAP` in `App.jsx` based on the active user session and view state.
-   - Authentication is managed via `currentUser` in top-level state and passed down to child views.
+| Model | Key fields |
+|---|---|
+| `Account` | `name`, `email` (unique), `phone`, `role` (`super_admin`/`staff`/`hub_receiver`), `password` (bcrypt, `comparePassword()`), `status` (`Active`/`Deactivated`), `accountCategory` (`REAL`/`DEMO`), `createdDate` |
+| `Seller` | `registrationId` (`YTO-SELL-YYYY-XXXXX`), `accountNumber`, `fullName`, `email`, `phone`, `idType`, `idNumber`, `status` (`ACTIVE`), `accountCategory`, `statusHistory[]` |
+| `Rider` | `registrationId` (`YTO-RIDE-YYYY-XXXXX`), `accountNumber`, `riderName`, `email`, `phone`, `vehicleType`, `vehiclePlate`, `status`, `deliveries`, `rating`, `successRate`, `accountCategory`, `statusHistory[]` |
+| `Customer` | `customerId` (`YTO-CUST-YYYY-XXXXX`), `fullName`, `email` (unique), `phone`, `address`, `accountCategory`, `status`, `source` (`mobile-app`), `statusHistory[]` |
+| `Parcel` | `trackingNumber` (unique), `senderName`, `receiverName`, `recipientEmail`, `item`, `weight`, `origin`, `destination`, `status`, `riderId`, `sellerId`, `podPhoto` (Base64 JPEG), `accountCategory`, `events[]` |
+| `ParcelLocation` | `parcelId` (unique), `lat`, `lng`, `location`, `type` (`Warehouse`), `status`, `geofence` (`Inside`) |
+| `Issue` | `ticketId` (`TICK-2026-XXXXX`), `trackingNumber`, `category`, `description`, `evidenceImages[]`, `reporterName/Email/Phone/Role`, `status` (`Open`→`Under Investigation`→`Resolved`→`Closed`), `accountCategory`, `adminNotes`, `resolvedAt` |
 
-2. **Backend Robustness & Graceful Degradation**
-   - External services (Twilio, Semaphore, Nodemailer) must always fall back gracefully to simulation mode when credentials are not configured.
-   - Bridge routes must never throw unhandled exceptions or crash the Express process; errors must be logged with payload context and return structured JSON.
+---
 
-3. **Data Integrity & Enterprise ID Format**
-   - Auto-generated Enterprise IDs must adhere strictly to format: `YTO-<PREFIX>-<YEAR>-<5-digit sequence>` (e.g. `YTO-SELL-2026-00001`).
-   - Super admin IDs follow `YTO-ADM-XXX`.
+## 5. Real-Time Layer (SSE)
 
-4. **Code Quality & Maintenance**
-   - Retain all existing docstrings, comments, and schemas.
-   - Use clear error boundaries and responsive UI layouts for both desktop and mobile viewports.
+- **`/api/events/stream`**: `text/event-stream`, 30s heartbeat, no JWT on the stream itself. `sseBroadcaster` singleton tracks connected clients, connection history (capped 500), peak alerts (threshold `SSE_PEAK_THRESHOLD` default 5, 1-min cooldown, optional email via `ADMIN_EMAIL`).
+- **Events broadcast**: `user-synced`, `parcel-synced`, `location-synced`, `parcel-updated`, `issue-synced`, `issue-status-updated`, `peak-alert`.
+- **Client hook (`useSSE.js`)**: connects to `/api/events/stream?token=<jwt>`; auto-reconnect every 3s; after **5 failed attempts falls back to HTTP polling every 5s** (`/api/activity-log?limit=10`, diffing timestamps); exposes `{ connected, mode: 'sse'|'polling'|'offline', lastEvent, on(type, cb), retry() }`; optional browser notifications per event type.
 
+---
+
+## 6. Cross-Platform Bridge Protocol (`server/bridgeRoutes.js`)
+
+Bidirectional REST bridge with the Android backend (`yto_express_backend`). Every route validates its payload, never lets an exception escape (all try/caught + `logBridgeError`), answers `{ success, message, data }` / `{ success: false, error, details }`, and broadcasts SSE to admin clients. Optional shared-secret gate via `BRIDGE_API_KEY` (off by default).
+
+| Route | Purpose |
+|---|---|
+| `POST /api/bridge/sync-user` | Mobile `User.js` → `Seller`/`Rider`/`Customer` by role; **Enterprise ID generation** `YTO-<PREFIX>-<YEAR>-<5-digit>` (sequence per collection per year); partial-update merge (only fields the client sent); SSE `user-synced` |
+| `POST /api/bridge/sync-parcel` | Mobile `Shipment.js` → `Parcel.js` (nested sender/recipient flattened; tolerates flat payloads); server-side weight validation (>0); upsert by `trackingNumber`; SSE `parcel-synced` |
+| `POST /api/bridge/sync-issue` | Mobile `Issue.js` → `Issue.js`; SSE `issue-synced` |
+| `POST /api/bridge/sync-location` | Rider GPS telemetry → `ParcelLocation`; SSE `location-synced` |
+| `POST /api/bridge/receive-status` | Rider terminal transitions; SSE `parcel-synced` |
+| `POST /api/bridge/receive-issue-status` | Mobile-side ticket status; SSE `issue-status-updated` |
+| `GET /api/bridge/health` | Bridge liveness |
+
+**Outbound** (`server/utils/BridgeClient.js`): `sendStatus(trackingNumber, status)`, `sendApproval(email, role, status)`, `syncParcel(parcelData)`, `pollChanges(since)`, `sendIssueStatus(ticketId, status, adminNotes)`, `healthCheck()` — HTTP(S) POST with retry (3 attempts, exponential backoff, 10s timeout) to `ANDROID_BACKEND_URL`.
+
+---
+
+## 7. Demo vs. Real Isolation (Web Admin)
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│            WEB ADMIN DEMO VS. REAL ISOLATION PROTOCOL                 │
+├────────────────────────────────────────────────────────────────────────┤
+│                  [Admin Authentication / Login]                       │
+│                                    │                                   │
+│                  ┌─────────────────┴─────────────────┐                 │
+│                  ▼                                   ▼                 │
+│   ┌─────────────────────────────┐     ┌─────────────────────────────┐  │
+│   │     Real Admin Account      │     │      Demo Admin Account     │  │
+│   │  (JWT isDemo: false)        │     │   (JWT isDemo: true)        │  │
+│   │  - Strict live DB queries   │     │   - Realm defaults to DEMO  │  │
+│   │  - 0 records = clean empty  │     │   - Sandbox test records    │  │
+│   │    state (NO mock fallback) │     │   - [DEMO MODE] banner      │  │
+│   └─────────────────────────────┘     └─────────────────────────────┘  │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+1. **Login & session flag**: `/api/accounts/login` embeds `isDemo` in the 24h JWT from `isDemoEmail()`; `App.jsx` propagates `currentUser.isDemo` everywhere.
+2. **Clean empty states**: real admins (`!isDemo`) with 0 records see clean empty-state graphics — zero synthetic/mock injections. Demo admins load test datasets (`FALLBACK_PARCELS`, `MOCK_ACCOUNTS`, `mockSellers`, `mockRiders`) under a yellow `[DEMO MODE]` banner.
+3. **Category filtering**: every data grid has an `Account Category` column + `All`/`Real Records`/`Demo Records` filter; **badge scheme: green `REAL` (#43A047) / gray `DEMO` (#9CA3AF)** — centralized in `components/ui/statusColors.js` (`ACCOUNT_CATEGORY_TONE`). ManageParcels additionally treats `DEMO-` tracking-number prefixes as demo.
+4. **Known asymmetry (intentional)**: the Android app treats `customer/seller/rider@gmail.com` as demo/test logins; the Web portal treats gmail as REAL unless the account/record was seeded with `accountCategory: DEMO` (see `seed_official_demo_accounts.js`).
+
+---
+
+## 8. Engineering Rules
+
+1. **State isolation & navigation** — views route via `PAGE_MAP`; `currentUser` is top-level state; 401 expiry → clean logout to `LoginPage`.
+2. **Backend robustness** — external services (Twilio, Semaphore, Nodemailer) fall back to simulation when credentials are absent; bridge routes never throw unhandled; errors logged with payload context and structured JSON.
+3. **Data integrity & Enterprise IDs** — strict formats: tickets `TICK-<YEAR>-<5-digit>`; sellers `YTO-SELL-<YEAR>-<5-digit>`; riders `YTO-RIDE-<YEAR>-<5-digit>`; customers `YTO-CUST-<YEAR>-<5-digit>`; admins `YTO-ADM-XXX`.
+4. **Input hygiene** — email `.toLowerCase().trim()`; phone `.replaceAll("[^0-9]","")`; no emojis in UI strings or logs; no hardcoded impersonating fallbacks (`"seller@gmail.com"`, `"YTO Rider"`, `"Store Warehouse"`).
+5. **Code quality** — retain docstrings/comments/schemas; responsive desktop + mobile layouts; clear error boundaries.
+6. **Auth** — bcrypt 10 rounds; JWT 24h; token key `yto_token`; 401 interceptor clears storage + emits `yto:auth_expired`.
+
+---
+
+## 9. Scripts & Tooling (`server/`, `scripts/`)
+
+- `server/seed_official_demo_accounts.js` — upserts official demo records (e.g., `seller@gmail.com` → `YTO-SELL-2026-DEMO1`, `accountCategory: DEMO`) for seller/customer/rider.
+- `server/clean_web_db.js` — wipes test records while **preserving** `seller@gmail.com`, `customer@gmail.com`, `rider@gmail.com`.
+- `scripts/dev.cjs` — `npm run dev:all` launcher (frontend + server).
+- `package.json` scripts: `dev` (vite), `dev:server`, `dev:all`, `start` (dev.cjs), `build` (`vite build`), `lint`, `preview`.
+- Skills specs live in `my-react-app/skills/` (9 SKILL.md files: authentication, cross-device, geofence-delivery, map-location-picker, notifications, package-booking, profile-management, rider-delivery, seller-dashboard).
+
+---
+
+## 10. File Structure Reference
+
+```
+C:\Users\ADMIN\React_Projects\YTO Latest\
+├─ AGENTS2.md                        (this document)
+├─ my-react-app/
+│  ├─ package.json, vite.config.js, index.html
+│  ├─ src/
+│  │  ├─ App.jsx, main.jsx, index.css, tailwind.css, demoUtils.js
+│  │  ├─ (pages: AnalyticsDashboard, ProcessSellerInformation, ViewSeller,
+│  │  │   ProcessParcelInformation, ManageParcels, ProcessRiderInformation,
+│  │  │   MonitorRiderStatus, GenerateRiderDataReport, CustomerList, ActivityLog,
+│  │  │   ManageAccounts, HubParcelReceiving, ManageIssues, ManageParcelLocation,
+│  │  │   MonitorParcel, GenerateTrackingInformation, Settings, SettingsArchiveView,
+│  │  │   LoginPage, Logout, GlobalHeader, GlobalSearch, NotificationBell, ...)
+│  │  ├─ components/ui/              (Badge, Modal, EmptyState, skeletons, statusColors.js, ...)
+│  │  ├─ services/                   (api.js, localApi.js, useSSE.js)
+│  │  ├─ verification/               (PendingVerificationsTable, ReviewModal, SendSMSModal, ...)
+│  │  └─ (utils: exportUtils, leafletLoader, luzonCityCoords, luzonMockData, hubGeofenceData, alertsFeed, useRouteAnimation)
+│  ├─ server/
+│  │  ├─ Server.js, bridgeRoutes.js
+│  │  ├─ models/                     (Account, Seller, Rider, Customer, Parcel, ParcelLocation, Issue)
+│  │  ├─ utils/                      (BridgeClient.js, sseBroadcaster.js)
+│  │  ├─ seed_official_demo_accounts.js, clean_web_db.js
+│  │  └─ .env                        (MONGO_URI, JWT_SECRET, TWILIO_*, SEMAPHORE_*, EMAIL_*, ANDROID_BACKEND_URL, BRIDGE_API_KEY, SSE_PEAK_THRESHOLD)
+│  ├─ scripts/dev.cjs
+│  ├─ public/                        (assets, server, vite.svg)
+│  └─ skills/                        (9 SKILL.md files)
+└─ __MACOSX/                         (junk from archive extraction — ignore)
+```

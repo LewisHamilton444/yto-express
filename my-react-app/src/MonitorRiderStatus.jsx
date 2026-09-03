@@ -125,12 +125,17 @@ function MapView({ lat, lng, vehicle, uniqueId }) {
   return <div ref={containerRef} id={`map-${uniqueId}`} style={{ width: '100%', height: '150px', borderRadius: '8px', border: '1px solid #e2e8f0', marginTop: '12px' }} />;
 }
 
-export default function MonitorRiderStatus() {
+export default function MonitorRiderStatus({ currentUser }) {
   const [activeTab, setActiveTab] = useState('gps-coords');
   const [riders, setRiders] = useState([]);
   const [archivedCount, setArchivedCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState('');
+  const [selectedRider, setSelectedRider] = useState(null);
+  const [riderTab, setRiderTab] = useState('details');
+  const [riderTimeline, setRiderTimeline] = useState([]);
+  const [timelineLoading, setTimelineLoading] = useState(false);
+  const [categoryFilter, setCategoryFilter] = useState('All');
   const [geofences, setGeofences] = useState([
     { id: 'G001', name: 'Makati District',  center: '14.5547, 121.0244', radius: '2 km',   status: 'Active'   },
     { id: 'G002', name: 'Quezon City Hub',  center: '14.6760, 121.0437', radius: '1.5 km', status: 'Active'   },
@@ -162,21 +167,67 @@ export default function MonitorRiderStatus() {
     try {
       const data = await ridersApi.list();
 
-      const normalized  = data.map(normalizeRider);
-      // ── ONLY show active riders on the live map, hide archived/pending ──
-      const activeOnes  = normalized.filter(r => r.status === RIDER_STATUS.ACTIVE);
-      const archivedNum = normalized.length - activeOnes.length;
+      if (Array.isArray(data) && data.length > 0) {
+        const normalized  = data.map(normalizeRider);
+        const activeOnes  = normalized.filter(r => r.status === RIDER_STATUS.ACTIVE);
+        const archivedNum = normalized.length - activeOnes.length;
 
-      setRiders(attachLiveGps(activeOnes));
-      setArchivedCount(archivedNum);
+        setRiders(attachLiveGps(activeOnes));
+        setArchivedCount(archivedNum);
+      } else if (currentUser?.isDemo) {
+        setRiders(attachLiveGps(mockRiders.filter(r => r.status === RIDER_STATUS.ACTIVE)));
+        setArchivedCount(mockRiders.length - mockRiders.filter(r => r.status === RIDER_STATUS.ACTIVE).length);
+      } else {
+        setRiders([]);
+        setArchivedCount(0);
+      }
       setLastUpdated(new Date().toLocaleTimeString());
     } catch (err) {
       console.error('Error fetching riders:', err);
-      setRiders(attachLiveGps(mockRiders.filter(r => r.status === RIDER_STATUS.ACTIVE)));
-      setArchivedCount(mockRiders.length - mockRiders.filter(r => r.status === RIDER_STATUS.ACTIVE).length);
+      if (currentUser?.isDemo) {
+        setRiders(attachLiveGps(mockRiders.filter(r => r.status === RIDER_STATUS.ACTIVE)));
+        setArchivedCount(mockRiders.length - mockRiders.filter(r => r.status === RIDER_STATUS.ACTIVE).length);
+      } else {
+        setRiders([]);
+        setArchivedCount(0);
+      }
     } finally {
       setLoading(false);
     }
+  };
+
+  const formatTimelineDate = (dateStr) => {
+    if (!dateStr) return '-';
+    return new Date(dateStr).toLocaleString('en-PH', {
+      year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+    });
+  };
+
+  const fetchRiderTimeline = (rider) => {
+    setTimelineLoading(true);
+    const events = [];
+
+    // Registration event
+    events.push({
+      status: 'Registered',
+      changedAt: rider.raw?.createdAt || rider.joined,
+      reason: `${rider.fullName} joined as ${rider.raw?.accountCategory || 'REAL'} rider`,
+    });
+
+    // Status history from DB
+    if (rider.raw?.statusHistory && rider.raw.statusHistory.length > 0) {
+      rider.raw.statusHistory.forEach(sh => {
+        events.push({
+          status: sh.status,
+          changedAt: sh.changedAt,
+          reason: sh.reason || 'Status changed',
+        });
+      });
+    }
+
+    events.sort((a, b) => new Date(b.changedAt) - new Date(a.changedAt));
+    setRiderTimeline(events);
+    setTimelineLoading(false);
   };
 
   useEffect(() => {
@@ -257,7 +308,7 @@ export default function MonitorRiderStatus() {
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '20px' }}>
               {riders.map((r) => (
-                <div key={r.riderId} style={{ background: 'white', border: '1px solid #e0d5f0', borderRadius: '12px', padding: '18px', boxShadow: '0 4px 14px rgba(57,9,85,0.04)', display: 'flex', flexDirection: 'column' }}>
+                <div key={r.riderId} onClick={() => { setSelectedRider(r); setRiderTab('details'); setRiderTimeline([]); fetchRiderTimeline(r); }} style={{ background: 'white', border: '1px solid #e0d5f0', borderRadius: '12px', padding: '18px', boxShadow: '0 4px 14px rgba(57,9,85,0.04)', display: 'flex', flexDirection: 'column', cursor: 'pointer', transition: 'box-shadow 0.15s' }} onMouseEnter={e => e.currentTarget.style.boxShadow = '0 6px 20px rgba(57,9,85,0.1)'} onMouseLeave={e => e.currentTarget.style.boxShadow = '0 4px 14px rgba(57,9,85,0.04)'}>
                   <div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '12px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -357,6 +408,102 @@ export default function MonitorRiderStatus() {
         )}
 
       </div>
+
+      {/* Rider Detail Modal */}
+      {selectedRider && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(26,6,40,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }} onClick={() => setSelectedRider(null)}>
+          <div style={{ background: 'white', borderRadius: 16, width: '90%', maxWidth: 480, maxHeight: '85vh', overflow: 'hidden', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)' }} onClick={e => e.stopPropagation()}>
+            {/* Header */}
+            <div style={{ background: 'linear-gradient(135deg, #390955, #5a1f80)', padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>{vehicleIcon(selectedRider.vehicleType)}</div>
+                <div>
+                  <h3 style={{ color: 'white', margin: 0, fontSize: 15, fontWeight: 700 }}>{selectedRider.fullName || 'Rider'}</h3>
+                  <p style={{ color: 'rgba(255,255,255,0.6)', margin: '2px 0 0', fontSize: 12 }}>{selectedRider.riderId} · {selectedRider.vehicleType}</p>
+                </div>
+              </div>
+              <button onClick={() => setSelectedRider(null)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', fontSize: 20, lineHeight: 1 }}>&times;</button>
+            </div>
+
+            {/* Tabs */}
+            <div style={{ display: 'flex', borderBottom: '2px solid #f0eaf8' }}>
+              {[{ key: 'details', label: 'Details' }, { key: 'timeline', label: 'Timeline' }].map(tab => (
+                <button key={tab.key} onClick={() => setRiderTab(tab.key)} style={{
+                  flex: 1, padding: '12px 0', border: 'none', cursor: 'pointer',
+                  fontSize: 13, fontWeight: 600, transition: 'all 0.2s',
+                  background: riderTab === tab.key ? '#faf7fd' : 'transparent',
+                  color: riderTab === tab.key ? '#390955' : '#7b6d8d',
+                  borderBottom: riderTab === tab.key ? '2px solid #390955' : '2px solid transparent',
+                  marginBottom: -2,
+                }}>{tab.label}</button>
+              ))}
+            </div>
+
+            {/* Content */}
+            <div style={{ padding: 24, maxHeight: 400, overflowY: 'auto' }}>
+              {riderTab === 'details' && (
+                <>
+                  {[
+                    { label: 'Full Name', value: selectedRider.fullName },
+                    { label: 'Email', value: selectedRider.email || '---' },
+                    { label: 'Phone', value: selectedRider.phone || '---' },
+                    { label: 'Vehicle Type', value: selectedRider.vehicleType },
+                    { label: 'Plate Number', value: selectedRider.vehiclePlateNumber || '---' },
+                    { label: 'License Number', value: selectedRider.driverLicenseNumber || '---' },
+                    { label: 'City', value: selectedRider.location?.city || '---' },
+                    { label: 'Status', value: selectedRider.status, badge: true, color: selectedRider.status === 'Active' ? { bg: '#d1fae5', color: '#065f46' } : { bg: '#fee2e2', color: '#991b1b' } },
+                    { label: 'Deliveries', value: selectedRider.performance?.deliveriesCount ?? 0 },
+                    { label: 'Rating', value: `${selectedRider.performance?.rating ?? 5.0}/5.0` },
+                    { label: 'Joined', value: selectedRider.joined || '---' },
+                  ].map(row => (
+                    <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 0', borderBottom: '1px solid #f0eaf8' }}>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: '#7b6d8d' }}>{row.label}</span>
+                      {row.badge ? (
+                        <span style={{ padding: '3px 10px', borderRadius: 100, fontSize: 10, fontWeight: 700, background: row.color.bg, color: row.color.color }}>{row.value}</span>
+                      ) : (
+                        <span style={{ fontSize: 13, fontWeight: 500, color: '#1f1329' }}>{row.value}</span>
+                      )}
+                    </div>
+                  ))}
+                </>
+              )}
+
+              {riderTab === 'timeline' && (
+                <>
+                  {timelineLoading ? (
+                    <div style={{ padding: 20, textAlign: 'center', color: '#a890c0', fontSize: 12 }}>Loading timeline...</div>
+                  ) : riderTimeline.length === 0 ? (
+                    <div style={{ padding: 20, textAlign: 'center' }}>
+                      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#d4c8e8" strokeWidth="1.5" style={{ marginBottom: 6 }}>
+                        <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
+                      </svg>
+                      <p style={{ color: '#a890c0', fontSize: 12, margin: 0 }}>No status history yet</p>
+                    </div>
+                  ) : (
+                    <div style={{ position: 'relative', paddingLeft: 24 }}>
+                      <div style={{ position: 'absolute', left: 9, top: 6, bottom: 6, width: 2, background: 'linear-gradient(180deg, #1E88E5 0%, #390955 100%)', borderRadius: 1, opacity: 0.3 }} />
+                      {riderTimeline.map((evt, idx) => (
+                        <div key={idx} style={{ position: 'relative', marginBottom: idx < riderTimeline.length - 1 ? 16 : 0 }}>
+                          <div style={{ position: 'absolute', left: -24, top: 2, width: 18, height: 18, borderRadius: '50%', background: '#1E88E5', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1, boxShadow: '0 0 0 3px white, 0 0 0 4px rgba(30,136,229,0.2)' }}>
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="white"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" /></svg>
+                          </div>
+                          <div style={{ padding: '8px 12px', background: '#faf7fd', borderRadius: 8, border: '1px solid #ede6f7', borderLeft: '3px solid #1E88E5' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+                              <span style={{ fontSize: 11, fontWeight: 700, color: '#1f1329' }}>Status: {evt.status}</span>
+                              <span style={{ fontSize: 9, color: '#a890c0' }}>{formatTimelineDate(evt.changedAt)}</span>
+                            </div>
+                            <p style={{ margin: 0, fontSize: 10, color: '#6b7280' }}>{evt.reason || 'No reason provided'}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { apiFetch } from './services/api';
 import StatusBadge from './components/ui/StatusBadge';
 import { PARCEL_STATUS_COLORS } from './components/ui/statusColors';
 import Modal from './components/ui/Modal';
+import { isDemoEmail } from './demoUtils';
 
 /**
  * ManageParcels.jsx
@@ -267,6 +268,8 @@ function normalizeParcel(raw, riderNameById) {
     estimatedDelivery: addDays(createdAt, 3).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }),
     lat: base.lat,
     lng: base.lng,
+    podPhoto: raw.podPhoto || '',
+    accountCategory: raw.accountCategory || (isDemoEmail(raw.senderEmail || raw.sender?.email) || String(raw.trackingNumber || raw._id || '').startsWith('DEMO-') ? 'DEMO' : 'REAL'),
   };
 
   // Real per-scan history if the backend recorded any events; otherwise fall
@@ -726,6 +729,20 @@ function ParcelModal({ parcel, onClose, allParcels }) {
                         </div>
                       ))}
                     </div>
+                    {parcel.podPhoto && (
+                      <div style={{ background: '#faf8ff', border: '1.5px solid #e8e0f5', borderRadius: 12, padding: 14, marginTop: 12 }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: '#390955', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
+                          Proof of Delivery (POD Photo)
+                        </div>
+                        <div style={{ width: '100%', maxHeight: 220, borderRadius: 8, overflow: 'hidden', border: '1px solid #d1c4e9' }}>
+                          <img
+                            src={parcel.podPhoto}
+                            alt="Proof of Delivery"
+                            style={{ width: '100%', maxHeight: 220, objectFit: 'contain', background: '#111', display: 'block' }}
+                          />
+                        </div>
+                      </div>
+                    )}
                   </>
                 )}
               </div>
@@ -738,7 +755,9 @@ function ParcelModal({ parcel, onClose, allParcels }) {
 
 // ── Toolbar (search + status filter + Export PDF/CSV) ──────────────────────
 
-function Toolbar({ search, setSearch, statusFilter, setStatusFilter, onExportCSV, onExportPDF, resultCount }) {
+// ── Toolbar (search + status filter + Export PDF/CSV) ──────────────────────
+
+function Toolbar({ search, setSearch, statusFilter, setStatusFilter, categoryFilter, setCategoryFilter, onExportCSV, onExportPDF, resultCount }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
 
@@ -772,6 +791,17 @@ function Toolbar({ search, setSearch, statusFilter, setStatusFilter, onExportCSV
       >
         <option value="All">All Statuses</option>
         {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+      </select>
+
+      <select
+        value={categoryFilter}
+        onChange={(e) => setCategoryFilter(e.target.value)}
+        className="mp-select"
+        style={{ padding: '9px 12px', border: '1.5px solid #e0d5f0', borderRadius: 8, fontSize: 13, color: '#1a1a1a', background: 'white', fontFamily: 'inherit', outline: 'none', cursor: 'pointer' }}
+      >
+        <option value="All">All Categories</option>
+        <option value="REAL">Real Parcels</option>
+        <option value="DEMO">Demo Parcels</option>
       </select>
 
       <span style={{ fontSize: 12, color: '#aaa' }}>{resultCount} result{resultCount !== 1 ? 's' : ''}</span>
@@ -836,7 +866,7 @@ function AssignRiderButton({ parcel, riders, onAssign }) {
 
 // ── Main Component ──────────────────────────────────────────────────────────
 
-export default function ManageParcels() {
+export default function ManageParcels({ currentUser }) {
   const [parcels, setParcels]           = useState([]);
   const [riders, setRiders]             = useState([]); // [{ riderId, riderName }] from GET /api/riders
   const [loading, setLoading]           = useState(true);
@@ -844,6 +874,7 @@ export default function ManageParcels() {
   const [actionError, setActionError]   = useState('');
   const [search, setSearch]             = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
+  const [categoryFilter, setCategoryFilter] = useState(currentUser?.isDemo ? 'DEMO' : 'REAL');
   const [viewParcel, setViewParcel]     = useState(null);
 
   const flashActionError = (msg) => { setActionError(msg); setTimeout(() => setActionError(''), 4000); };
@@ -866,14 +897,28 @@ export default function ManageParcels() {
 
       const normalized = (Array.isArray(parcelsData) ? parcelsData : []).map((p) => normalizeParcel(p, riderNameById));
 
-      setParcels(normalized);
+      if (normalized.length > 0) {
+        setParcels(normalized);
+        setUsingFallback(false);
+      } else if (currentUser?.isDemo) {
+        setParcels(FALLBACK_PARCELS.map(p => ({ ...p, accountCategory: 'DEMO' })));
+        setUsingFallback(true);
+      } else {
+        setParcels([]);
+        setUsingFallback(false);
+      }
       setRiders(riderList);
-      setUsingFallback(false);
     } catch (err) {
-      console.error('ManageParcels: falling back to sample data —', err);
-      setParcels(FALLBACK_PARCELS);
+      console.error('ManageParcels: error loading parcels —', err);
+      if (currentUser?.isDemo) {
+        setParcels(FALLBACK_PARCELS.map(p => ({ ...p, accountCategory: 'DEMO' })));
+        setUsingFallback(true);
+      } else {
+        setParcels([]);
+        setUsingFallback(false);
+        flashActionError('Could not reach the server.');
+      }
       setRiders([]);
-      setUsingFallback(true);
     } finally {
       setLoading(false);
     }
@@ -885,6 +930,7 @@ export default function ManageParcels() {
     const q = search.trim().toLowerCase();
     return parcels.filter((p) => {
       if (statusFilter !== 'All' && p.status !== statusFilter) return false;
+      if (categoryFilter !== 'All' && (p.accountCategory || 'REAL') !== categoryFilter) return false;
       if (!q) return true;
       return (
         p.id.toLowerCase().includes(q) ||
@@ -894,7 +940,7 @@ export default function ManageParcels() {
         (p.assignedRider && p.assignedRider.toLowerCase().includes(q))
       );
     });
-  }, [parcels, search, statusFilter]);
+  }, [parcels, search, statusFilter, categoryFilter]);
 
   // Persists the assignment to the real parcel record (PUT /api/parcels/:id)
   // when we're on live data; in fallback mode (API unreachable) there's
@@ -918,7 +964,7 @@ export default function ManageParcels() {
     }
   };
 
-  const COLS = ['Parcel ID', 'Sender', 'Receiver', 'Delivery Address', 'Weight', 'Assigned Rider', 'Status'];
+  const COLS = ['Parcel ID', 'Category', 'Sender', 'Receiver', 'Delivery Address', 'Weight', 'Assigned Rider', 'Status'];
 
   return (
     <div style={{ flex: 1, overflowY: 'auto', backgroundColor: '#f9f7ff', fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" }}>
@@ -953,7 +999,7 @@ export default function ManageParcels() {
       <div style={{ padding: '24px 32px', display: 'flex', flexDirection: 'column', gap: 20 }}>
         {usingFallback && !loading && (
           <div style={{ padding: '12px 16px', background: '#fff4ec', color: '#c2410c', border: '1px solid #f9d4b6', borderRadius: 10, fontSize: 12.5, fontWeight: 600 }}>
-            ⚠️ Showing sample parcels — the live server didn't respond. Rider assignment won't be saved until it's back.
+            ⚠️ Showing demo test parcels (Demo Mode active).
           </div>
         )}
         {actionError && (
@@ -977,6 +1023,7 @@ export default function ManageParcels() {
           <Toolbar
             search={search} setSearch={setSearch}
             statusFilter={statusFilter} setStatusFilter={setStatusFilter}
+            categoryFilter={categoryFilter} setCategoryFilter={setCategoryFilter}
             onExportCSV={() => exportCSV(filtered)}
             onExportPDF={() => exportPDF(filtered)}
             resultCount={filtered.length}
@@ -996,10 +1043,21 @@ export default function ManageParcels() {
                 {loading ? (
                   <tr><td colSpan={COLS.length + 1} style={{ padding: '48px 20px', textAlign: 'center', color: '#aaa', fontSize: 13 }}>Loading parcels…</td></tr>
                 ) : filtered.length === 0 ? (
-                  <tr><td colSpan={COLS.length + 1} style={{ padding: '48px 20px', textAlign: 'center', color: '#aaa', fontSize: 13 }}>No parcels found matching your search.</td></tr>
+                  <tr><td colSpan={COLS.length + 1} style={{ padding: '48px 20px', textAlign: 'center', color: '#aaa', fontSize: 13 }}>No parcels found in this category.</td></tr>
                 ) : filtered.map((p, idx) => (
                   <tr key={p.id} className="mp-row" style={{ background: idx % 2 === 0 ? 'white' : '#faf9ff' }}>
                     <td style={{ padding: '12px 16px', fontFamily: 'monospace', color: '#390955', fontWeight: 700, whiteSpace: 'nowrap', borderBottom: '1px solid #f3f0f8' }}>{p.id}</td>
+                    <td style={{ padding: '12px 16px', whiteSpace: 'nowrap', borderBottom: '1px solid #f3f0f8' }}>
+                      <span style={{
+                        fontSize: 10, fontWeight: 800, padding: '3px 8px', borderRadius: 6,
+                        background: p.accountCategory === 'DEMO' ? '#f3f4f6' : '#ecfdf5',
+                        color: p.accountCategory === 'DEMO' ? '#6b7280' : '#059669',
+                        border: `1px solid ${p.accountCategory === 'DEMO' ? '#d1d5db' : '#a7f3d0'}`,
+                        textTransform: 'uppercase',
+                      }}>
+                        {p.accountCategory || 'REAL'}
+                      </span>
+                    </td>
                     <td style={{ padding: '12px 16px', color: '#1a1a1a', fontWeight: 600, whiteSpace: 'nowrap', borderBottom: '1px solid #f3f0f8' }}>{p.sender.name}</td>
                     <td style={{ padding: '12px 16px', color: '#374151', whiteSpace: 'nowrap', borderBottom: '1px solid #f3f0f8' }}>{p.receiver.name}</td>
                     <td style={{ padding: '12px 16px', color: '#666', borderBottom: '1px solid #f3f0f8', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.address}</td>

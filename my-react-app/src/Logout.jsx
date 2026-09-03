@@ -1,61 +1,65 @@
 import React, { useState, useEffect } from 'react';
+import './Logout.css';
 
-export default function Logout({ setActivePage, onLogout }) {
+const ROLE_LABELS = {
+  super_admin: 'Super Admin',
+  staff: 'Operations Staff',
+  hub_receiver: 'Hub Receiver',
+};
+
+function initials(email = '') {
+  const local = String(email || '').split('@')[0].trim();
+  if (!local) return 'YX';
+  const parts = local.split(/[._\-\s]+/).filter(Boolean).slice(0, 2);
+  const letters = parts.map((p) => p.charAt(0).toUpperCase()).join('');
+  return letters || local.charAt(0).toUpperCase();
+}
+
+export default function Logout({ setActivePage, onLogout, currentUser }) {
   const [visible, setVisible] = useState(false);
+  const [exiting, setExiting] = useState(false);
 
   useEffect(() => {
     const t = setTimeout(() => setVisible(true), 10);
     return () => clearTimeout(t);
   }, []);
 
-  const handleStay = () => {
-    setActivePage('dashboard');
+  const perform = (action) => {
+    if (exiting) return;
+    setExiting(true);
+    window.setTimeout(() => {
+      if (action === 'stay') {
+        if (setActivePage) setActivePage('dashboard');
+      } else if (action === 'logout' && onLogout) {
+        onLogout(); // clears currentUser -> shows login
+      }
+    }, 320);
   };
 
-  const handleLogout = () => {
-    if (onLogout) onLogout();        // clears currentUser → shows login
-    else setActivePage('dashboard'); // fallback
-  };
+  const roleLabel = currentUser ? ROLE_LABELS[currentUser.role] : null;
+  const isDemo = !!(currentUser && currentUser.isDemo);
 
   return (
-    <div style={{
-      display: 'flex',
-      justifyContent: 'center',
-      alignItems: 'center',
-      minHeight: '80vh',
-      padding: '30px',
-      background: '#f7f4fa',
-    }}>
-      <div style={{
-        background: 'white',
-        borderRadius: 16,
-        padding: '48px 40px',
-        maxWidth: 440,
-        width: '100%',
-        boxShadow: '0 4px 24px rgba(57,9,85,0.12)',
-        border: '1px solid rgba(57,9,85,0.08)',
-        textAlign: 'center',
-        position: 'relative',
-        overflow: 'hidden',
-        opacity: visible ? 1 : 0,
-        transform: visible ? 'translateY(0)' : 'translateY(16px)',
-        transition: 'opacity 0.35s ease, transform 0.35s ease',
-      }}>
+    <div className="logout-root">
+      <div className={`logout-card ${visible ? 'in' : ''} ${exiting ? 'exit' : ''}`}>
+        <div className="logout-accent" />
 
-        {/* Top accent bar */}
-        <div style={{
-          position: 'absolute', top: 0, left: 0, right: 0, height: 4,
-          background: 'linear-gradient(90deg, #390955, #7b3fa0)',
-        }} />
+        {/* Active session user: avatar, email, role/demo badge */}
+        {currentUser && (
+          <div className="logout-user">
+            <div className="logout-avatar">{initials(currentUser.email)}</div>
+            <div className="logout-user-meta">
+              <span className="logout-user-email">{currentUser.email || ''}</span>
+              {(isDemo || roleLabel) && (
+                <span className={isDemo ? 'logout-user-demo' : 'logout-user-role'}>
+                  {isDemo ? 'Demo' : roleLabel}
+                </span>
+              )}
+            </div>
+          </div>
+        )}
 
-        {/* Icon */}
-        <div style={{
-          width: 72, height: 72, borderRadius: '50%',
-          background: 'rgba(57,9,85,0.08)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          margin: '0 auto 24px',
-          border: '2px solid rgba(57,9,85,0.12)',
-        }}>
+        <div className="logout-icon-wrap">
           <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#390955" strokeWidth="1.8">
             <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
             <polyline points="16 17 21 12 16 7" />
@@ -63,49 +67,26 @@ export default function Logout({ setActivePage, onLogout }) {
           </svg>
         </div>
 
-        <h1 style={{ fontSize: 24, fontWeight: 700, color: '#1a1a1a', margin: '0 0 12px', letterSpacing: '-0.5px' }}>
-          Signing Out
-        </h1>
-        <p style={{ fontSize: 14, color: '#666', margin: '0 0 8px', lineHeight: 1.6 }}>
+        <h1 className="logout-title">Signing Out</h1>
+        <p className="logout-desc">
           Are you sure you want to log out of{' '}
-          <strong style={{ color: '#390955' }}>YTO Express</strong>?
+          <strong>YTO Express</strong>?
         </p>
-        <p style={{ fontSize: 12, color: '#bbb', margin: '0 0 28px' }}>
-          Any unsaved changes will be lost.
-        </p>
+        <p className="logout-sub">Any unsaved changes will be lost.</p>
 
-        <div style={{ height: 1, background: '#f0e8f8', margin: '0 0 28px' }} />
+        <div className="logout-divider" />
 
-        <div style={{ display: 'flex', gap: 12 }}>
-          <button
-            type="button"
-            onClick={handleStay}
-            style={{
-              flex: 1, padding: '12px 0', borderRadius: 10,
-              background: 'white', color: '#390955',
-              border: '2px solid #390955', fontWeight: 600,
-              fontSize: 14, cursor: 'pointer', fontFamily: 'inherit',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-            }}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+        <div className="logout-actions">
+          <button type="button" className="logout-btn logout-btn--ghost" onClick={() => perform('stay')}>
+            <svg width="14" height="14" viewBox="0 0 24 24
+" fill="none" stroke="currentColor" strokeWidth="2.5">
               <line x1="18" y1="6" x2="6" y2="18" />
               <line x1="6" y1="6" x2="18" y2="18" />
             </svg>
             Stay Logged In
           </button>
 
-          <button
-            type="button"
-            onClick={handleLogout}
-            style={{
-              flex: 1, padding: '12px 0', borderRadius: 10,
-              background: '#390955', color: 'white',
-              border: '2px solid #390955', fontWeight: 600,
-              fontSize: 14, cursor: 'pointer', fontFamily: 'inherit',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-            }}
-          >
+          <button type="button" className="logout-btn logout-btn--primary" onClick={() => perform('logout')}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
               <polyline points="16 17 21 12 16 7" />
@@ -115,9 +96,7 @@ export default function Logout({ setActivePage, onLogout }) {
           </button>
         </div>
 
-        <p style={{ fontSize: 11, color: '#ccc', margin: '24px 0 0', letterSpacing: '0.3px' }}>
-          YTO Express — Logistics Management System
-        </p>
+        <p className="logout-footer">YTO Express — Logistics Management System</p>
       </div>
     </div>
   );

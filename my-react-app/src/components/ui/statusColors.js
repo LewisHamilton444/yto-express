@@ -14,3 +14,9 @@ export const PARCEL_STATUS_COLORS = {
   'Returned':         { bg: '#f3f4f6', color: '#6b7280' },
   'Failed':           { bg: '#fee2e2', color: '#991b1b' },
 };
+
+// Account category badging shared by admin views (CustomerList, ManageIssues, ...).
+// Canonical scheme: REAL renders green, DEMO renders neutral gray — matches the
+// long-standing inline badges in ManageAccounts / ViewSeller / ManageParcels.
+export const ACCOUNT_CATEGORY_TONE = { REAL: 'green', DEMO: 'slate' };
+export const ACCOUNT_CATEGORY_LABEL = { REAL: 'Real (Verified)', DEMO: 'Demo' };

@@ -7,6 +7,7 @@ import { exportToCSV, exportToExcel } from './exportUtils';
 import { apiFetch } from './services/api';
 import StatusBadge from './components/ui/StatusBadge';
 import Modal from './components/ui/Modal';
+import { isDemoEmail } from './demoUtils';
 
 const SELLER_EXPORT_COLUMNS = [
   { key: 'sellerId', label: 'Seller ID' },
@@ -24,9 +25,10 @@ const SELLER_STATUS_COLORS = {
   ARCHIVED:              { bg: '#fee2e2', color: '#991b1b' },
 };
 
-const GenerateSellerReport = ({ sellers: externalSellers, onUpdateSellers }) => {
+const GenerateSellerReport = ({ sellers: externalSellers, onUpdateSellers, currentUser }) => {
   const [sellers, setSellers] = useState(() => (externalSellers ?? []).map(normalizeSeller));
   const sellersRef = useRef(sellers);
+  const [categoryFilter, setCategoryFilter] = useState('All');
 
   useEffect(() => {
     const fetchSellers = async () => {
@@ -34,13 +36,26 @@ const GenerateSellerReport = ({ sellers: externalSellers, onUpdateSellers }) => 
         const response = await apiFetch('/sellers');
         if (!response.ok) throw new Error('Failed to fetch');
         const data = await response.json();
-        const normalized = data.map(normalizeSeller);
-        setSellers(normalized);
-        sellersRef.current = normalized;
+        if (Array.isArray(data) && data.length > 0) {
+          const normalized = data.map(normalizeSeller);
+          setSellers(normalized);
+          sellersRef.current = normalized;
+        } else if (currentUser?.isDemo) {
+          setSellers(mockSellers);
+          sellersRef.current = mockSellers;
+        } else {
+          setSellers([]);
+          sellersRef.current = [];
+        }
       } catch (err) {
         console.error("Error fetching sellers:", err);
-        setSellers(mockSellers);
-        sellersRef.current = mockSellers;
+        if (currentUser?.isDemo) {
+          setSellers(mockSellers);
+          sellersRef.current = mockSellers;
+        } else {
+          setSellers([]);
+          sellersRef.current = [];
+        }
       }
     };
     fetchSellers();
@@ -57,6 +72,9 @@ const GenerateSellerReport = ({ sellers: externalSellers, onUpdateSellers }) => 
   const [editingSeller, setEditingSeller] = useState(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [detailSeller,  setDetailSeller]  = useState(null);
+  const [detailTab,     setDetailTab]     = useState('details');
+  const [sellerTimeline, setSellerTimeline] = useState([]);
+  const [timelineLoading, setTimelineLoading] = useState(false);
   const [currentPage,   setCurrentPage]   = useState(1);
   const [recordsPerPage,setRecordsPerPage]= useState(10);
   const [saveError,     setSaveError]     = useState('');
@@ -69,7 +87,9 @@ const GenerateSellerReport = ({ sellers: externalSellers, onUpdateSellers }) => 
       seller.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       seller.sellerId.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === 'All' || seller.status === statusFilter;
-    return matchesSearch && matchesStatus;
+    const cat = seller.accountCategory || (isDemoEmail(seller.email) ? 'DEMO' : 'REAL');
+    const matchesCategory = categoryFilter === 'All' || cat === categoryFilter;
+    return matchesSearch && matchesStatus && matchesCategory;
   });
 
   const indexOfLastRecord  = currentPage * recordsPerPage;
@@ -81,6 +101,46 @@ const GenerateSellerReport = ({ sellers: externalSellers, onUpdateSellers }) => 
 
   const handleExportCSV = () => exportToCSV(filteredSellers, SELLER_EXPORT_COLUMNS, 'sellers-ledger');
   const handleExportExcel = () => exportToExcel(filteredSellers, SELLER_EXPORT_COLUMNS, 'sellers-ledger');
+
+  const formatTimelineDate = (dateStr) => {
+    if (!dateStr) return '-';
+    return new Date(dateStr).toLocaleString('en-PH', {
+      year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+    });
+  };
+
+  const fetchSellerTimeline = async (seller) => {
+    try {
+      setTimelineLoading(true);
+      const events = [];
+
+      // Registration event
+      events.push({
+        status: 'Registered',
+        changedAt: seller.raw?.createdAt || seller.createdAt,
+        reason: `${seller.fullName} joined as ${seller.raw?.accountCategory || 'REAL'} seller`,
+      });
+
+      // Status history from DB
+      if (seller.raw?.statusHistory && seller.raw.statusHistory.length > 0) {
+        seller.raw.statusHistory.forEach(sh => {
+          events.push({
+            status: sh.status,
+            changedAt: sh.changedAt,
+            reason: sh.reason || 'Status changed',
+          });
+        });
+      }
+
+      events.sort((a, b) => new Date(b.changedAt) - new Date(a.changedAt));
+      setSellerTimeline(events);
+    } catch (err) {
+      console.error('Error fetching seller timeline:', err);
+      setSellerTimeline([]);
+    } finally {
+      setTimelineLoading(false);
+    }
+  };
 
   const handleSaveChanges = async (e) => {
     e.preventDefault();
@@ -165,7 +225,7 @@ const GenerateSellerReport = ({ sellers: externalSellers, onUpdateSellers }) => 
           <h2 style={s.panelHeading}>Search & Status Directives</h2>
         </div>
         <div style={s.panelBody}>
-          <div style={{ display: 'grid', gridTemplateColumns: '3fr 1fr', gap: '16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '16px' }}>
             <div>
               <label style={{ fontSize: '11px', fontWeight: 700, color: '#a890c0', textTransform: 'uppercase', display: 'block', marginBottom: '6px' }}>Search Seller Name or ID</label>
               <input type="text" placeholder="Type to filter lookup..." style={s.formInput} value={searchTerm} onChange={handleSearchChange} />
@@ -176,6 +236,14 @@ const GenerateSellerReport = ({ sellers: externalSellers, onUpdateSellers }) => 
                 <option value="All">All Statuses</option>
                 <option value={SELLER_STATUS.PENDING_VERIFICATION}>Pending Verification</option>
                 <option value={SELLER_STATUS.ACTIVE}>Active Only</option>
+              </select>
+            </div>
+            <div>
+              <label style={{ fontSize: '11px', fontWeight: 700, color: '#a890c0', textTransform: 'uppercase', display: 'block', marginBottom: '6px' }}>Account Category</label>
+              <select style={s.formInput} value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}>
+                <option value="All">All Categories</option>
+                <option value="REAL">Real Sellers</option>
+                <option value="DEMO">Demo Sellers</option>
               </select>
             </div>
           </div>
@@ -200,6 +268,7 @@ const GenerateSellerReport = ({ sellers: externalSellers, onUpdateSellers }) => 
               <thead>
                 <tr>
                   <th style={s.th}>Seller ID</th>
+                  <th style={s.th}>Category</th>
                   <th style={s.th}>Full Name</th>
                   <th style={s.th}>Contact Point (Email/Phone)</th>
                   <th style={s.th}>Payment Cycle / Commission</th>
@@ -210,15 +279,27 @@ const GenerateSellerReport = ({ sellers: externalSellers, onUpdateSellers }) => 
               <tbody>
                 {currentRecords.length === 0 ? (
                   <tr>
-                    <td colSpan="6" style={{ ...s.td, textAlign: 'center', padding: '48px', color: '#a890c0', fontWeight: 500 }}>
+                    <td colSpan="7" style={{ ...s.td, textAlign: 'center', padding: '48px', color: '#a890c0', fontWeight: 500 }}>
                       No records match the current view.
                     </td>
                   </tr>
                 ) : (
                   currentRecords.map((seller, idx) => {
+                    const isDemo = (seller.accountCategory || 'REAL') === 'DEMO';
                     return (
                       <tr key={seller._id || idx} style={{ background: idx % 2 === 0 ? 'white' : '#faf7fd' }}>
                         <td style={{ ...s.td, fontFamily: "'DM Mono', monospace", fontWeight: 600, fontSize: '12px' }}>{seller.sellerId}</td>
+                        <td style={s.td}>
+                          <span style={{
+                            fontSize: '10px', fontWeight: 800, padding: '3px 8px', borderRadius: '6px',
+                            background: isDemo ? '#f3f4f6' : '#ecfdf5',
+                            color: isDemo ? '#6b7280' : '#059669',
+                            border: `1px solid ${isDemo ? '#d1d5db' : '#a7f3d0'}`,
+                            textTransform: 'uppercase',
+                          }}>
+                            {isDemo ? 'DEMO' : 'REAL'}
+                          </span>
+                        </td>
                         <td style={{ ...s.td, fontWeight: 700 }}>{seller.fullName || '—'}</td>
                         <td style={s.td}>
                           <div style={{ fontWeight: 500 }}>{seller.email}</div>
@@ -233,7 +314,7 @@ const GenerateSellerReport = ({ sellers: externalSellers, onUpdateSellers }) => 
                         </td>
                         <td style={{ ...s.td, textAlign: 'right' }}>
                           <div style={{ display: 'inline-flex', gap: '8px' }}>
-                            <button style={s.btnOutline} onClick={() => setDetailSeller(seller)}>
+                            <button style={s.btnOutline} onClick={() => { setDetailTab('details'); setSellerTimeline([]); setDetailSeller(seller); fetchSellerTimeline(seller); }}>
                               View Details
                             </button>
                             <button style={s.btnOutline} onClick={() => { setEditingSeller({ ...seller, address: { ...seller.address } }); setShowEditModal(true); }}>
@@ -285,11 +366,64 @@ const GenerateSellerReport = ({ sellers: externalSellers, onUpdateSellers }) => 
               <div style={s.detailRow}><span style={s.detailLabel}>Postal Code</span><span style={s.detailValue}>{detailSeller.address.postalCode || '—'}</span></div>
               <div style={s.detailRow}><span style={s.detailLabel}>Country</span><span style={s.detailValue}>{detailSeller.address.country || '—'}</span></div>
 
-              <div style={s.detailSection}>Bank & Payout</div>
-              <div style={s.detailRow}><span style={s.detailLabel}>Bank Name</span><span style={s.detailValue}>{detailSeller.bankName || '—'}</span></div>
-              <div style={s.detailRow}><span style={s.detailLabel}>Account Number</span><span style={s.detailValue}>{detailSeller.accountNumber || '—'}</span></div>
-              <div style={s.detailRow}><span style={s.detailLabel}>Payment Cycle</span><span style={s.detailValue}>{detailSeller.paymentCycle}</span></div>
-              <div style={s.detailRow}><span style={s.detailLabel}>Commission Rate</span><span style={s.detailValue}>{detailSeller.commissionRate}%</span></div>
+              {/* Tabs */}
+              <div style={{ display: 'flex', borderBottom: '2px solid #f0eaf8', margin: '16px 0 0' }}>
+                {[{ key: 'details', label: 'Details' }, { key: 'timeline', label: 'Timeline' }].map(tab => (
+                  <button key={tab.key} onClick={() => setDetailTab(tab.key)} style={{
+                    flex: 1, padding: '10px 0', border: 'none', cursor: 'pointer',
+                    fontSize: 12, fontWeight: 600, transition: 'all 0.2s',
+                    background: detailTab === tab.key ? '#faf7fd' : 'transparent',
+                    color: detailTab === tab.key ? '#390955' : '#a890c0',
+                    borderBottom: detailTab === tab.key ? '2px solid #390955' : '2px solid transparent',
+                    marginBottom: -2,
+                  }}>{tab.label}</button>
+                ))}
+              </div>
+
+              {/* Details Tab */}
+              {detailTab === 'details' && (
+                <>
+                  <div style={s.detailSection}>Bank & Payout</div>
+                  <div style={s.detailRow}><span style={s.detailLabel}>Bank Name</span><span style={s.detailValue}>{detailSeller.bankName || '—'}</span></div>
+                  <div style={s.detailRow}><span style={s.detailLabel}>Account Number</span><span style={s.detailValue}>{detailSeller.accountNumber || '—'}</span></div>
+                  <div style={s.detailRow}><span style={s.detailLabel}>Payment Cycle</span><span style={s.detailValue}>{detailSeller.paymentCycle}</span></div>
+                  <div style={s.detailRow}><span style={s.detailLabel}>Commission Rate</span><span style={s.detailValue}>{detailSeller.commissionRate}%</span></div>
+                </>
+              )}
+
+              {/* Timeline Tab */}
+              {detailTab === 'timeline' && (
+                <div style={{ marginTop: 12 }}>
+                  {timelineLoading ? (
+                    <div style={{ padding: 20, textAlign: 'center', color: '#a890c0', fontSize: 12 }}>Loading timeline...</div>
+                  ) : sellerTimeline.length === 0 ? (
+                    <div style={{ padding: 20, textAlign: 'center' }}>
+                      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#d4c8e8" strokeWidth="1.5" style={{ marginBottom: 6 }}>
+                        <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
+                      </svg>
+                      <p style={{ color: '#a890c0', fontSize: 12, margin: 0 }}>No status history yet</p>
+                    </div>
+                  ) : (
+                    <div style={{ position: 'relative', paddingLeft: 24 }}>
+                      <div style={{ position: 'absolute', left: 9, top: 6, bottom: 6, width: 2, background: 'linear-gradient(180deg, #390955 0%, #1E88E5 100%)', borderRadius: 1, opacity: 0.3 }} />
+                      {sellerTimeline.map((evt, idx) => (
+                        <div key={idx} style={{ position: 'relative', marginBottom: idx < sellerTimeline.length - 1 ? 16 : 0 }}>
+                          <div style={{ position: 'absolute', left: -24, top: 2, width: 18, height: 18, borderRadius: '50%', background: '#390955', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1, boxShadow: '0 0 0 3px white, 0 0 0 4px rgba(57,9,85,0.2)' }}>
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="white"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" /></svg>
+                          </div>
+                          <div style={{ padding: '8px 12px', background: '#faf7fd', borderRadius: 8, border: '1px solid #ede6f7', borderLeft: '3px solid #390955' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+                              <span style={{ fontSize: 11, fontWeight: 700, color: '#1f1329' }}>Status: {evt.status}</span>
+                              <span style={{ fontSize: 9, color: '#a890c0' }}>{formatTimelineDate(evt.changedAt)}</span>
+                            </div>
+                            <p style={{ margin: 0, fontSize: 10, color: '#6b7280' }}>{evt.reason || 'No reason provided'}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '16px' }}>
                 <button style={s.btnOutline} onClick={() => setDetailSeller(null)}>Close</button>

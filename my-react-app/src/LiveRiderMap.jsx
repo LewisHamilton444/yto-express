@@ -7,6 +7,7 @@ import { MOCK_LUZON_RIDERS, MOCK_LUZON_PARCELS } from './luzonMockData';
 import { useRouteAnimation } from './useRouteAnimation';
 import { buildLiveAlerts } from './alertsFeed';
 import { ridersApi, parcelsApi } from './services/api';
+import useSSE from './services/useSSE';
 
 const TILE_LAYERS = {
   street: { url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', attribution: '© OpenStreetMap contributors' },
@@ -205,6 +206,15 @@ export default function LiveRiderMap() {
       setLastUpdated(new Date().toLocaleTimeString());
     }
   }, []);
+
+  // Real-time SSE updates — refresh map when location/parcel events arrive
+  const { on } = useSSE();
+  useEffect(() => {
+    const unsub1 = on('location-synced', () => fetchData());
+    const unsub2 = on('parcel-synced', () => fetchData());
+    const unsub3 = on('parcel-updated', () => fetchData());
+    return () => { unsub1(); unsub2(); unsub3(); };
+  }, [on, fetchData]);
 
   useEffect(() => {
     fetchData();

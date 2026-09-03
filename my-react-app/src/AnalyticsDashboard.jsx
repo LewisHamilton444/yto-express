@@ -7,6 +7,7 @@ import {
   Users, PackageSearch, BarChart3,
 } from 'lucide-react';
 import { apiFetch, parcelsApi, ridersApi } from './services/api';
+import useSSE from './services/useSSE';
 import './AnalyticsDashboard.css';
 import yto_logo from './yto_express_logo.png';
 
@@ -23,6 +24,11 @@ import Settings                          from "./Settings";
 import Logout                            from "./Logout";
 import ManageAccounts                    from "./ManageAccounts";
 import HubParcelReceiving                from "./HubParcelReceiving";
+import CustomerList                      from "./CustomerList";
+import ActivityLog                       from "./ActivityLog";
+import ManageIssues                      from "./ManageIssues";
+import ConnectionHistoryChart             from "./ConnectionHistoryChart";
+import PeakAlertBanner                   from "./PeakAlertBanner";
 import GlobalHeader                      from "./GlobalHeader";
 import { initialPendingSellers, initialPendingRiders } from "./verification/mockPendingRegistrations";
 
@@ -50,6 +56,12 @@ const getMenuItems = (role) => [
       { label: 'Generate Rider Data Report', key: 'rider-report'  },
     ],
   }] : []),
+
+  ...(role !== 'hub_receiver' ? [
+    { label: 'Customers', key: 'customer-list' },
+    { label: 'Customer Issues', key: 'manage-issues' },
+    { label: 'Activity Log', key: 'activity-log' },
+  ] : []),
 
   ...(role === 'super_admin' ? [{
     label: 'GPS-Based Parcel Tracking', key: 'gps', children: [
@@ -82,6 +94,26 @@ const icons = {
   rider: (
     <svg className="ad-sidebar-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <circle cx="12" cy="8" r="4"/><path d="M5 20c0-3.3 3.1-6 7-6s7 2.7 7 6"/>
+    </svg>
+  ),
+  'customer-list': (
+    <svg className="ad-sidebar-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+      <circle cx="9" cy="7" r="4"/>
+      <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+      <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+    </svg>
+  ),
+  'manage-issues': (
+    <svg className="ad-sidebar-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+      <line x1="12" y1="8" x2="12" y2="12"/>
+      <line x1="12" y1="16" x2="12.01" y2="16"/>
+    </svg>
+  ),
+  'activity-log': (
+    <svg className="ad-sidebar-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
     </svg>
   ),
   gps: (
@@ -197,6 +229,27 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
   const [archivedReports, setArchivedReports] = useState([]);
 
   const isSuperAdmin = currentUser?.role === 'super_admin';
+
+  // Real-time SSE connection — auto-refreshes data when bridge events arrive
+  const { connected: sseConnected } = useSSE();
+
+  // SSE connection count (how many admin clients are connected)
+  const [sseClientCount, setSseClientCount] = useState(0);
+
+  useEffect(() => {
+    const fetchSSEStats = async () => {
+      try {
+        const res = await apiFetch('/events/stats');
+        if (res.ok) {
+          const data = await res.json();
+          setSseClientCount(data.connectedClients || 0);
+        }
+      } catch {}
+    };
+    fetchSSEStats();
+    const interval = setInterval(fetchSSEStats, 10000); // refresh every 10s
+    return () => clearInterval(interval);
+  }, []);
 
   const toggleSection   = (key) => setOpenSection(prev => (prev === key ? null : key));
   const handleMenuClick = (key) => setActiveMenuItem(key);
@@ -326,24 +379,28 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
             onNavigateToSettings={goToSettings}
           />
         );
-      case 'seller-report':       return <ViewSeller sellers={sharedSellers} onUpdateSellers={setSharedSellers} />;
-      case 'manage-parcels':      return <ManageParcels />;
+      case 'seller-report':       return <ViewSeller sellers={sharedSellers} onUpdateSellers={setSharedSellers} currentUser={currentUser} />;
+      case 'manage-parcels':      return <ManageParcels currentUser={currentUser} />;
+      case 'customer-list':       return <CustomerList currentUser={currentUser} />;
+      case 'activity-log':        return <ActivityLog currentUser={currentUser} />;
+      case 'manage-issues':       return <ManageIssues currentUser={currentUser} />;
       case 'process-rider':
         return (
           <ProcessRiderInformation
             pendingRiders={pendingRiders}
             setPendingRiders={setPendingRiders}
             onNavigateToSettings={goToSettings}
+            currentUser={currentUser}
           />
         );
-      case 'monitor-rider':       return <MonitorRiderStatus />;
-      case 'rider-report':        return <GenerateRiderDataReport />;
-      case 'parcel-location':     return <ManageParcelLocation />;
-      case 'geofence':            return <MonitorParcel />;
-      case 'tracking-info':       return <GenerateTrackingInformation reports={trackingReports} onReportsChange={setTrackingReports} />;
+      case 'monitor-rider':       return <MonitorRiderStatus currentUser={currentUser} />;
+      case 'rider-report':        return <GenerateRiderDataReport currentUser={currentUser} />;
+      case 'parcel-location':     return <ManageParcelLocation currentUser={currentUser} />;
+      case 'geofence':            return <MonitorParcel currentUser={currentUser} />;
+      case 'tracking-info':       return <GenerateTrackingInformation reports={trackingReports} onReportsChange={setTrackingReports} currentUser={currentUser} />;
       case 'settings':            return <Settings currentUser={currentUser} archivedReports={archivedReports} />;
       case 'manage-accounts':     return isSuperAdmin ? <ManageAccounts currentUser={currentUser} /> : null;
-      case 'hub-parcels':         return currentUser?.role === 'hub_receiver' ? <HubParcelReceiving /> : null;
+      case 'hub-parcels':         return currentUser?.role === 'hub_receiver' ? <HubParcelReceiving currentUser={currentUser} /> : null;
       case 'logout':              return <Logout setActivePage={setActiveMenuItem} onLogout={onLogout} onCancel={() => setActiveMenuItem('dashboard')} />;
       default:                    return null;
     }
@@ -425,6 +482,22 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
                 <p>YTO Express • Delivery Performance Overview</p>
               </div>
               <div className="ed-header-controls">
+                {/* SSE Connection Count */}
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px',
+                  background: sseConnected ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)',
+                  borderRadius: 8, border: `1px solid ${sseConnected ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)'}`,
+                }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={sseConnected ? '#16a34a' : '#dc2626'} strokeWidth="2">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                    <circle cx="9" cy="7" r="4"/>
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                  </svg>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: sseConnected ? '#16a34a' : '#dc2626' }}>
+                    {sseClientCount} connected
+                  </span>
+                </div>
                 <div className="ed-select-container">
                   <select value={dateRange} onChange={e => setDateRange(e.target.value)}>
                     <option value="today">Today</option>
@@ -470,6 +543,14 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
                       </div>
                     );
                   })}
+                </div>
+
+                {/* Peak Connection Alert Banner */}
+                <PeakAlertBanner />
+
+                {/* SSE Connection History Chart */}
+                <div style={{ marginBottom: 20 }}>
+                  <ConnectionHistoryChart />
                 </div>
 
                 <div className="ed-workspace-grid">

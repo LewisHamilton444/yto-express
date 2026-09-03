@@ -21,8 +21,10 @@ const router = express.Router();
 const Seller         = require('./models/Seller');
 const Rider          = require('./models/Rider');
 const Customer       = require('./models/Customer');
+const sseBroadcaster = require('./utils/sseBroadcaster');
 const Parcel         = require('./models/Parcel');
 const ParcelLocation = require('./models/ParcelLocation');
+const Issue          = require('./models/Issue');
 
 // ── Optional shared-secret gate ─────────────────────────────────────────
 // These routes accept writes from another backend, not from the admin UI,
@@ -55,7 +57,7 @@ function statusForError(err) {
 // REAL = live @gmail.com signup. DEMO = @yto.com / @example.com test
 // account. Anything else defaults to REAL (safer default than silently
 // treating an unrecognized domain as a throwaway test account).
-const DEMO_DOMAINS = ['yto.com', 'example.com'];
+const DEMO_DOMAINS = ['yto.com', 'example.com', 'ytoexpress.com'];
 function categorizeEmail(email) {
   const domain = String(email).split('@')[1]?.toLowerCase() || '';
   return DEMO_DOMAINS.includes(domain) ? 'DEMO' : 'REAL';
@@ -132,6 +134,16 @@ router.post('/sync-user', async (req, res) => {
     const syncByRole = { seller: syncSeller, rider: syncRider, customer: syncCustomer };
     const result = await syncByRole[normalizedRole](body, normalizedEmail, accountCategory);
 
+    // Broadcast SSE event to connected admin clients
+    sseBroadcaster.broadcast('user-synced', {
+      role: normalizedRole,
+      name: body.name,
+      email: normalizedEmail,
+      enterpriseId: result.enterpriseId,
+      created: result.created,
+      timestamp: new Date().toISOString(),
+    });
+
     return res.status(result.created ? 201 : 200).json({
       success: true,
       message: `${normalizedRole} ${result.created ? 'registered' : 'updated'} successfully.`,
@@ -159,13 +171,35 @@ async function syncSeller(body, email, accountCategory) {
 
   const existing = await Seller.findOne({ email });
   if (existing) {
+    // Record status change in history
+    const newStatus = body.status || existing.status;
+    if (newStatus !== existing.status) {
+      if (!existing.statusHistory) existing.statusHistory = [];
+      existing.statusHistory.push({
+        status: newStatus,
+        changedAt: new Date(),
+        reason: body.statusReason || 'Status updated via bridge',
+      });
+      existing.status = newStatus;
+    }
     Object.assign(existing, updates);
     await existing.save();
     return { doc: existing, created: false, collection: 'Seller', enterpriseId: existing.registrationId };
   }
 
   const registrationId = await generateEnterpriseId('seller', Seller, 'registrationId');
-  const doc = await Seller.create({ registrationId, accountNumber: '', phone: '', ...updates });
+  const accountNumber = body.accountNumber || String(Math.floor(1000000000 + Math.random() * 9000000000));
+  const doc = await Seller.create({
+    registrationId,
+    accountNumber,
+    phone: body.phone || '',
+    ...updates,
+    statusHistory: [{
+      status: body.status || 'ACTIVE',
+      changedAt: new Date(),
+      reason: 'Seller registered',
+    }],
+  });
   return { doc, created: true, collection: 'Seller', enterpriseId: registrationId };
 }
 
@@ -179,13 +213,35 @@ async function syncRider(body, email, accountCategory) {
 
   const existing = await Rider.findOne({ email });
   if (existing) {
+    // Record status change in history
+    const newStatus = body.status || existing.status;
+    if (newStatus !== existing.status) {
+      if (!existing.statusHistory) existing.statusHistory = [];
+      existing.statusHistory.push({
+        status: newStatus,
+        changedAt: new Date(),
+        reason: body.statusReason || 'Status updated via bridge',
+      });
+      existing.status = newStatus;
+    }
     Object.assign(existing, updates);
     await existing.save();
     return { doc: existing, created: false, collection: 'Rider', enterpriseId: existing.registrationId };
   }
 
   const registrationId = await generateEnterpriseId('rider', Rider, 'registrationId');
-  const doc = await Rider.create({ registrationId, accountNumber: '', phone: '', ...updates });
+  const accountNumber = body.accountNumber || String(Math.floor(1000000000 + Math.random() * 9000000000));
+  const doc = await Rider.create({
+    registrationId,
+    accountNumber,
+    phone: body.phone || '',
+    ...updates,
+    statusHistory: [{
+      status: body.status || 'Active',
+      changedAt: new Date(),
+      reason: 'Rider registered',
+    }],
+  });
   return { doc, created: true, collection: 'Rider', enterpriseId: registrationId };
 }
 
@@ -195,13 +251,32 @@ async function syncCustomer(body, email, accountCategory) {
 
   const existing = await Customer.findOne({ email });
   if (existing) {
+    // Record status change in history if status differs
+    const newStatus = body.status || existing.status;
+    if (newStatus !== existing.status) {
+      if (!existing.statusHistory) existing.statusHistory = [];
+      existing.statusHistory.push({
+        status: newStatus,
+        changedAt: new Date(),
+        reason: body.statusReason || 'Status updated via bridge',
+      });
+      existing.status = newStatus;
+    }
     Object.assign(existing, updates);
     await existing.save();
     return { doc: existing, created: false, collection: 'Customer', enterpriseId: existing.customerId };
   }
 
   const customerId = await generateEnterpriseId('customer', Customer, 'customerId');
-  const doc = await Customer.create({ customerId, ...updates });
+  const doc = await Customer.create({
+    customerId,
+    ...updates,
+    statusHistory: [{
+      status: body.status || 'Active',
+      changedAt: new Date(),
+      reason: 'Customer registered',
+    }],
+  });
   return { doc, created: true, collection: 'Customer', enterpriseId: customerId };
 }
 
@@ -229,12 +304,25 @@ router.post('/sync-parcel', async (req, res) => {
       return res.status(400).json({ success: false, error: '"item" is required.' });
     }
 
+    // Server-side weight validation
+    if (body.weight !== undefined && body.weight !== null && body.weight !== '') {
+      const numericWeight = parseFloat(body.weight);
+      if (isNaN(numericWeight) || numericWeight <= 0) {
+        return res.status(400).json({ success: false, error: '"weight" must be a positive number.' });
+      }
+    }
+
+    const senderEmail = body.sender?.email || body.senderEmail || '';
+    const recipientEmail = body.recipient?.email || body.recipientEmail || '';
+    const parcelCategory = body.accountCategory || categorizeEmail(senderEmail || recipientEmail);
+
     const update = {
       trackingNumber,
       senderName,
       receiverName,
       item: body.item,
-      ...pickDefined(body, ['weight', 'value', 'origin', 'destination', 'status', 'riderId', 'sellerId']),
+      accountCategory: parcelCategory,
+      ...pickDefined(body, ['weight', 'value', 'origin', 'destination', 'status', 'riderId', 'sellerId', 'recipientEmail', 'podPhoto']),
     };
 
     const existing = await Parcel.findOne({ trackingNumber });
@@ -257,6 +345,17 @@ router.post('/sync-parcel', async (req, res) => {
       created = true;
     }
 
+    // Broadcast SSE event to connected admin clients
+    sseBroadcaster.broadcast('parcel-synced', {
+      trackingNumber: doc.trackingNumber,
+      senderName,
+      receiverName,
+      status: doc.status,
+      accountCategory: doc.accountCategory,
+      created,
+      timestamp: new Date().toISOString(),
+    });
+
     return res.status(created ? 201 : 200).json({
       success: true,
       message: `Parcel ${created ? 'created' : 'updated'} successfully.`,
@@ -265,6 +364,70 @@ router.post('/sync-parcel', async (req, res) => {
   } catch (err) {
     logBridgeError('sync-parcel', err, body);
     return res.status(statusForError(err)).json({ success: false, error: 'Failed to sync parcel record.', details: err.message });
+  }
+});
+
+// ══════════════════════════════════════════════════════════════════════
+// POST /api/bridge/sync-issue
+// Android Issue.js -> Web Issue.js
+// ══════════════════════════════════════════════════════════════════════
+router.post('/sync-issue', async (req, res) => {
+  const body = req.body || {};
+  try {
+    const ticketId = (body.ticketId || '').toString().trim().toUpperCase();
+    const trackingNumber = (body.trackingNumber || '').toString().trim().toUpperCase();
+
+    if (!ticketId || !trackingNumber) {
+      return res.status(400).json({ success: false, error: '"ticketId" and "trackingNumber" are required.' });
+    }
+
+    const issueCategory = body.accountCategory || categorizeEmail(body.reporterEmail || '');
+
+    const update = {
+      ticketId,
+      trackingNumber,
+      category: body.category || 'Other',
+      description: body.description || '',
+      evidenceImages: Array.isArray(body.evidenceImages) ? body.evidenceImages : (body.evidenceImages ? [body.evidenceImages] : []),
+      reporterName: body.reporterName || 'Customer',
+      reporterEmail: body.reporterEmail || '',
+      reporterPhone: body.reporterPhone || '',
+      reporterRole: body.reporterRole || 'customer',
+      status: body.status || 'Open',
+      accountCategory: issueCategory,
+      adminNotes: body.adminNotes || '',
+      updatedAt: new Date(),
+    };
+
+    let doc = await Issue.findOne({ ticketId });
+    let created = false;
+    if (doc) {
+      Object.assign(doc, update);
+      await doc.save();
+    } else {
+      doc = await Issue.create(update);
+      created = true;
+    }
+
+    // Broadcast SSE event to connected admin clients
+    sseBroadcaster.broadcast('issue-synced', {
+      ticketId: doc.ticketId,
+      trackingNumber: doc.trackingNumber,
+      category: doc.category,
+      status: doc.status,
+      accountCategory: doc.accountCategory,
+      created,
+      timestamp: new Date().toISOString(),
+    });
+
+    return res.status(created ? 201 : 200).json({
+      success: true,
+      message: `Issue ticket ${ticketId} ${created ? 'created' : 'updated'} successfully.`,
+      data: doc,
+    });
+  } catch (err) {
+    logBridgeError('sync-issue', err, body);
+    return res.status(statusForError(err)).json({ success: false, error: 'Failed to sync issue record.', details: err.message });
   }
 });
 
@@ -303,6 +466,14 @@ router.post('/sync-location', async (req, res) => {
       { upsert: true, new: true, setDefaultsOnInsert: true, runValidators: true }
     );
 
+    // Broadcast SSE event to connected admin clients
+    sseBroadcaster.broadcast('location-synced', {
+      parcelId,
+      lat,
+      lng,
+      timestamp: new Date().toISOString(),
+    });
+
     return res.status(200).json({
       success: true,
       message: 'Location telemetry synced successfully.',
@@ -315,3 +486,99 @@ router.post('/sync-location', async (req, res) => {
 });
 
 module.exports = router;
+
+// ── RECEIVE STATUS: Rider status transitions from Android ────────────────
+// Accepts rider terminal slider swipes (Out for Delivery, Delivered, Returning, Returned)
+router.post('/receive-status', async (req, res) => {
+  try {
+    const { trackingId, status, riderId, riderName, podPhoto, timestamp } = req.body;
+    if (!trackingId || !status) {
+      return res.status(400).json({ success: false, error: '"trackingId" and "status" are required.' });
+    }
+
+    const parcel = await Parcel.findOne({ trackingNumber: trackingId });
+    if (!parcel) {
+      return res.status(404).json({ success: false, error: `Parcel not found for tracking: ${trackingId}` });
+    }
+
+    const allowedStatuses = ['Pending', 'Picked Up', 'In Transit', 'Out for Delivery', 'Delivered', 'Returning', 'Returned', 'Cancelled'];
+    if (!allowedStatuses.includes(status)) {
+      return res.status(400).json({ success: false, error: `Invalid status: ${status}. Allowed: ${allowedStatuses.join(', ')}` });
+    }
+
+    parcel.status = status;
+    if (podPhoto) parcel.podPhoto = podPhoto;
+    parcel.events.push({
+      timestamp: timestamp || new Date().toISOString(),
+      location: parcel.destination || '',
+      status: status,
+      description: `Status updated to ${status} via Android bridge`,
+    });
+    await parcel.save();
+
+    sseBroadcaster.broadcast('parcel-synced', {
+      trackingNumber: parcel.trackingNumber,
+      status: parcel.status,
+      updatedAt: new Date().toISOString(),
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: `Parcel status updated to "${status}".`,
+      data: { trackingNumber: parcel.trackingNumber, status: parcel.status },
+    });
+  } catch (err) {
+    logBridgeError('receive-status', err, req.body);
+    return res.status(500).json({ success: false, error: 'Failed to receive status update.', details: err.message });
+  }
+});
+
+// ── RECEIVE ISSUE STATUS: Admin investigation status push to Android ─────
+router.post('/receive-issue-status', async (req, res) => {
+  try {
+    const { ticketId, status, adminNotes } = req.body;
+    if (!ticketId || !status) {
+      return res.status(400).json({ success: false, error: '"ticketId" and "status" are required.' });
+    }
+
+    const issue = await Issue.findOne({ ticketId });
+    if (!issue) {
+      return res.status(404).json({ success: false, error: `Issue not found for ticket: ${ticketId}` });
+    }
+
+    const allowedStatuses = ['Open', 'Under Investigation', 'Resolved', 'Closed'];
+    if (!allowedStatuses.includes(status)) {
+      return res.status(400).json({ success: false, error: `Invalid status: ${status}. Allowed: ${allowedStatuses.join(', ')}` });
+    }
+
+    issue.status = status;
+    if (adminNotes) issue.adminNotes = adminNotes;
+    if (status === 'Resolved' || status === 'Closed') issue.resolvedAt = new Date();
+    await issue.save();
+
+    sseBroadcaster.broadcast('issue-status-updated', {
+      ticketId: issue.ticketId,
+      status: issue.status,
+      updatedAt: new Date().toISOString(),
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: `Issue ${ticketId} status updated to "${status}".`,
+      data: { ticketId: issue.ticketId, status: issue.status },
+    });
+  } catch (err) {
+    logBridgeError('receive-issue-status', err, req.body);
+    return res.status(500).json({ success: false, error: 'Failed to receive issue status update.', details: err.message });
+  }
+});
+
+// ── BRIDGE HEALTH CHECK ─────────────────────────────────────────────────
+router.get('/health', (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: 'Bridge operational',
+    timestamp: new Date().toISOString(),
+    routes: ['sync-user', 'sync-parcel', 'sync-issue', 'sync-location', 'receive-status', 'receive-issue-status'],
+  });
+});

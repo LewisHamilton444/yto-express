@@ -15,6 +15,11 @@ const CustomerSchema = new mongoose.Schema({
   accountCategory: { type: String, enum: ['REAL', 'DEMO'], default: 'REAL' },
   status:          { type: String, default: 'Active' },
   source:          { type: String, default: 'mobile-app' },
+  statusHistory: [{
+    status: String,
+    changedAt: { type: Date, default: Date.now },
+    reason:    { type: String, default: '' },
+  }],
 }, { timestamps: true });
 
 module.exports = mongoose.model('Customer', CustomerSchema);

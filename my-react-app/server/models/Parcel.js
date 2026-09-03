@@ -4,6 +4,7 @@ const parcelSchema = new mongoose.Schema({
     trackingNumber: { type: String, required: true, unique: true },
     senderName: { type: String, required: true },
     receiverName: { type: String, required: true },
+    recipientEmail: { type: String, default: '' },
     item: { type: String, required: true },
     weight: String,
     value: String,
@@ -12,6 +13,7 @@ const parcelSchema = new mongoose.Schema({
     status: { type: String, default: 'Pending' },
     riderId: { type: String, default: '' },
     sellerId: { type: String, default: '' },
+    podPhoto: { type: String, default: '' },
     events: [{ 
         time: String, 
         event: String, 
