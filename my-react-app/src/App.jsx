@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { setAuthToken, getAuthToken } from './services/api';
 import { isDemoEmail } from './demoUtils';
 import { ToastProvider } from './components/ui/ToastContext';
+import ErrorBoundary from './components/ui/ErrorBoundary';
 
 import LoginPage from './LoginPage';
 import AnalyticsDashboard from "./AnalyticsDashboard"
@@ -65,6 +66,10 @@ function App() {
     return null;
   });
   const [activePage, setActivePage] = useState('dashboard');
+  // Bumped by the error boundary's "Retry" button to force a fresh remount
+  // of the current page (the boundary key changes -> React throws the old
+  // tree away and re-runs the page from scratch).
+  const [retryNonce, setRetryNonce] = useState(0);
 
   // Handle session expiration from apiFetch interceptor
   useState(() => {
@@ -93,16 +98,22 @@ function App() {
   return (
     <div style={{ flex: 1 }}>
       <ToastProvider>
-        <PageComponent
-          activePage={activePage}
-          setActivePage={setActivePage}
-          currentUser={currentUser}
-          onLogout={() => {
-            setAuthToken(null);
-            setCurrentUser(null);
-            setActivePage('dashboard');
-          }}
-        />
+        <ErrorBoundary
+          key={`${activePage}:${retryNonce}`}
+          onReset={() => setRetryNonce(n => n + 1)}
+          onHome={() => { setActivePage('dashboard'); setRetryNonce(n => n + 1); }}
+        >
+          <PageComponent
+            activePage={activePage}
+            setActivePage={setActivePage}
+            currentUser={currentUser}
+            onLogout={() => {
+              setAuthToken(null);
+              setCurrentUser(null);
+              setActivePage('dashboard');
+            }}
+          />
+        </ErrorBoundary>
       </ToastProvider>
     </div>
   );

@@ -32,7 +32,10 @@ const ConnectionHistoryChart = () => {
 
             if (historyRes.ok) {
                 const historyData = await historyRes.json();
-                setHistory(historyData);
+                // Guard against non-array responses (error payloads, {}) —
+                // buildChartData() calls history.forEach and used to crash the
+                // whole dashboard when the endpoint didn't return an array.
+                setHistory(Array.isArray(historyData) ? historyData : []);
             }
         } catch (err) {
             console.error('Error fetching SSE history:', err);
@@ -46,12 +49,13 @@ const ConnectionHistoryChart = () => {
         if (history.length === 0) return [];
 
         const grouped = {};
-        history.forEach(entry => {
-            const minute = entry.timestamp.slice(0, 16); // YYYY-MM-DDTHH:MM
+        (Array.isArray(history) ? history : []).forEach(entry => {
+            const ts = typeof entry?.timestamp === 'string' ? entry.timestamp : '';
+            const minute = ts.slice(0, 16); // YYYY-MM-DDTHH:MM
             if (!grouped[minute]) {
                 grouped[minute] = { count: 0, events: 0 };
             }
-            grouped[minute].count = Math.max(grouped[minute].count, entry.count);
+            grouped[minute].count = Math.max(grouped[minute].count, Number(entry.count) || 0);
             grouped[minute].events++;
         });
 

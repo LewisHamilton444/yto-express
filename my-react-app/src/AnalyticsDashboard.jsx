@@ -371,18 +371,26 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
     return () => { cancelled = true; };
   }, []);
 
-  const totalParcels    = dashboardStats ? dashboardStats.totalParcels   : parcels.length;
-  const deliveredCount  = dashboardStats ? dashboardStats.deliveredCount : parcels.filter(p => p.status === 'Delivered').length;
+  // Stats endpoint responses have drifted before (missing/renamed fields) and
+  // used to crash the dashboard via unconditional `.toFixed()` on undefined —
+  // every nested field is guarded so a partial payload falls back to the
+  // locally-computed numbers instead of throwing.
+  const hasNum = (v) => typeof v === 'number' && Number.isFinite(v);
+
+  const totalParcels    = hasNum(dashboardStats?.totalParcels) ? dashboardStats.totalParcels : parcels.length;
+  const deliveredCount  = hasNum(dashboardStats?.deliveredCount) ? dashboardStats.deliveredCount : parcels.filter(p => p.status === 'Delivered').length;
   const returnedCount   = parcels.filter(p => isReturnStatus(p.status)).length;
-  const deliverySuccessPct = dashboardStats ? dashboardStats.deliverySuccessPct.toFixed(1)
+  const deliverySuccessPct = hasNum(dashboardStats?.deliverySuccessPct)
+    ? dashboardStats.deliverySuccessPct.toFixed(1)
     : totalParcels ? ((deliveredCount / totalParcels) * 100).toFixed(1) : '0.0';
   const returnRatePct      = totalParcels ? ((returnedCount / totalParcels) * 100).toFixed(1) : '0.0';
 
-  const totalRidersCount  = dashboardStats ? dashboardStats.totalRiders       : riders.length;
-  const activeRidersCount = dashboardStats ? dashboardStats.activeRidersCount : riders.filter(r => r.status === 'Active').length;
-  const avgRating   = dashboardStats ? dashboardStats.avgRiderRating.toFixed(1)
+  const totalRidersCount  = hasNum(dashboardStats?.totalRiders) ? dashboardStats.totalRiders : riders.length;
+  const activeRidersCount = hasNum(dashboardStats?.activeRidersCount) ? dashboardStats.activeRidersCount : riders.filter(r => r.status === 'Active').length;
+  const avgRating   = hasNum(dashboardStats?.avgRiderRating)
+    ? dashboardStats.avgRiderRating.toFixed(1)
     : riders.length ? (riders.reduce((s, r) => s + (r.rating || 0), 0) / riders.length).toFixed(1) : '0.0';
-  const totalRides  = dashboardStats ? dashboardStats.totalDeliveries : riders.reduce((s, r) => s + (r.deliveries || 0), 0);
+  const totalRides  = hasNum(dashboardStats?.totalDeliveries) ? dashboardStats.totalDeliveries : riders.reduce((s, r) => s + (r.deliveries || 0), 0);
 
   const last7 = useMemo(() => buildLast7Days(parcels), [parcels]);
   const createdVals  = last7.map(d => d.created);
