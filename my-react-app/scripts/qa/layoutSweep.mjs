@@ -1,7 +1,8 @@
 // QA layout sweep — headless-Chrome geometry + crash sweep of the admin portal.
 //
-//   npm run qa:layout            full matrix (default widths below)
-//   npm run qa:layout -- 1366 1280 1080 960 902   custom widths
+//   npm run qa:layout                full matrix (default widths below)
+//   npm run qa:layout -- 1366 ...     custom widths
+//   npm run qa:layout -- --no-int     skip per-page action clicks (faster)
 //
 // What it does:
 //   1. Starts an in-process seed API server (see ./seedServer.mjs) so every
@@ -13,7 +14,12 @@
 //   4. For every sidebar page x every viewport width it measures:
 //        - horizontal overflow (document scrollWidth - clientWidth)
 //        - whether the ErrorBoundary recovery card is showing (page crash)
+//        - vertical fit: content taller than the viewport must be reachable
+//          by scrolling (the page or the .ad-main pane), not silently clipped
 //        - runtime console errors captured via CDP Log/Runtime events
+//        - interaction probe: clicks up to 3 safe content actions (Add / New /
+//          Export / Print / Download / Generate / Refresh / Register) on each
+//          page and re-asserts crash/overflow/errors after every click
 //   5. Prints a pass/fail table and exits non-zero on any failure.
 //
 // This catches exactly the class of bug `vite build` cannot: pages that
@@ -130,6 +136,7 @@ class CDP {
 async function main() {
   const widths = process.argv.slice(2).map(Number).filter((n) => n > 0 && Number.isInteger(n));
   const WIDTHS = widths.length ? [...new Set(widths)] : DEFAULT_WIDTHS;
+  const NO_INT = process.argv.includes('--no-int');   // skip per-page action clicks (faster)
   const chromePath = findChrome();
   const token = mintToken();
 
@@ -198,6 +205,8 @@ async function main() {
   await cdp.send('Page.enable');
   await cdp.send('Runtime.enable');
   await cdp.send('Log.enable');
+  // Never let a stray window.alert/confirm block the sweep (auto-dismiss).
+  cdp.on('Page.javascriptDialogOpening', () => { cdp.send('Page.handleJavaScriptDialog', { accept: false }).catch(() => {}); });
   await cdp.send('Page.navigate', { url: devUrl });
   await waitFor('.login-card-title, .ad-sidebar', 20000);
 
@@ -269,10 +278,73 @@ async function main() {
         crash: document.body.innerText.indexOf('This page hit an unexpected error') !== -1,
         head: (document.querySelector('.ad-main h1, h1') || { textContent: '' }).textContent.trim().slice(0, 46),
       }))()`);
+
+      // Vertical fit: when content is taller than the viewport, at least one
+      // scroller (the page itself or the .ad-main pane) must actually scroll
+      // to its bottom — otherwise content is clipped and unreachable (the
+      // short-screen defect class this sweep is meant to prevent).
+      const vfit = await evalJs(`(() => {
+        const cands = [document.scrollingElement, document.querySelector('.ad-main')].filter(Boolean);
+        const stuck = [];
+        let needsScroll = false;
+        for (const el of cands) {
+          if (el.scrollHeight <= el.clientHeight + 1) continue;
+          needsScroll = true;
+          const before = el.scrollTop;
+          el.scrollTop = el.scrollHeight;
+          if (el.scrollTop <= before) stuck.push(el === document.scrollingElement ? 'page' : 'main');
+          el.scrollTop = 0;
+        }
+        return { needsScroll, stuck };
+      })()`);
+      const clipped = !!vfit && vfit.needsScroll && vfit.stuck.length > 0;
+
+      // Interaction probe: click up to 3 safe content actions (Add / New /
+      // Export / Print / Download / Generate / Refresh / Register) inside the
+      // page area, then re-assert crash/overflow/errors after each click so
+      // a modal or handler that only breaks on interaction is caught too.
+      const ACTION_RE = '/^(add|new|export|print|download|generate|refresh|register)(\\s|$)/i';
+      const intCount = NO_INT ? 0 : Number(await evalJs(`(() => {
+        const host = document.querySelector('.ad-main') || document.body;
+        const re = ${ACTION_RE};
+        return [...host.querySelectorAll('button')]
+          .filter((b) => { const cs = getComputedStyle(b); return !b.disabled && b.offsetParent !== null && cs.visibility !== 'hidden' && re.test((b.innerText || '').trim()); })
+          .length;
+      })()`));
+      const intErrors = [];
+      for (let i = 0; i < Math.min(intCount, 3); i++) {
+        const before = errors.length;
+        await evalJs(`(() => {
+          const host = document.querySelector('.ad-main') || document.body;
+          const re = ${ACTION_RE};
+          const btns = [...host.querySelectorAll('button')]
+            .filter((b) => { const cs = getComputedStyle(b); return !b.disabled && b.offsetParent !== null && cs.visibility !== 'hidden' && re.test((b.innerText || '').trim()); });
+          if (!btns[${i}]) return 'gone';
+          btns[${i}].click();
+          return 'ok';
+        })()`);
+        await sleep(650);
+        // Dismiss any modal the action opened (shared Modal closes on Escape).
+        await evalJs(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); 'x'`);
+        await sleep(150);
+        const im = await evalJs(`(() => ({
+          se: document.scrollingElement ? document.scrollingElement.scrollWidth : 0,
+          ce: document.documentElement.clientWidth,
+          crash: document.body.innerText.indexOf('This page hit an unexpected error') !== -1,
+        }))()`);
+        const fresh = errors.slice(before);
+        if (im.crash) intErrors.push('click ' + (i + 1) + ' crashed');
+        if ((im.se || 0) > (im.ce || 0)) intErrors.push('click ' + (i + 1) + ' overflow+' + ((im.se || 0) - (im.ce || 0)));
+        if (fresh.length) intErrors.push('click ' + (i + 1) + ': ' + fresh.slice(0, 2).join(' | '));
+      }
+
       rows.push({
         width, label: item.label,
         overflow: Math.max(0, (m.se || 0) - (m.ce || 0)),
         crash: !!m.crash,
+        clipped,
+        intClicks: NO_INT ? 0 : Math.min(intCount, 3),
+        intErrors,
         errs: cres === 'noleaf' ? ['LEAF NOT FOUND'] : errors.slice(pageMarker),
         head: m.head,
       });
@@ -293,14 +365,23 @@ async function main() {
       const flags = [];
       if (r.overflow > 0) flags.push('OVERFLOW+' + r.overflow);
       if (r.crash) flags.push('CRASH');
+      if (r.clipped) flags.push('CLIPPED');
       if (r.errs && r.errs.length) flags.push('ERR');
+      if (r.intErrors && r.intErrors.length) flags.push('INT-ERR');
       if (!flags.length) return pad('ok', 22);
-      failures.push(`${label} @ ${w}px: ${flags.join(', ')}${r.errs && r.errs.length ? ' — ' + r.errs.slice(0, 2).join(' | ') : ''}`);
+      const detail = [];
+      if (r.errs && r.errs.length) detail.push(r.errs.slice(0, 2).join(' | '));
+      if (r.intErrors && r.intErrors.length) detail.push(r.intErrors.slice(0, 2).join('; '));
+      failures.push(`${label} @ ${w}px: ${flags.join(', ')}${detail.length ? ' — ' + detail.join(' || ') : ''}`);
       return pad(flags.join(' '), 22);
     }).join('');
     log('  ' + pad(label, 38) + ' ' + cellText);
   }
-  if (!failures.length) log('\nAll ' + rows.length + ' page-width checks clean: zero overflow, zero crashes, zero console errors.');
+  const distinctPages = new Set(rows.map((r) => r.label)).size;
+  const totalClicks = rows.reduce((n, r) => n + (r.intClicks || 0), 0);
+  const clickPages = new Set(rows.filter((r) => (r.intClicks || 0) > 0).map((r) => r.label)).size;
+  if (!NO_INT) log('  action clicks: ' + totalClicks + ' executed across ' + clickPages + '/' + distinctPages + ' pages (max 3 per page-width).');
+  if (!failures.length) log('\nAll ' + rows.length + ' page-width checks clean: zero overflow, zero crashes, zero clipped panes, zero console errors' + (NO_INT ? '.' : ' — and every action click stayed clean.'));
   else {
     log('\n' + failures.length + ' failure(s):');
     failures.forEach((f) => log('  - ' + f));
