@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import Modal from '../components/ui/Modal';
+import Tooltip from '../components/ui/Tooltip';
 import { FileText } from 'lucide-react';
 
 const s = {
@@ -166,9 +167,13 @@ const ReviewModal = ({ item, type, onClose, onApprove, onReject }) => {
           )}
 
           <div style={s.actions}>
+            <Tooltip content="Decline this application — a reason is required">
             <button style={s.btnDanger} onClick={() => setRejecting(true)}>Reject</button>
+            </Tooltip>
             <button style={s.btnOutline} onClick={handleClose}>Close</button>
+            <Tooltip content="Approve the registration and email login credentials to the applicant">
             <button style={s.btnPrimary} onClick={() => onApprove(item)}>Approve &amp; Send Credentials</button>
+            </Tooltip>
           </div>
         </div>
     </Modal>

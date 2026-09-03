@@ -250,17 +250,17 @@ export default function ManageIssues({ currentUser }) {
                   return (
                     <tr key={issue._id || idx} className="border-b border-slate-100 text-[13px] transition hover:bg-slate-50">
                       <td className="px-4 py-3.5 font-extrabold text-brand-purple">{issue.ticketId}</td>
-                      <td className="px-4 py-3.5"><Badge tone={ACCOUNT_CATEGORY_TONE[catKey]}>{ACCOUNT_CATEGORY_LABEL[catKey]}</Badge></td>
+                      <td className="px-4 py-3.5"><Badge tone={ACCOUNT_CATEGORY_TONE[catKey]} hint={catKey === 'REAL' ? 'Live ticket from the production database' : 'Demo/test record — not a live production ticket'}>{ACCOUNT_CATEGORY_LABEL[catKey]}</Badge></td>
                       <td className="px-4 py-3.5 font-bold text-brand-orange">{issue.trackingNumber}</td>
                       <td className="px-4 py-3.5 font-semibold text-gray-700">{issue.category}</td>
                       <td className="px-4 py-3.5">
                         <div className="font-bold text-gray-800">{issue.reporterName || 'Customer'}</div>
                         <div className="text-[11px] text-gray-500">{issue.reporterEmail || issue.reporterPhone || 'Mobile App'}</div>
                       </td>
-                      <td className="px-4 py-3.5"><Badge tone={STATUS_TONE[issue.status] || 'red'}>{issue.status}</Badge></td>
+                      <td className="px-4 py-3.5"><Badge tone={STATUS_TONE[issue.status] || 'red'} hint={{ Open: 'Reported — awaiting first action', Investigating: 'Being investigated by operations staff', Resolved: 'Closed after a resolution was confirmed' }[issue.status]}>{issue.status}</Badge></td>
                       <td className="px-4 py-3.5">
                         {issue.evidenceImages && issue.evidenceImages.length > 0 ? (
-                          <Badge tone="purple" icon={Camera}>{issue.evidenceImages.length} Photo{issue.evidenceImages.length > 1 ? 's' : ''}</Badge>
+                          <Badge tone="purple" icon={Camera} hint={`${issue.evidenceImages.length} attached evidence image${issue.evidenceImages.length > 1 ? 's' : ''} — click View & Resolve to inspect`}>{issue.evidenceImages.length} Photo{issue.evidenceImages.length > 1 ? 's' : ''}</Badge>
                         ) : (
                           <span className="text-[11px] text-gray-400">None</span>
                         )}

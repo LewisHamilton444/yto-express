@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { apiFetch, parcelsApi, ridersApi, sellersApi } from './services/api';
 import { useToast } from './components/ui/ToastContext';
+import Tooltip from './components/ui/Tooltip';
 import { PARCEL_STATUS_COLORS } from './components/ui/statusColors';
 import StatusBadge from './components/ui/StatusBadge';
 import { Plus, Pencil, X, Search, Bike } from 'lucide-react';
@@ -502,7 +503,9 @@ export default function ProcessParcelInformation() {
                   </div>
                   <div className="ppi-delete-row-right">
                     <ParcelStatusBadge status={p.status} />
+                    <Tooltip content="Delete this parcel record — a confirmation dialog will appear">
                     <button className="ppi-btn ppi-btn--danger" onClick={() => setDeleteConfirm(p)}>Delete</button>
+                    </Tooltip>
                   </div>
                 </div>
               ))}
@@ -642,7 +645,9 @@ export default function ProcessParcelInformation() {
             </div>
             <div className="ppi-modal-foot">
               <button className="ppi-btn ppi-btn--ghost" onClick={() => setDeleteConfirm(null)}>Cancel</button>
+              <Tooltip content="Permanently delete this parcel record — cannot be undone">
               <button className="ppi-btn ppi-btn--danger" onClick={handleDeleteConfirm}>Yes, Delete</button>
+              </Tooltip>
             </div>
           </div>
         </div>

@@ -1,6 +1,7 @@
 'use client';
 import React, { useEffect, useRef, useState } from 'react';
 import { buildLiveAlerts } from './alertsFeed';
+import Tooltip from './components/ui/Tooltip';
 
 const s = {
   wrap:   { position: 'relative' },
@@ -33,12 +34,14 @@ export default function NotificationBell({ riders = [], pendingCount = 0, onNavi
 
   return (
     <div style={s.wrap} ref={wrapRef}>
-      <button style={s.bellBtn} onClick={() => setOpen(v => !v)} aria-label="Notifications">
-        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#390955" strokeWidth="2">
-          <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>
-        </svg>
-        {totalCount > 0 && <span style={s.badge}>{totalCount > 9 ? '9+' : totalCount}</span>}
-      </button>
+      <Tooltip content={totalCount > 0 ? `Notifications — ${totalCount} unread alert${totalCount !== 1 ? 's' : ''} & pending registration${pendingCount !== 1 ? 's' : ''}` : 'Notifications — no active alerts' }>
+        <button style={s.bellBtn} onClick={() => setOpen(v => !v)} aria-label="Notifications">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#390955" strokeWidth="2">
+            <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+          </svg>
+          {totalCount > 0 && <span style={s.badge}>{totalCount > 9 ? '9+' : totalCount}</span>}
+        </button>
+      </Tooltip>
 
       {open && (
         <div style={s.dropdown}>

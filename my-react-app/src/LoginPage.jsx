@@ -12,6 +12,7 @@ const LoginPage = ({ onLogin }) => {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [shaking, setShaking] = useState(false);
+  const [leaving, setLeaving] = useState(false);
   const [apiHealth, setApiHealth] = useState('checking');
 
   // Caps Lock detection
@@ -30,17 +31,50 @@ const LoginPage = ({ onLogin }) => {
     return () => clearTimeout(timer);
   }, [error]);
 
-  // Live backend health probe
+  // Live backend health probe — tolerant of Render free-tier cold starts.
+  // The first attempt can abort quickly; if it fails we retry with a much
+  // longer window before ever declaring the API offline (a sleeping backend
+  // wakes in ~30-60s). The pill stays "Connecting..." between attempts so a
+  // cold start never falsely flashes red.
   useEffect(() => {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 6000);
-    fetch(API_ROOT, { signal: ctrl.signal })
-      .then((res) => setApiHealth(res.ok ? 'online' : 'offline'))
-      .catch(() => setApiHealth('offline'))
-      .finally(() => clearTimeout(timer));
+    let cancelled = false;
+    let ctrl = null;
+    let activeTimer = null;
+
+    const tryOnce = (index) => {
+      if (cancelled) return;
+      const attempts = [
+        { timeout: 10000, pauseMs: 800 },  // fast path: warm backend answers in <1s
+        { timeout: 45000, pauseMs: 0 },    // cold start: give Render time to wake
+      ];
+      if (index >= attempts.length) {
+        setApiHealth('offline');
+        return;
+      }
+      ctrl = new AbortController();
+      const { timeout, pauseMs } = attempts[index];
+      activeTimer = setTimeout(() => ctrl.abort(), timeout);
+      fetch(API_ROOT, { signal: ctrl.signal })
+        .then((res) => {
+          if (!cancelled) setApiHealth(res.ok ? 'online' : 'offline');
+        })
+        .catch(() => {
+          if (cancelled) return;
+          clearTimeout(activeTimer);
+          if (pauseMs > 0) {
+            activeTimer = setTimeout(() => tryOnce(index + 1), pauseMs);
+          } else {
+            tryOnce(index + 1);
+          }
+        })
+        .finally(() => { if (ctrl && !cancelled) clearTimeout(activeTimer); });
+    };
+
+    tryOnce(0);
     return () => {
-      clearTimeout(timer);
-      ctrl.abort();
+      cancelled = true;
+      clearTimeout(activeTimer);
+      if (ctrl) ctrl.abort();
     };
   }, []);
 
@@ -54,9 +88,12 @@ const LoginPage = ({ onLogin }) => {
       const data = await adminLogin(email.trim().toLowerCase(), password, rememberMe);
       setLoading(false);
       setSuccess(true);
+      // Pause on the success check, then play the page exit (fade + slide up)
+      // before handing off to the dashboard. Timings mirror the CSS below.
+      window.setTimeout(() => setLeaving(true), 260);
       window.setTimeout(() => {
         if (onLogin) onLogin(data);
-      }, 450);
+      }, 720);
     } catch (err) {
       setError(err.message || 'Cannot connect to server.');
       setLoading(false);
@@ -80,7 +117,11 @@ const LoginPage = ({ onLogin }) => {
     .join(' ');
 
   return (
-    <div className="login-root" role="main" aria-label="YTO Express Admin Login">
+    <div
+      className={`login-root${leaving ? ' login-root--leaving' : ''}`}
+      role="main"
+      aria-label="YTO Express Admin Login"
+    >
       {/* Decorative ambient glows floating over the photo */}
       <div className="login-ornaments" aria-hidden="true">
         <span className="login-orb login-orb--violet" />
@@ -91,7 +132,7 @@ const LoginPage = ({ onLogin }) => {
       <header className="login-page-header">
         <div className="login-header-brand anim-fade-up anim-d1">
           <div className="login-logo-badge">
-            <img src="/assets/yto_express_logo.png" alt="YTO Express" className="login-official-logo" />
+            <img src="/assets/yto_express_logo_mark.png" alt="YTO Express" className="login-official-logo" />
           </div>
           <div className="login-header-brand-text">
             <h1 className="login-brand-name">

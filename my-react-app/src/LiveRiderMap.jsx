@@ -10,6 +10,7 @@ import { vehicleGlyphSvg, vehicleTypeLabel } from './components/ui/vehicleIcons'
 import { VehicleIcon } from './components/ui/vehicleIcons';
 import { AlertTriangle, CircleDot, Flame, Map, Package, RefreshCw, Satellite, TrafficCone, X } from 'lucide-react';
 import { ridersApi, parcelsApi } from './services/api';
+import Tooltip from './components/ui/Tooltip';
 import useSSE from './services/useSSE';
 
 const TILE_LAYERS = {
@@ -383,7 +384,9 @@ export default function LiveRiderMap() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {usingMock && <span style={{ fontSize: 10, fontWeight: 700, color: '#c2410c', background: '#fff4ec', padding: '3px 9px', borderRadius: 20 }}>Showing sample Luzon data (backend unreachable)</span>}
           {lastUpdated && <span style={{ fontSize: 10, color: '#9b82b2', fontFamily: 'monospace' }}>Updated {lastUpdated}</span>}
+          <Tooltip content="Re-fetch the latest rider and parcel positions">
           <button onClick={fetchData} style={{ padding: '5px 12px', background: 'white', border: '1.5px solid #e0d5f0', borderRadius: 8, fontSize: 11, fontWeight: 700, color: '#390955', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}><RefreshCw size={12} aria-hidden="true" /> Refresh</button>
+          </Tooltip>
         </div>
       </div>
 
@@ -394,16 +397,26 @@ export default function LiveRiderMap() {
             {topAlert.type} — {topAlert.riderName} in {topAlert.zone} ({topAlert.minutesAgo} min ago)
             {activeAlerts.length > 1 && <span style={{ fontWeight: 500, opacity: 0.75 }}> · +{activeAlerts.length - 1} more active alert{activeAlerts.length - 1 !== 1 ? 's' : ''}</span>}
           </span>
+          <Tooltip content="Dismiss this alert">
           <button onClick={() => setDismissedAlertIds(prev => [...prev, topAlert.id])} aria-label="Dismiss alert" style={{ background: 'none', border: 'none', cursor: 'pointer', color: topAlert.severity === 'danger' ? '#991b1b' : '#c2410c', lineHeight: 1, display: 'inline-flex', padding: 2 }}><X size={16} aria-hidden="true" /></button>
+          </Tooltip>
         </div>
       )}
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 20px', borderBottom: '1px solid rgba(57,9,85,0.07)', flexWrap: 'wrap' }}>
         <span style={{ fontSize: 11, fontWeight: 700, color: '#9b82b2', textTransform: 'uppercase', letterSpacing: 0.4 }}>Map Layers</span>
+        <Tooltip content="Show live traffic conditions overlay">
         <button style={{ ...layerBtn(layers.traffic), display: 'inline-flex', alignItems: 'center', gap: 5 }} onClick={() => toggleLayer('traffic')}><TrafficCone size={12} aria-hidden="true" /> Traffic</button>
+        </Tooltip>
+        <Tooltip content="Switch to satellite imagery base layer">
         <button style={{ ...layerBtn(layers.satellite), display: 'inline-flex', alignItems: 'center', gap: 5 }} onClick={() => toggleLayer('satellite')}><Satellite size={12} aria-hidden="true" /> Satellite</button>
+        </Tooltip>
+        <Tooltip content="Toggle hub geofence zone circles">
         <button style={{ ...layerBtn(layers.geofences), display: 'inline-flex', alignItems: 'center', gap: 5 }} onClick={() => toggleLayer('geofences')}><CircleDot size={12} aria-hidden="true" /> Geofences</button>
+        </Tooltip>
+        <Tooltip content="Show parcel density heat layer">
         <button style={{ ...layerBtn(layers.heatmap), display: 'inline-flex', alignItems: 'center', gap: 5 }} onClick={() => toggleLayer('heatmap')}><Flame size={12} aria-hidden="true" /> Heatmap</button>
+        </Tooltip>
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 20px', borderBottom: '1px solid rgba(57,9,85,0.07)', flexWrap: 'wrap' }}>
@@ -464,7 +477,8 @@ export default function LiveRiderMap() {
               {hubMetrics.map(h => {
                 const colors = HUB_STATUS_COLORS[h.status];
                 return (
-                  <div key={h.hubId} style={{ border: '1.5px solid rgba(57,9,85,0.1)', borderRadius: 10, padding: '10px 12px', cursor: 'pointer' }}
+                  <Tooltip key={h.hubId} content={`${h.hubName} — ${h.activeParcelsCount} parcel${h.activeParcelsCount !== 1 ? 's' : ''} inside a ${h.geofenceRadius} km geofence · ${h.assignedRidersCount} rider${h.assignedRidersCount !== 1 ? 's' : ''} assigned. Click for full hub detail.`}>
+                  <div style={{ border: '1.5px solid rgba(57,9,85,0.1)', borderRadius: 10, padding: '10px 12px', cursor: 'pointer' }}
                     onClick={() => setSelectedHub(h.hubId)}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <span style={{ fontSize: 12, fontWeight: 700, color: '#1a0a2e' }}>{h.hubName}</span>
@@ -472,6 +486,7 @@ export default function LiveRiderMap() {
                     </div>
                     <div style={{ fontSize: 11, color: '#9b82b2', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}><Package size={11} aria-hidden="true" /> {h.activeParcelsCount} parcels · <VehicleIcon type="motorcycle" size={12} /> {h.assignedRidersCount} riders</div>
                   </div>
+                  </Tooltip>
                 );
               })}
               <div style={{ fontSize: 11, color: '#bbb', marginTop: 6, textAlign: 'center' }}>Click a hub, or hover/click a moving rider on the map.</div>
@@ -482,7 +497,9 @@ export default function LiveRiderMap() {
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
                 <div style={{ fontSize: 15, fontWeight: 800, color: '#1a0a2e' }}>{hub.hubName}</div>
+                <Tooltip content="Close hub details">
                 <button onClick={() => setSelectedHub(null)} aria-label="Close hub details" style={{ width: 22, height: 22, borderRadius: 6, border: '1.5px solid rgba(57,9,85,0.15)', background: 'white', cursor: 'pointer', color: '#9b82b2', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><X size={13} aria-hidden="true" /></button>
+                </Tooltip>
               </div>
               <div style={{ fontSize: 11, color: '#9b82b2', marginBottom: 12, fontFamily: 'monospace' }}>{hub.hubId} · {hub.region}</div>
               <div style={statRow}><span style={{ color: '#888' }}>Status</span><span style={{ fontWeight: 700 }}>{hub.status}</span></div>
@@ -510,7 +527,9 @@ export default function LiveRiderMap() {
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
                 <div style={{ fontSize: 15, fontWeight: 800, color: '#1a0a2e', display: 'flex', alignItems: 'center', gap: 6 }}><VehicleIcon type={rider.vehicleType} size={16} /> {rider.fullName}</div>
+                <Tooltip content="Close rider details">
                 <button onClick={() => setSelectedRider(null)} aria-label="Close rider details" style={{ width: 22, height: 22, borderRadius: 6, border: '1.5px solid rgba(57,9,85,0.15)', background: 'white', cursor: 'pointer', color: '#9b82b2', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><X size={13} aria-hidden="true" /></button>
+                </Tooltip>
               </div>
               <div style={{ fontSize: 11, color: '#9b82b2', marginBottom: 12, fontFamily: 'monospace' }}>{rider.riderId}</div>
               <div style={statRow}><span style={{ color: '#888' }}>Vehicle Type</span><span style={{ fontWeight: 700 }}>{rider.vehicleType}</span></div>

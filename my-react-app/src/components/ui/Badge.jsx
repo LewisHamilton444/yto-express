@@ -1,4 +1,5 @@
 import React from 'react';
+import Tooltip from './Tooltip';
 
 // Tailwind tone palette shared by CustomerList / ManageIssues / ActivityLog
 // badges (account category, ticket status, role, evidence count, ...).
@@ -14,13 +15,17 @@ const TONE_CLASSES = {
   orange: 'bg-orange-50 text-brand-orange border-orange-200',
 };
 
-export default function Badge({ tone = 'slate', icon: Icon, children, className = '' }) {
-  return (
+export default function Badge({ tone = 'slate', icon: Icon, children, className = '', hint }) {
+  const pill = (
     <span
       className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${TONE_CLASSES[tone] || TONE_CLASSES.slate} ${className}`}
     >
       {Icon && <Icon size={11} strokeWidth={2.5} />}
       {children}
     </span>
+  );
+  if (!hint) return pill;
+  return (
+    <Tooltip content={hint}>{pill}</Tooltip>
   );
 }

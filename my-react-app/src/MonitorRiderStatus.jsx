@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { normalizeRider, mockRiders, RIDER_STATUS } from './sellerRiderData';
 import { ridersApi } from './services/api';
 import SimulatedFeedBadge from './components/ui/SimulatedFeedBadge';
+import Tooltip from './components/ui/Tooltip';
 import { VehicleIcon, vehicleGlyphSvg } from './components/ui/vehicleIcons';
 import { Archive, BatteryMedium, Check, Database, MapPin, RefreshCw, RotateCw, X } from 'lucide-react';
 
@@ -259,9 +260,11 @@ export default function MonitorRiderStatus({ currentUser }) {
         </div>
         <div style={{ display:'flex', alignItems:'center', gap:8 }}>
           {lastUpdated && <span style={{ fontSize:10, color:'#9b82b2', fontFamily:'monospace' }}>Updated {lastUpdated}</span>}
+          <Tooltip content="Re-fetch rider statuses from the server">
           <button onClick={fetchRiders} style={{ padding:'6px 14px', background:'white', border:'1.5px solid #e0d5f0', borderRadius:8, fontSize:11, fontWeight:700, color:'#390955', cursor:'pointer', display:'inline-flex', alignItems:'center', gap:6 }}>
             <RefreshCw size={13} aria-hidden="true" /> Refresh
           </button>
+          </Tooltip>
           {archivedCount > 0 && (
             <span style={{ display:'flex', alignItems:'center', gap:5, padding:'6px 12px', background:'rgba(127,140,141,0.1)', borderRadius:8, fontSize:11, fontWeight:700, color:'#7f8c8d' }}>
               <Archive size={13} aria-hidden="true" /> {archivedCount} Archived (hidden)

@@ -10,6 +10,7 @@ import { apiFetch, parcelsApi, ridersApi } from './services/api';
 import { exportToCSV } from './exportUtils';
 import useSSE from './services/useSSE';
 import './AnalyticsDashboard.css';
+import Tooltip from './components/ui/Tooltip';
 import yto_logo from './yto_express_logo.png';
 
 import ProcessSellerInformation         from "./ProcessSellerInformation";
@@ -509,9 +510,11 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
         aria-label="Main navigation"
       >
         <div className="ad-sidebar-header">
-          <button className="ad-sidebar-collapse-btn" onClick={toggleSidebar} aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'} title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
+          <Tooltip content={sidebarCollapsed ? 'Expand sidebar to full menu' : 'Collapse sidebar to icon rail'}>
+          <button className="ad-sidebar-collapse-btn" onClick={toggleSidebar} aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points={sidebarExpanded ? '15 18 9 12 15 6' : '9 18 15 12 9 6'} /></svg>
           </button>
+          </Tooltip>
           <div className="ad-sidebar-logo">
             <div className="ad-sidebar-logo-circle">
               <img src={yto_logo} alt="YTO Express" className="ad-sidebar-logo-img" onError={(e) => { e.target.src = 'https://via.placeholder.com/150?text=YTO'; }} />
@@ -603,6 +606,7 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
               </div>
               <div className="ed-header-controls">
                 {/* SSE Connection Count */}
+                <Tooltip content="Admin clients currently connected to the realtime dashboard feed">
                 <div style={{
                   display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px',
                   background: sseConnected ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)',
@@ -618,6 +622,7 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
                     {sseClientCount} connected
                   </span>
                 </div>
+                </Tooltip>
                 <div className="ed-select-container">
                   <select value={dateRange} onChange={e => setDateRange(e.target.value)}>
                     <option value="today">Today</option>
@@ -649,10 +654,12 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
                         <div className="ed-kpi-top">
                           <span className={`ed-kpi-icon-wrap ${kpi.tone}`}><Icon size={20} strokeWidth={2.25} /></span>
                           {hasTrend && (
-                            <span className={`ed-kpi-trend ${trendUp ? 'up' : 'down'}`} title="Week-over-week change in delivery success rate">
-                              {trendUp ? <TrendingUp size={12} strokeWidth={3} /> : <TrendingDown size={12} strokeWidth={3} />}
-                              {trendUp ? '+' : ''}{kpi.trend} pts
-                            </span>
+                            <Tooltip content={`${kpi.label}: change vs the previous week`}>
+                              <span className={`ed-kpi-trend ${trendUp ? 'up' : 'down'}`}>
+                                {trendUp ? <TrendingUp size={12} strokeWidth={3} /> : <TrendingDown size={12} strokeWidth={3} />}
+                                {trendUp ? '+' : ''}{kpi.trend} pts
+                              </span>
+                            </Tooltip>
                           )}
                         </div>
                         <div className="ed-kpi-body">
@@ -710,18 +717,24 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
                     )}
 
                     <div className="ed-chart-footer">
+                      <Tooltip content="Rider with the highest delivery success rate this period">
                       <div className="ed-footer-badge highlight">
                         <span className="ed-footer-badge-icon"><Trophy size={14} /></span>
                         <div><label>Top Performing Rider</label><strong>{peakRider}</strong></div>
                       </div>
+                      </Tooltip>
+                      <Tooltip content="Average of rider delivery ratings, out of 5">
                       <div className="ed-footer-badge">
                         <span className="ed-footer-badge-icon"><Star size={14} /></span>
                         <div><label>Average Delivery Rating</label><strong>{avgRating} / 5</strong></div>
                       </div>
+                      </Tooltip>
+                      <Tooltip content="Completed delivery rides recorded across all riders">
                       <div className="ed-footer-badge">
                         <span className="ed-footer-badge-icon"><Route size={14} /></span>
                         <div><label>Total Completed Rides</label><strong>{totalRides.toLocaleString()}</strong></div>
                       </div>
+                      </Tooltip>
                     </div>
                   </section>
 
@@ -765,15 +778,21 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
                     </div>
 
                     <div className="ed-action-bar">
+                      <Tooltip content="Open the full Manage Parcels page">
                       <button className="ed-action-btn primary" onClick={() => handleMenuClick('manage-parcels')}>
                         <ClipboardList size={15} /> Generate Full Report
                       </button>
+                      </Tooltip>
+                      <Tooltip content="Download the current parcel list as a PDF report">
                       <button className="ed-action-btn secondary" disabled={parcels.length === 0} onClick={() => dashboardExportPDF(parcels)}>
                         <Download size={15} /> Download PDF
                       </button>
+                      </Tooltip>
+                      <Tooltip content="Export the current parcel list as a CSV file">
                       <button className="ed-action-btn secondary" disabled={parcels.length === 0} onClick={() => dashboardExportCSV(parcels)}>
                         <Share2 size={15} /> Export CSV
                       </button>
+                      </Tooltip>
                     </div>
                   </section>
                 </div>

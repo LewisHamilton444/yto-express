@@ -37,6 +37,27 @@ export const RIDER_STATUS_COLORS = {
   ARCHIVED:             { bg: '#f3f4f6', color: '#6b7280' },
 };
 
+// Human-readable meaning of each lifecycle status — shown as a hover hint on
+// status pills (see StatusBadge). Mirrors the delivery-workflow vocabulary.
+export const STATUS_HINTS = {
+  'Pending':          'Awaiting pickup from the sender',
+  'To Pay':           'Awaiting payment confirmation before shipment',
+  'Confirmed':        'Booking confirmed, preparing for pickup',
+  'Picked Up':        'Collected by the courier — in the network',
+  'In Transit':       'Moving through the logistics network',
+  'Out for Delivery': 'With the courier — delivery attempt underway',
+  'Delivered':        'Successfully delivered to the recipient',
+  'Returned':         'Sent back toward the sender',
+  'Returning':        'Being routed back to the sender',
+  'Failed':           'Delivery attempt failed — awaiting retry or return',
+  'Cancelled':        'Booking cancelled before fulfilment',
+  'ACTIVE':               'Account is live and operational',
+  'PENDING_VERIFICATION': 'Submitted — waiting for admin approval',
+  'ARCHIVED':             'Archived — no longer in the active roster',
+  'Received at Hub':      'Parcel received and logged at the hub',
+  'Returned to Hub':      'Parcel returned and logged at the hub',
+};
+
 export const RIDER_STATUS_BADGE = {
   ACTIVE:               { bg: '#390955', color: 'white',    border: 'none',                 dot: '#a8ffb0' },
   PENDING_VERIFICATION: { bg: 'white',   color: '#390955',  border: '1.5px solid #390955',  dot: '#f37021' },

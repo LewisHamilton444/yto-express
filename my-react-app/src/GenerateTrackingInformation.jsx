@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { parcelsApi } from './services/api';
 import { useToast } from './components/ui/ToastContext';
+import Tooltip from './components/ui/Tooltip';
 import { CheckCircle2, Download, FileText, Loader2 } from 'lucide-react';
 
 const S = {
@@ -220,7 +221,9 @@ export default function GenerateTrackingInformation({ reports: externalReports, 
                   <div style={{ fontSize:14, fontWeight:800, color:'#390955', display:'flex', alignItems:'center', gap:7 }}><CheckCircle2 size={17} color="#16a34a" aria-hidden="true" /> Report Generated — {previewReport.id}</div>
                   <div style={{ fontSize:12, color:'#9b82b2', marginTop:3 }}>{previewReport.trackingNo} · {previewReport.generatedDate}</div>
                 </div>
+                <Tooltip content="Download this tracking report as a file">
                 <button style={{ ...btnStyle('orange'), display:'inline-flex', alignItems:'center', gap:6 }} onClick={() => handleDownload(previewReport)}><Download size={13} aria-hidden="true" /> Download Now</button>
+                </Tooltip>
               </div>
               {previewReport.events.length > 0 && (
                 <div style={{ background:'white', borderRadius:9, border:'1px solid #e5ddf0', overflow:'hidden' }}>
@@ -263,8 +266,10 @@ export default function GenerateTrackingInformation({ reports: externalReports, 
                         <td style={S.td}><span style={{ padding:'2px 8px', borderRadius:6, fontSize:11, fontWeight:700, background:'#f0eaf8', color:'#390955' }}>{r.format}</span></td>
                         <td style={{ ...S.td, fontSize:12, color:'#888' }}>{r.generatedDate}</td>
                         <td style={S.td}>
+                          <Tooltip content="Download this tracking report as a file">
                           <button style={{ padding:'6px 14px', borderRadius:7, fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:'inherit', background:'#f37021', color:'white', border:'none' }}
                             onClick={() => handleDownload(r)}><span style={{ display:'inline-flex', alignItems:'center', gap:5 }}><Download size={12} aria-hidden="true" /> Download</span></button>
+                          </Tooltip>
                         </td>
                       </tr>
                     ))}

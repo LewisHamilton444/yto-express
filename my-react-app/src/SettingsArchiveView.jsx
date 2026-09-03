@@ -4,6 +4,7 @@ import { normalizeSeller, normalizeRider, SELLER_STATUS, RIDER_STATUS } from './
 import { apiFetch, sellersApi, ridersApi } from './services/api';
 import Modal from './components/ui/Modal';
 import { useToast } from './components/ui/ToastContext';
+import Tooltip from './components/ui/Tooltip';
 import { Package, Bike } from 'lucide-react';
 
 // Archiving/Restoring/Permanently-Deleting sellers & riders all live here now
@@ -213,11 +214,17 @@ export default function SettingsArchiveView({ onCountsChange = () => {} }) {
                     <td style={s.td}>
                       <div style={{ display: 'flex', gap: 8 }}>
                         {view === 'active' ? (
+                          <Tooltip content="Remove from active lists — can be restored anytime">
                           <button style={s.btnArchive} onClick={() => setConfirmArchive({ kind: 'seller', record: seller })}>Archive</button>
+                          </Tooltip>
                         ) : (
                           <>
+                            <Tooltip content="Bring this seller back to the active list">
                             <button style={s.btnRestore} onClick={() => handleRestoreSeller(seller)}>↩ Restore</button>
+                            </Tooltip>
+                            <Tooltip content="Permanently delete this record — cannot be undone">
                             <button style={s.btnDelete} onClick={() => setConfirmDelete({ kind: 'seller', record: seller })}>Delete</button>
+                            </Tooltip>
                           </>
                         )}
                       </div>
@@ -251,11 +258,17 @@ export default function SettingsArchiveView({ onCountsChange = () => {} }) {
                     <td style={s.td}>
                       <div style={{ display: 'flex', gap: 8 }}>
                         {view === 'active' ? (
+                          <Tooltip content="Remove from active lists — can be restored anytime">
                           <button style={s.btnArchive} onClick={() => setConfirmArchive({ kind: 'rider', record: rider })}>Archive</button>
+                          </Tooltip>
                         ) : (
                           <>
+                            <Tooltip content="Bring this rider back to the active list">
                             <button style={s.btnRestore} onClick={() => handleRestoreRider(rider)}>↩ Restore</button>
+                            </Tooltip>
+                            <Tooltip content="Permanently delete this record — cannot be undone">
                             <button style={s.btnDelete} onClick={() => setConfirmDelete({ kind: 'rider', record: rider })}>Delete</button>
+                            </Tooltip>
                           </>
                         )}
                       </div>

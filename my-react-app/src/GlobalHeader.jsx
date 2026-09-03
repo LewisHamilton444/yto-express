@@ -4,6 +4,7 @@ import GlobalSearch from './GlobalSearch';
 import NotificationBell from './NotificationBell';
 import AdminProfileDropdown from './AdminProfileDropdown';
 import useSSE from './services/useSSE';
+import Tooltip from './components/ui/Tooltip';
 
 const s = {
   bar: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '10px 24px', background: 'white', borderBottom: '1px solid rgba(57,9,85,0.08)', flexWrap: 'wrap' },
@@ -25,6 +26,7 @@ export default function GlobalHeader({ currentUser, riders, pendingCount, onNavi
       <GlobalSearch onNavigate={onNavigate} />
       <div style={s.right}>
         {/* Realm Indicator (REAL vs DEMO Sandbox) */}
+        <Tooltip content={currentUser?.isDemo ? 'Sandbox demo — synthetic data, no live writes' : 'Live realm — connected to production MongoDB'}>
         <div style={{
           display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px',
           background: currentUser?.isDemo ? 'rgba(245,158,11,0.12)' : 'rgba(5,150,105,0.12)',
@@ -40,8 +42,10 @@ export default function GlobalHeader({ currentUser, riders, pendingCount, onNavi
           }} />
           {currentUser?.isDemo ? 'Sandbox Demo' : 'Live Realm'}
         </div>
+        </Tooltip>
 
         {/* SSE Real-time indicator */}
+        <Tooltip content={mode === 'sse' ? 'Live realtime feed (SSE) — updates stream instantly' : mode === 'polling' ? 'Realtime feed degraded — polling for updates every few seconds' : 'Realtime feed disconnected — click Retry to reconnect'}>
         <div style={{
           display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px',
           background: mc.bg, borderRadius: 8, fontSize: 10, fontWeight: 700, color: mc.color,
@@ -59,6 +63,7 @@ export default function GlobalHeader({ currentUser, riders, pendingCount, onNavi
             }}>Retry</button>
           )}
         </div>
+        </Tooltip>
         <NotificationBell riders={riders} pendingCount={pendingCount} onNavigate={onNavigate} />
         <AdminProfileDropdown currentUser={currentUser} onNavigateSettings={onNavigateSettings} onLogout={onLogoutClick} />
       </div>

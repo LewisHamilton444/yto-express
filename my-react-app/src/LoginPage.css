@@ -97,12 +97,15 @@
 }
 
 .login-logo-badge {
-  width: 52px;
-  height: 52px;
+  /* Matches the mobile app + web sidebar logo: solid white disc with the
+     brand-orange outer ring (#F37021). The logo mark is pre-trimmed so it
+     fills the disc edge to edge. */
+  width: 56px;
+  height: 56px;
   border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.85);
-  padding: 5px;
-  background: rgba(255, 255, 255, 0.92);
+  border: 2px solid #f37021;
+  padding: 2px;
+  background: #ffffff;
   box-shadow: 0 4px 16px rgba(20, 3, 30, 0.35);
   display: flex;
   align-items: center;
@@ -114,7 +117,7 @@
 .login-official-logo {
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  object-fit: cover;
 }
 
 .login-header-brand-text {
@@ -280,6 +283,29 @@
   40%      { transform: translateX(8px); }
   60%      { transform: translateX(-6px); }
   80%      { transform: translateX(6px); }
+}
+
+/* ============================================================
+   PAGE EXIT — played after a successful sign-in, right before the
+   dashboard mounts. The .leaving flag is set ~260ms after the
+   success check appears; onLogin fires ~720ms after success, so this
+   0.46s fade + slide-up fully finishes before the swap.
+   ============================================================ */
+
+.login-root--leaving {
+  animation: loginRootExit 0.46s cubic-bezier(0.5, 0, 0.78, 0.35) forwards;
+  pointer-events: none;
+}
+
+@keyframes loginRootExit {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-28px) scale(0.985);
+  }
 }
 
 /* ============================================================
@@ -619,12 +645,34 @@
 }
 
 /* ============================================================
-   REDUCED MOTION — Intentionally omitted.
-   The entrance fades (glassPanelIn, elementFadeUp) are a core design
-   requirement; a reduced-motion block stripping animations to `none`
-   previously broke the whole entrance when the Windows "Show animations"
-   toggle was off.
+   REDUCED MOTION — scoped restoration for the login screen ONLY.
+
+   The global src/index.css reduced-motion block crushes every animation
+   to 0.01ms with `!important` (honoring OS "reduce motion"), which also
+   silences THIS screen's entrance/exit. Those are a core design
+   requirement here (the screen is a full takeover, not an app shell;
+   stripping them to `none` previously left the form stuck at opacity 0
+   when the Windows "Show animations" toggle was off).
+
+   So we restore the real durations for the login entrance/exit only,
+   at higher specificity so they beat the global `!important`. All other
+   pages keep their reduced-motion behavior untouched.
    ============================================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  .login-root .login-card {
+    animation-duration: 0.7s !important;
+  }
+  .login-root .login-card.shaking {
+    animation-duration: 420ms !important;
+  }
+  .login-root .anim-fade-up {
+    animation-duration: 0.55s !important;
+  }
+  .login-root.login-root--leaving {
+    animation-duration: 0.46s !important;
+  }
+}
 
 /* ============================================================
    RESPONSIVE

@@ -6,6 +6,7 @@ import { PARCEL_STATUS_COLORS } from './components/ui/statusColors';
 import Modal from './components/ui/Modal';
 import SimulatedFeedBadge from './components/ui/SimulatedFeedBadge';
 import { isDemoEmail } from './demoUtils';
+import Tooltip from './components/ui/Tooltip';
 import { AlertTriangle, Check, CheckCircle2, CircleDot, FileDown, FileText, X, XCircle } from 'lucide-react';
 
 /**
@@ -552,7 +553,9 @@ function ParcelModal({ parcel, onClose, allParcels }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <RiderBadge name={parcel.assignedRider} />
             <span style={{ fontSize: 10, fontWeight: 700, padding: '4px 10px', borderRadius: 6, background: svc.bg, color: svc.color }}>{parcel.service}</span>
-            <button onClick={onClose} aria-label="Close parcel details" style={{ width: 30, height: 30, borderRadius: 8, border: '1.5px solid #e0d5f0', background: 'white', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: '#999' }}><X size={15} aria-hidden="true" /></button>
+            <Tooltip content="Close parcel details">
+      <button onClick={onClose} aria-label="Close parcel details" style={{ width: 30, height: 30, borderRadius: 8, border: '1.5px solid #e0d5f0', background: 'white', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: '#999' }}><X size={15} aria-hidden="true" /></button>
+      </Tooltip>
           </div>
         </div>
 
@@ -861,9 +864,11 @@ function AssignRiderButton({ parcel, riders, onAssign }) {
 
   return (
     <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
-      <button onClick={() => setOpen((v) => !v)} className="mp-icon-btn" title="Assign Rider" style={iconBtnStyle}>
+      <Tooltip content="Assign a rider to this parcel">
+      <button onClick={() => setOpen((v) => !v)} className="mp-icon-btn" style={iconBtnStyle}>
         <RiderIcon size={13} />
       </button>
+      </Tooltip>
       {open && (
         <div style={{ position: 'absolute', right: 0, top: 'calc(100% + 6px)', background: 'white', border: '1px solid #e0d5f0', borderRadius: 10, boxShadow: '0 12px 32px rgba(57,9,85,0.14)', overflow: 'hidden', minWidth: 160, maxHeight: 260, overflowY: 'auto', zIndex: 20, textAlign: 'left' }}>
           <div style={{ padding: '8px 14px', fontSize: 10, fontWeight: 700, color: '#aaa', textTransform: 'uppercase', letterSpacing: 0.4 }}>Assign Rider</div>

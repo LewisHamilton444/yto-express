@@ -4,6 +4,7 @@ import LiveRiderMap from './LiveRiderMap';
 import { CITY_COORDS } from './luzonCityCoords';
 import { ridersApi, parcelsApi } from './services/api';
 import { VehicleIcon } from './components/ui/vehicleIcons';
+import Tooltip from './components/ui/Tooltip';
 import { Package, RefreshCw } from 'lucide-react';
 
 export default function MonitorGeofenceBoundary() {
@@ -106,7 +107,9 @@ export default function MonitorGeofenceBoundary() {
         </div>
         <div style={{display:'flex',alignItems:'center',gap:8}}>
           {lastUpdated&&<span style={{fontSize:10,color:'#9b82b2',fontFamily:'monospace'}}>Updated {lastUpdated}</span>}
+          <Tooltip content="Re-fetch the latest geofence and parcel status">
           <button onClick={fetchData} style={{padding:'5px 12px',background:'white',border:'1.5px solid #e0d5f0',borderRadius:8,fontSize:11,fontWeight:700,color:'#390955',cursor:'pointer',display:'inline-flex',alignItems:'center',gap:5}}><RefreshCw size={12} aria-hidden="true" /> Refresh</button>
+          </Tooltip>
           <span style={{display:'inline-flex',alignItems:'center',gap:5,padding:'5px 12px',background:'rgba(57,9,85,0.08)',borderRadius:8,fontSize:11,fontWeight:700,color:'#390955'}}><Package size={12} aria-hidden="true" /> {parcels.length} Parcels</span>
           <span style={{display:'flex',alignItems:'center',gap:4,padding:'5px 12px',background:'rgba(34,197,94,0.1)',borderRadius:8,fontSize:11,fontWeight:700,color:'#16a34a'}}>
             <span style={{width:6,height:6,borderRadius:'50%',background:'#22c55e',animation:'pulse 1.5s infinite',display:'inline-block'}}/>

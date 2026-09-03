@@ -241,6 +241,35 @@ Anyone who cloned or forked the repo before the force-push keeps the secrets. Ro
 | `MONGO_URI` | MongoDB Atlas (regenerate user/password) |
 | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER` | Twilio console |
 | `SEMAPHORE_API_KEY`, `SEMAPHORE_SENDER_NAME` | Semaphore SMS |
-| `EMAIL_USER`, `EMAIL_APP_PASSWORD` | Gmail app password |
-| `JWT_SECRET`, `BRIDGE_API_KEY`, `ANDROID_BRIDGE_API_KEY` | Internal — regenerate with any strong string |
-```
+| `EMAIL_USER`, `EMAIL_APP_PASSWORD` | Gmail app password || `JWT_SECRET`, `BRIDGE_API_KEY`, `ANDROID_BRIDGE_API_KEY` | Internal — regenerate with any strong string |
+```
+
+---
+
+## 12. Deployment: Render Cold-Start & Keep-Alive (Recommendation)
+
+**Symptom:** the LoginPage health pill sometimes shows red `API OFFLINE` when the app has been idle — even though nothing is broken.
+
+**Root cause:** the hosted backend `https://yto-express.onrender.com` runs on Render's free tier, which **sleeps after ~15 minutes of no traffic**. The first request after idle must cold-start the service (30–60s), which exceeds the old 6s probe timeout.
+
+**Current state (2026-09-03):** LoginPage now uses a two-stage, cold-start-tolerant probe — 10s first attempt, then an 800ms pause and a second 45s attempt, with the pill staying orange `Connecting...` throughout the wake-up window. It only declares `API OFFLINE` after ~46s of genuine failure. Trade-off: a truly dead backend takes longer to show red (acceptable — sign-in itself always waits for the cold start and succeeds).
+
+### Recommended: free uptime-monitor keep-alive (so Render never sleeps)
+
+Any free external monitor that pings the backend every ~10 minutes keeps the free instance warm and removes the cold-start lag entirely. Options (free tiers):
+
+| Service | Setup | Notes |
+|---|---|---|
+| **UptimeRobot** (recommended) | Add a new monitor → HTTP(S) → URL `https://yto-express.onrender.com` → interval **10 min** | 50 monitors free; alert emails if the service ever goes down |
+| **cron-job.org** | Add a cron job → `https://yto-express.onrender.com` → every **10 min** | Free, no sign-up friction; only GET pings |
+| **Better Stack Uptime** | Add uptime monitor → URL above → 10 min interval | Free tier includes status pages |
+
+Rules to follow so the keep-alive actually works and stays honest:
+
+1. **Ping the root URL** (`https://yto-express.onrender.com/`) — a GET returning 200 counts as traffic and prevents sleep. Do not point the monitor at the Vite dev origin or a Mongo URI.
+2. **Interval ≤ 15 min** (10 min is the safe choice) — Render's idle cutoff is ~15 minutes; anything slower re-introduces cold starts.
+3. **Do NOT add keep-alive logic inside the app** (frontend polling, self-ping endpoints). Render free tier only wakes on inbound external traffic, and internal self-requests do not reliably prevent sleep — the external monitor is the fix.
+4. **Re-check after backend redeploys** — a fresh Render deploy restarts the idle timer; the monitor resumes keeping it warm automatically.
+
+Once a monitor is active, the login pill should read green `System Operational` within ~1s on every visit (no `Connecting...` wait, no red flash).
+

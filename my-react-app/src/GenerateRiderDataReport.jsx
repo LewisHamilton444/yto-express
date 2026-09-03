@@ -8,6 +8,7 @@ import { apiFetch, ridersApi, parcelsApi } from './services/api';
 import Modal from './components/ui/Modal';
 import { VehicleIcon } from './components/ui/vehicleIcons';
 import { RIDER_STATUS_BADGE } from './components/ui/statusColors';
+import Tooltip from './components/ui/Tooltip';
 import { ArrowLeft, ArrowRight, CheckCircle2, XCircle } from 'lucide-react';
 
 const RIDER_EXPORT_COLUMNS = [
@@ -293,8 +294,12 @@ export default function GenerateRiderDataReport() {
                   <span style={{ fontSize: 11, color: '#22c55e', fontWeight: 600 }}>● {riders.filter(r=>r.status===RIDER_STATUS.ACTIVE).length} active on map</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Tooltip content="Download the filtered rider rows as a CSV file">
                   <button onClick={handleExportCSV} style={{ padding: '6px 12px', border: '1.5px solid #e0d5f0', borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', background: 'white', color: '#390955' }}>Export CSV</button>
+                  </Tooltip>
+                  <Tooltip content="Download the filtered rider rows as an Excel workbook">
                   <button onClick={handleExportExcel} style={{ padding: '6px 12px', border: '1.5px solid #e0d5f0', borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', background: 'white', color: '#390955' }}>Export Excel</button>
+                  </Tooltip>
                 </div>
               </div>
 

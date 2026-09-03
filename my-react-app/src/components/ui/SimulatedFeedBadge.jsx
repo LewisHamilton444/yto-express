@@ -1,5 +1,6 @@
 import React from 'react';
 import { FlaskConical } from 'lucide-react';
+import Tooltip from './Tooltip';
 
 /**
  * Honest-label pill for any widget showing simulated/demo telemetry (GPS
@@ -10,13 +11,20 @@ import { FlaskConical } from 'lucide-react';
  * there is room next to the widget.
  */
 export default function SimulatedFeedBadge({ text = 'Simulated feed', full = false, className = '' }) {
-  return (
+  const pill = (
     <span
-      title={full ? 'This data is simulated for demonstration and is not backed by a live telemetry feed.' : undefined}
       className={`inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wide text-amber-700 ${className}`}
     >
       <FlaskConical size={10} strokeWidth={2.75} />
       {text}
     </span>
+  );
+  return (
+    <Tooltip content={full
+      ? 'This data is simulated for demonstration and is not backed by a live telemetry feed.'
+      : 'Simulated for demonstration — not backed by live telemetry.'}
+    >
+      {pill}
+    </Tooltip>
   );
 }

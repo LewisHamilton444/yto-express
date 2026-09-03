@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import SettingsArchiveView from './SettingsArchiveView';
 import { FileText } from 'lucide-react';
 import { useToast } from './components/ui/ToastContext';
+import Tooltip from './components/ui/Tooltip';
 
 export default function Settings({
   /* ── Archived tracking reports still come from AnalyticsDashboard; archived
@@ -94,7 +95,9 @@ export default function Settings({
                       <td style={s.td}>{report.filetype}</td>
                       <td style={s.td}><span style={s.archivedBadge}>Archived</span></td>
                       <td style={s.td}>
+                        <Tooltip content="Make this report available for download again">
                         <button style={s.btnRestore} onClick={() => { onRestoreReport(report.id); showNotification(`Report ${report.id} restored`); }}>↩ Restore</button>
+                        </Tooltip>
                       </td>
                     </tr>
                   ))}
