@@ -1,7 +1,10 @@
 /* ============================================================
    YTO EXPRESS — Web Authentication Stylesheet
-   Centered floating 2-column card with pure CSS dual-wing
-   slide-in entrance, staggered element reveals, and compact form layout.
+   Full-bleed photographic backdrop with a frosted-glass login
+   panel on the left, page-level brand header (top-left), and
+   underline-style inputs — inspired by a glassmorphism login
+   reference. Behavior/states (error shake, spinner, success
+   check, caps-lock, show/hide, remember-me) are unchanged.
    ============================================================ */
 
 *, *::before, *::after {
@@ -11,574 +14,101 @@
 }
 
 /* ============================================================
-   ROOT CANVAS — Scrollable Viewport
+   ROOT CANVAS — Full-bleed photo + readability scrim
    ============================================================ */
 
 .login-root {
+  position: relative;
   min-height: 100vh;
-  height: auto;
-  padding: 32px 16px;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow-y: auto;
-  box-sizing: border-box;
-  background: #f3edf7;
+  flex-direction: column;
+  padding: 34px 0 44px;
+  overflow: hidden;
   font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-}
-
-/* ============================================================
-   MAIN FLOATING CARD — Centers Single Hero Column, then Unfolds
-   ============================================================ */
-
-.login-card {
-  position: relative;
-  display: flex;
-  width: 92%;
-  max-width: 960px;
-  /* Fixed min-height so both the hero and the form column always paint at
-     the same height — before, the card height followed whichever column
-     happened to be taller mid-entrance, so the hero side visibly grew/snapped
-     taller after the two wings finished sliding into place. The content area
-     of both columns is re-derived below and kept in sync with this value. */
-  min-height: 566px;
-  border-radius: 22px;
-  overflow: hidden;
-  border: 1px solid rgba(57, 9, 85, 0.08);
-  box-shadow: 0 18px 52px rgba(57, 9, 85, 0.15);
-  background: #ffffff;
-  /* Phase 1 (0.0s - 0.7s): Emerges as single-column centered Hero card
-     Phase 2 (0.7s - 1.5s): Smoothly expands to 960px dual-column card */
-  animation: cardHeroToDualSplit 1.5s cubic-bezier(0.16, 1, 0.3, 1) both !important;
-}
-
-@keyframes cardHeroToDualSplit {
-  0% {
-    max-width: 460px;
-    opacity: 0;
-    transform: translateY(28px) scale(0.95);
-  }
-  35% {
-    max-width: 460px;
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-  50% {
-    max-width: 460px;
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-  100% {
-    max-width: 960px;
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-/* ============================================================
-   STAGGERED ELEMENT ANIMATIONS (Hero Phase 1 vs Form Phase 2)
-   ============================================================ */
-
-/* Hero elements appear immediately in Phase 1 */
-.login-hero-col .anim-fade-up {
-  opacity: 0;
-  transform: translateY(10px);
-  animation: heroElementFade 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
-}
-
-@keyframes heroElementFade {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-.login-hero-col .anim-d1 { animation-delay: 0.15s !important; }
-.login-hero-col .anim-d2 { animation-delay: 0.25s !important; }
-.login-hero-col .anim-d3 { animation-delay: 0.35s !important; }
-.login-hero-col .anim-d4 { animation-delay: 0.45s !important; }
-
-/* Form elements appear progressively in Phase 2 as the left wing opens */
-.login-form-col .anim-fade-up {
-  opacity: 0;
-  transform: translateY(12px);
-  animation: formElementFade 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
-}
-
-@keyframes formElementFade {
-  from { opacity: 0; transform: translateY(12px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-.login-form-col .anim-d1 { animation-delay: 1.00s !important; }
-.login-form-col .anim-d2 { animation-delay: 1.12s !important; }
-.login-form-col .anim-d3 { animation-delay: 1.24s !important; }
-.login-form-col .anim-d4 { animation-delay: 1.36s !important; }
-.login-form-col .anim-d5 { animation-delay: 1.48s !important; }
-
-/* ============================================================
-   LEFT COLUMN — Unfolds & Slides Out on Left (Revealed in Phase 2)
-   ============================================================ */
-
-.login-form-col {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  /* Center content vertically, but let the column itself stretch to the
-     card height — keeps the white background flush edge-to-edge on both
-     wings instead of each column ending at its own content height. */
-  align-items: center;
-  align-self: stretch;
-  justify-content: center;
-  padding: 54px 44px;
-  position: relative;
+  /* Photo fills the whole viewport. Scrim stack (bottom to top):
+     1. soft white veil at the top for the glass to read as light frosted
+     2. brand-violet gradient deepening toward the left (behind the panel)
+     3. the courier photo itself
+     Order in a single background layer: later layers sit on top. */
   background:
-    radial-gradient(ellipse at 12% 88%, rgba(57, 9, 85, 0.04), transparent 55%),
-    radial-gradient(ellipse at 92% 10%, rgba(243, 112, 33, 0.03), transparent 50%),
-    #ffffff;
-  animation: formColUnfold 1.5s cubic-bezier(0.16, 1, 0.3, 1) both !important;
+    linear-gradient(180deg, rgba(255, 255, 255, 0.10) 0%, rgba(255, 255, 255, 0.03) 34%, rgba(255, 255, 255, 0) 100%),
+    linear-gradient(115deg, rgba(18, 2, 28, 0.88) 0%, rgba(57, 9, 85, 0.66) 27%, rgba(57, 9, 85, 0.30) 56%, rgba(57, 9, 85, 0.10) 82%, rgba(57, 9, 85, 0.04) 100%),
+    url('/assets/img_auth_courier_hero.jpg') center / cover no-repeat;
 }
 
-@keyframes formColUnfold {
-  0%, 45% {
-    max-width: 0;
-    flex: 0 0 0%;
-    padding-left: 0;
-    padding-right: 0;
-    opacity: 0;
-    overflow: hidden;
-    transform: translateX(-40px);
-    pointer-events: none;
-    visibility: hidden;
+/* Pin the photo on desktop so a short viewport scrolls over a static
+   backdrop (mobile keeps default scroll for broader support). */
+@media (min-width: 861px) {
+  .login-root {
+    background-attachment: fixed, fixed, fixed;
   }
-  50% {
-    visibility: visible;
-  }
-  100% {
-    max-width: 50%;
-    flex: 1 1 0%;
-    padding-left: 44px;
-    padding-right: 44px;
-    opacity: 1;
-    overflow: visible;
-    transform: translateX(0);
-    pointer-events: auto;
-    visibility: visible;
-  }
-}
-
-.login-form-inner {
-  width: 100%;
-  max-width: 360px;
-}
-
-.login-card-header {
-  margin-bottom: 30px;
-}
-
-.login-card-title {
-  font-size: 24px;
-  font-weight: 800;
-  color: #390955;
-  letter-spacing: -0.4px;
-  margin-bottom: 6px;
-}
-
-.login-card-subtitle {
-  font-size: 13.5px;
-  color: #8f79a8;
-  font-weight: 500;
-}
-
-/* Error Banner */
-.login-error {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 14px;
-  background: #fdf2f2;
-  border: 1px solid #fecaca;
-  border-radius: 8px;
-  font-size: 12px;
-  font-weight: 600;
-  color: #9b1c1c;
-  margin-bottom: 16px;
-  animation: errorSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-@keyframes errorSlideIn {
-  from {
-    opacity: 0;
-    transform: translateY(-6px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* Form Fields */
-.login-form {
-  display: flex;
-  flex-direction: column;
-  gap: 22px;
-}
-
-.login-field {
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-  position: relative;
-}
-
-.login-label {
-  font-size: 11.5px;
-  font-weight: 700;
-  color: #7b6d8d;
-  text-transform: uppercase;
-  letter-spacing: 0.6px;
-}
-
-.login-input-wrap {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-
-.login-input-icon {
-  position: absolute;
-  left: 14px;
-  color: #a890c0;
-  pointer-events: none;
-  transition: color 0.25s ease;
-}
-
-.login-input {
-  width: 100%;
-  padding: 13.5px 16px 13.5px 42px;
-  border: 1.5px solid #dcd3e8;
-  border-radius: 10px;
-  font-size: 13.5px;
-  font-weight: 500;
-  color: #390955;
-  background: #ffffff;
-  font-family: inherit;
-  transition: border-color 0.25s ease, box-shadow 0.25s ease;
-  outline: none;
-}
-
-.login-input::placeholder {
-  color: #b8a9cc;
-}
-
-.login-input-wrap:focus-within .login-input {
-  border-color: #f37021;
-  box-shadow: 0 0 0 3px rgba(243, 112, 33, 0.14);
-}
-
-.login-input-wrap:focus-within .login-input-icon {
-  color: #f37021;
-}
-
-/* Show / Hide password toggle */
-.login-show-pass {
-  position: absolute;
-  right: 12px;
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: #a890c0;
-  display: flex;
-  align-items: center;
-  padding: 4px;
-  border-radius: 6px;
-  transition: color 0.2s ease;
-}
-
-.login-show-pass:hover {
-  color: #390955;
-}
-
-.login-show-pass:focus-visible {
-  outline: 2px solid #f37021;
-  outline-offset: 2px;
-}
-
-/* Caps Lock detector */
-.login-capslock {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  margin-top: 4px;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
-  color: #b45309;
-}
-
-.login-options {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  margin-top: -2px;
-}
-
-.login-remember {
-  display: inline-flex;
-  align-items: center;
-  gap: 9px;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: #7b6d8d;
-  cursor: pointer;
-  user-select: none;
-  transition: color 0.2s ease;
-}
-
-.login-remember:hover {
-  color: #390955;
-}
-
-.login-checkbox-wrap {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 17px;
-  height: 17px;
-  flex-shrink: 0;
-}
-
-.login-checkbox-input {
-  position: absolute;
-  inset: 0;
-  opacity: 0;
-  width: 100%;
-  height: 100%;
-  cursor: pointer;
-  margin: 0;
-  z-index: 2;
-}
-
-.login-checkbox-custom {
-  position: absolute;
-  inset: 0;
-  width: 17px;
-  height: 17px;
-  border-radius: 5px;
-  border: 1.5px solid #c7bad9;
-  background: #ffffff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  box-sizing: border-box;
-}
-
-.login-checkbox-input:checked + .login-checkbox-custom {
-  background: #f37021;
-  border-color: #f37021;
-  box-shadow: 0 2px 8px rgba(243, 112, 33, 0.38);
-}
-
-.login-checkbox-check {
-  width: 11px;
-  height: 11px;
-  opacity: 0;
-  transform: scale(0.5);
-  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.login-checkbox-input:checked + .login-checkbox-custom .login-checkbox-check {
-  opacity: 1;
-  transform: scale(1);
-}
-
-.login-checkbox-input:focus-visible + .login-checkbox-custom {
-  outline: 2px solid #f37021;
-  outline-offset: 2px;
 }
 
 /* ============================================================
-   PRIMARY BUTTON — Brand Orange (#F37021)
+   AMBIENT GLOWS — soft blurred orbs over the photo
    ============================================================ */
 
-.login-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  margin-top: 14px;
-  padding: 14.5px 24px;
-  background: linear-gradient(135deg, #f37021 0%, #e05e10 100%);
-  color: #ffffff;
-  border: none;
-  border-radius: 10px;
-  font-size: 14.5px;
-  font-weight: 700;
-  cursor: pointer;
-  font-family: inherit;
-  transition: all 0.2s ease;
-  box-shadow: 0 4px 14px rgba(243, 112, 33, 0.30);
-}
-
-.login-btn:hover:not(:disabled) {
-  background: linear-gradient(135deg, #e05e10 0%, #cc4e04 100%);
-  transform: translateY(-1px);
-  box-shadow: 0 6px 18px rgba(243, 112, 33, 0.42);
-}
-
-.login-btn:active:not(:disabled) {
-  transform: translateY(0) scale(0.99);
-  transition-duration: 0.08s;
-}
-
-.login-btn:disabled {
-  opacity: 0.7;
-  cursor: not-allowed;
-}
-
-/* Spinner */
-.login-spinner {
-  width: 17px;
-  height: 17px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-top-color: white;
-  border-radius: 50%;
-  animation: spin 0.7s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-/* Error Shake */
-.login-card.shaking {
-  animation: loginShake 420ms cubic-bezier(0.36, 0.07, 0.19, 0.97);
-}
-
-@keyframes loginShake {
-  0%, 100% { transform: translateX(0); }
-  20%      { transform: translateX(-8px); }
-  40%      { transform: translateX(8px); }
-  60%      { transform: translateX(-6px); }
-  80%      { transform: translateX(6px); }
-}
-
-/* ============================================================
-   RIGHT COLUMN — Atmospheric Courier Hero (Visible FIRST in Phase 1)
-   ============================================================ */
-
-.login-hero-col {
-  flex: 1;
-  min-width: 0;
-  position: relative;
-  display: flex;
-  align-items: center;
-  align-self: stretch;
-  justify-content: center;
-  padding: 54px 44px;
-  overflow: hidden;
-  background:
-    linear-gradient(105deg, #220330 0%, rgba(57, 9, 85, 0.90) 38%, rgba(57, 9, 85, 0.40) 75%, rgba(57, 9, 85, 0.05) 100%),
-    url('/assets/img_auth_courier_hero.jpg') center right / cover no-repeat;
-  /* Emerges centered in Phase 1, then stays vibrant as form wing unfolds */
-  animation: heroColEntrance 1.5s cubic-bezier(0.16, 1, 0.3, 1) both !important;
-}
-
-@keyframes heroColEntrance {
-  0% {
-    opacity: 0;
-    transform: scale(0.96);
-  }
-  30% {
-    opacity: 1;
-    transform: scale(1);
-  }
-  100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-.login-hero-bg {
+.login-ornaments {
   position: absolute;
   inset: 0;
   pointer-events: none;
+  z-index: 0;
 }
 
 .login-orb {
   position: absolute;
   border-radius: 50%;
-  filter: blur(60px);
-  pointer-events: none;
+  filter: blur(70px);
 }
 
 .login-orb--violet {
-  width: 250px;
-  height: 250px;
-  background: rgba(122, 60, 180, 0.35);
-  top: -60px;
-  left: -60px;
+  width: 340px;
+  height: 340px;
+  background: rgba(190, 130, 255, 0.16);
+  top: -120px;
+  right: -80px;
 }
 
 .login-orb--orange {
-  width: 180px;
-  height: 180px;
-  background: rgba(243, 112, 33, 0.22);
-  bottom: -40px;
-  right: -30px;
+  width: 260px;
+  height: 260px;
+  background: rgba(255, 165, 90, 0.13);
+  bottom: -90px;
+  left: 8%;
 }
 
-.login-hero-content {
+/* ============================================================
+   PAGE HEADER — brand top-left, floating over the image
+   ============================================================ */
+
+.login-page-header {
   position: relative;
   z-index: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  text-align: left;
   width: 100%;
-  max-width: 370px;
+  max-width: 1160px;
+  margin: 0 auto;
+  padding: 0 clamp(26px, 5vw, 60px);
 }
 
-/* Hero content children: staggered fade-in + slide up */
-.login-hero-content > * {
-  opacity: 0;
-  transform: translateY(14px);
-  animation: heroChildIn 0.55s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-
-.login-hero-content > *:nth-child(1) { animation-delay: 0.50s; }
-.login-hero-content > *:nth-child(2) { animation-delay: 0.60s; }
-.login-hero-content > *:nth-child(3) { animation-delay: 0.70s; }
-.login-hero-content > *:nth-child(4) { animation-delay: 0.80s; }
-/* Note: the old 5th-child delay (0.90s) belonged to a text-carousel slide
-   that no longer exists — hero now has exactly 4 children. Keeping the
-   selector would only delay nothing, so it was dropped. */
-
-@keyframes heroChildIn {
-  from { opacity: 0; transform: translateY(14px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-.login-hero-brand {
-  margin-bottom: 22px;
+.login-header-brand {
+  display: flex;
+  align-items: center;
+  gap: 16px;
 }
 
 .login-logo-badge {
-  width: 50px;
-  height: 50px;
+  width: 52px;
+  height: 52px;
   border-radius: 50%;
-  border: 2px solid #f37021;
-  padding: 4px;
-  background: white;
-  box-shadow: 0 4px 14px rgba(243, 112, 33, 0.25);
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  padding: 5px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 4px 16px rgba(20, 3, 30, 0.35);
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  margin-bottom: 12px;
+  flex-shrink: 0;
 }
 
 .login-official-logo {
@@ -587,13 +117,18 @@
   object-fit: contain;
 }
 
+.login-header-brand-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
 .login-brand-name {
-  font-size: 24px;
+  font-size: 25px;
   font-weight: 900;
-  color: white;
+  color: #ffffff;
   letter-spacing: -0.6px;
-  line-height: 1;
-  margin-bottom: 4px;
+  line-height: 1.05;
 }
 
 .login-brand-name span {
@@ -601,12 +136,12 @@
 }
 
 .login-brand-tagline {
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.65);
-  font-weight: 500;
+  font-size: 10.5px;
+  color: rgba(255, 255, 255, 0.72);
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 1.4px;
-  margin-bottom: 12px;
+  letter-spacing: 1.6px;
+  margin-top: 3px;
 }
 
 .login-brand-divider {
@@ -614,31 +149,31 @@
   height: 3px;
   background: #f37021;
   border-radius: 2px;
+  margin-top: 7px;
 }
 
-.login-hero-lead {
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.72);
-  line-height: 1.65;
-  margin-bottom: 20px;
-  max-width: 340px;
+/* Meta row: API health pill + role access chips under the brand */
+.login-header-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-top: 20px;
 }
 
-/* Health pill */
 .login-health-pill {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  margin-bottom: 20px;
   padding: 4px 12px;
   border-radius: 100px;
   background: rgba(255, 255, 255, 0.10);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.16);
   font-size: 9.5px;
   font-weight: 700;
   letter-spacing: 0.8px;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.85);
+  color: rgba(255, 255, 255, 0.88);
 }
 
 .login-health-dot {
@@ -671,8 +206,6 @@
   50% { opacity: 0.35; }
 }
 
-/* Role access tags */
-
 .login-role-tags {
   display: flex;
   flex-wrap: wrap;
@@ -680,175 +213,497 @@
 }
 
 .login-role-tag {
-  padding: 5px 14px;
+  padding: 4px 12px;
   border-radius: 100px;
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.14);
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.75);
+  color: rgba(255, 255, 255, 0.78);
   letter-spacing: 0.3px;
 }
 
 /* ============================================================
-   TEXT CAROUSEL
+   STAGE — keeps the glass panel vertically centered on the left
    ============================================================ */
 
-.login-carousel {
+.login-stage {
+  position: relative;
+  z-index: 1;
+  flex: 1 0 auto;
   width: 100%;
-}
-
-.login-carousel-track {
-  position: relative;
-  min-height: 96px;
-}
-
-.login-slide {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  text-align: left;
-  opacity: 0;
-  transform: translateY(6px);
-  transition: opacity 0.45s ease, transform 0.45s cubic-bezier(0.16, 1, 0.3, 1);
-  pointer-events: none;
-}
-
-.login-slide.active {
-  opacity: 1;
-  transform: translateY(0);
-  pointer-events: auto;
-  position: relative;
-}
-
-.login-slide-badge {
-  display: inline-block;
-  padding: 2px 7px;
-  border-radius: 100px;
-  background: rgba(255, 255, 255, 0.12);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.8px;
-  color: rgba(255, 255, 255, 0.75);
-  margin-bottom: 4px;
-}
-
-.login-slide-title {
-  font-size: 16.5px;
-  font-weight: 800;
-  color: white;
-  letter-spacing: -0.3px;
-  margin-bottom: 4px;
-}
-
-.login-slide-desc {
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.70);
-  line-height: 1.6;
-  max-width: 330px;
-  margin: 0;
-}
-
-/* Dot pagination */
-.login-carousel-dots {
+  max-width: 1160px;
+  margin: 0 auto;
   display: flex;
   align-items: center;
-  gap: 7px;
-  margin-top: 18px;
+  justify-content: flex-start;
+  padding: 42px clamp(26px, 5vw, 60px) 0;
 }
 
-.login-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.35);
+/* ============================================================
+   GLASS PANEL — the login card
+   ============================================================ */
+
+.login-card {
+  width: min(432px, 100%);
+  padding: 46px 42px 40px;
+  border-radius: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.13);
+  -webkit-backdrop-filter: blur(18px) saturate(1.35);
+  backdrop-filter: blur(18px) saturate(1.35);
+  box-shadow: 0 24px 64px rgba(12, 1, 20, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  /* Entrance: calm single-panel rise (the old 1.5s dual-wing unfold is
+     gone — there is no second wing anymore). NOT !important so the
+     .shaking error animation below can override it while active. */
+  animation: glassPanelIn 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes glassPanelIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.login-card.shaking {
+  animation: loginShake 420ms cubic-bezier(0.36, 0.07, 0.19, 0.97);
+}
+
+@keyframes loginShake {
+  0%, 100% { transform: translateX(0); }
+  20%      { transform: translateX(-8px); }
+  40%      { transform: translateX(8px); }
+  60%      { transform: translateX(-6px); }
+  80%      { transform: translateX(6px); }
+}
+
+/* ============================================================
+   STAGGERED ELEMENT REVEALS (single shared set for header + panel)
+   ============================================================ */
+
+.anim-fade-up {
+  opacity: 0;
+  transform: translateY(12px);
+  animation: elementFadeUp 0.55s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes elementFadeUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.anim-d1 { animation-delay: 0.12s; }
+.anim-d2 { animation-delay: 0.22s; }
+.anim-d3 { animation-delay: 0.32s; }
+.anim-d4 { animation-delay: 0.42s; }
+.anim-d5 { animation-delay: 0.52s; }
+
+/* ============================================================
+   PANEL HEADER — "Welcome back"
+   ============================================================ */
+
+.login-glass-inner {
+  display: flex;
+  flex-direction: column;
+}
+
+.login-card-header {
+  margin-bottom: 30px;
+}
+
+.login-card-title {
+  font-size: 30px;
+  font-weight: 500;
+  letter-spacing: -0.5px;
+  color: #ffffff;
+  line-height: 1.15;
+}
+
+.login-card-subtitle {
+  margin-top: 5px;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.76);
+}
+
+/* ============================================================
+   ERROR BANNER — translucent glass red
+   ============================================================ */
+
+.login-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: rgba(170, 26, 26, 0.28);
+  border: 1px solid rgba(255, 140, 140, 0.35);
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #ffe4e4;
+  margin-bottom: 18px;
+  animation: errorSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes errorSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ============================================================
+   FORM FIELDS — underline style (reference-inspired)
+   ============================================================ */
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.login-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  position: relative;
+}
+
+.login-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.80);
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+}
+
+.login-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.login-input-icon {
+  position: absolute;
+  left: 0;
+  color: rgba(255, 255, 255, 0.55);
+  pointer-events: none;
+  transition: color 0.25s ease;
+  flex-shrink: 0;
+}
+
+.login-input {
+  width: 100%;
+  padding: 11px 38px 11px 26px;
+  border: none;
+  border-bottom: 1.5px solid rgba(255, 255, 255, 0.45);
+  border-radius: 0;
+  font-size: 14.5px;
+  font-weight: 500;
+  color: #ffffff;
+  caret-color: #f37021;
+  background: transparent;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.login-input::placeholder {
+  color: rgba(255, 255, 255, 0.50);
+}
+
+/* Autofill on a glass surface paints white text — force dark text so it
+   stays legible on the browser's pale autofill wash. */
+.login-input:-webkit-autofill {
+  -webkit-text-fill-color: #ffffff;
+  -webkit-box-shadow: 0 0 0 1000px rgba(57, 9, 85, 0.55) inset;
+  box-shadow: 0 0 0 1000px rgba(57, 9, 85, 0.55) inset;
+  transition: background-color 9999s ease-in-out 0s;
+}
+
+.login-input-wrap:focus-within .login-input {
+  border-bottom-color: #f37021;
+  box-shadow: 0 9px 14px -11px rgba(243, 112, 33, 0.85);
+}
+
+.login-input-wrap:focus-within .login-input-icon {
+  color: #f37021;
+}
+
+/* Show / Hide password toggle */
+.login-show-pass {
+  position: absolute;
+  right: 2px;
+  background: none;
   border: none;
   cursor: pointer;
-  padding: 0;
-  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  color: rgba(255, 255, 255, 0.55);
+  display: flex;
+  align-items: center;
+  padding: 4px;
+  border-radius: 6px;
+  transition: color 0.2s ease;
 }
 
-.login-dot.active {
-  width: 22px;
-  height: 5.5px;
-  border-radius: 3px;
+.login-show-pass:hover {
+  color: #ffffff;
+}
+
+.login-show-pass:focus-visible {
+  outline: 2px solid #f37021;
+  outline-offset: 2px;
+}
+
+/* Caps Lock detector */
+.login-capslock {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: #ffd9a1;
+}
+
+/* ============================================================
+   REMEMBER-ME — translucent checkbox
+   ============================================================ */
+
+.login-options {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: -2px;
+}
+
+.login-remember {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.82);
+  cursor: pointer;
+  user-select: none;
+  transition: color 0.2s ease;
+}
+
+.login-remember:hover {
+  color: #ffffff;
+}
+
+.login-checkbox-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 17px;
+  height: 17px;
+  flex-shrink: 0;
+}
+
+.login-checkbox-input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+  margin: 0;
+  z-index: 2;
+}
+
+.login-checkbox-custom {
+  position: absolute;
+  inset: 0;
+  width: 17px;
+  height: 17px;
+  border-radius: 5px;
+  border: 1.5px solid rgba(255, 255, 255, 0.60);
+  background: rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-sizing: border-box;
+}
+
+.login-checkbox-input:checked + .login-checkbox-custom {
   background: #f37021;
+  border-color: #f37021;
+  box-shadow: 0 2px 10px rgba(243, 112, 33, 0.5);
+}
+
+.login-checkbox-check {
+  width: 11px;
+  height: 11px;
+  opacity: 0;
+  transform: scale(0.5);
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.login-checkbox-input:checked + .login-checkbox-custom .login-checkbox-check {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.login-checkbox-input:focus-visible + .login-checkbox-custom {
+  outline: 2px solid #f37021;
+  outline-offset: 2px;
 }
 
 /* ============================================================
-   REDUCED MOTION — Intentionally removed.
-   The entrance animations (cardEntrance, slideInLeft, slideInRight,
-   elementFadeUp) are a core design requirement. The previous
-   @media (prefers-reduced-motion: reduce) block was stripping
-   ALL animations to `none`, which broke the entrance entirely
-   when the Windows "Show animations" toggle was turned off
-   (Settings > Accessibility > Visual Effects).
+   PRIMARY BUTTON — Brand Orange (#F37021), kept as the CTA
+   ============================================================ */
+
+.login-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 6px;
+  padding: 15px 24px;
+  background: linear-gradient(135deg, #f37021 0%, #e05e10 100%);
+  color: #ffffff;
+  border: none;
+  border-radius: 11px;
+  font-size: 14.5px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.2s ease;
+  box-shadow: 0 6px 20px rgba(243, 112, 33, 0.42);
+}
+
+.login-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #e05e10 0%, #cc4e04 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 8px 24px rgba(243, 112, 33, 0.55);
+}
+
+.login-btn:active:not(:disabled) {
+  transform: translateY(0) scale(0.99);
+  transition-duration: 0.08s;
+}
+
+.login-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+/* Spinner */
+.login-spinner {
+  width: 17px;
+  height: 17px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ============================================================
+   REDUCED MOTION — Intentionally omitted.
+   The entrance fades (glassPanelIn, elementFadeUp) are a core design
+   requirement; a reduced-motion block stripping animations to `none`
+   previously broke the whole entrance when the Windows "Show animations"
+   toggle was off.
    ============================================================ */
 
 /* ============================================================
-   RESPONSIVE — Collapse on Viewports < 860px
+   RESPONSIVE
    ============================================================ */
 
+/* Mid-size: tighten spacing, panel stays centered on the photo. */
 @media (max-width: 860px) {
-  .login-root { padding: 20px 16px; }
-  .login-card {
-    flex-direction: column;
-    border-radius: 18px;
-    max-width: 440px !important;
-    min-height: auto;
-    animation: cardEntranceMobile 0.65s cubic-bezier(0.16, 1, 0.3, 1) both !important;
+  .login-root {
+    padding: 24px 0 36px;
   }
-  @keyframes cardEntranceMobile {
-    from { opacity: 0; transform: translateY(20px); }
-    to { opacity: 1; transform: translateY(0); }
+  .login-page-header,
+  .login-stage {
+    padding-left: clamp(20px, 5vw, 28px);
+    padding-right: clamp(20px, 5vw, 28px);
   }
-  .login-hero-col { display: none !important; }
-  .login-form-col {
-    max-width: 100% !important;
-    flex: 1 1 auto !important;
-    padding: 32px 22px !important;
-    animation: none !important;
-    opacity: 1 !important;
-    visibility: visible !important;
-    transform: none !important;
+  .login-stage {
+    padding-top: 34px;
   }
-  .login-form-col .anim-fade-up {
-    animation-delay: 0.15s !important;
-  }
-  .login-form-col .anim-d1 { animation-delay: 0.15s !important; }
-  .login-form-col .anim-d2 { animation-delay: 0.25s !important; }
-  .login-form-col .anim-d3 { animation-delay: 0.35s !important; }
-  .login-form-col .anim-d4 { animation-delay: 0.45s !important; }
-  .login-form-col .anim-d5 { animation-delay: 0.55s !important; }
 }
 
+/* Small phones */
 @media (max-width: 480px) {
-  .login-root { padding: 12px; }
-  .login-form-col { padding: 26px 16px; }
-  .login-card-title { font-size: 19px; }
+  .login-root {
+    padding: 18px 0 28px;
+  }
+  .login-brand-name {
+    font-size: 21px;
+  }
+  .login-logo-badge {
+    width: 44px;
+    height: 44px;
+  }
+  .login-card {
+    padding: 34px 24px 30px;
+    border-radius: 18px;
+  }
+  .login-card-title {
+    font-size: 24px;
+  }
+  .login-form {
+    gap: 18px;
+  }
+  .login-role-tag {
+    font-size: 10px;
+  }
 }
 
-/* Short viewports (laptops < ~720px tall, landscape phones): the locked card
-   height + 64px of root padding would overflow the fold. Shrink the padding
-   and let the form column scroll internally so every field stays reachable. */
-@media (max-height: 720px) and (min-width: 861px) {
-  .login-root { padding: 20px 16px; }
-  .login-card { min-height: calc(100vh - 40px); }
-  .login-form-col, .login-hero-col { padding: 34px 40px; }
-  .login-form-inner { overflow-y: auto; max-height: calc(100vh - 108px); padding-right: 4px; }
+/* Short viewports (small laptops, landscape phones): let the page scroll
+   instead of forcing the centered panel below the fold — the header stays
+   in flow above the panel, and every field remains reachable. */
+@media (max-height: 760px) {
+  .login-root {
+    padding-top: 22px;
+    padding-bottom: 30px;
+  }
+  .login-stage {
+    align-items: flex-start;
+    padding-top: 26px;
+  }
+  .login-header-meta {
+    margin-top: 14px;
+  }
 }
 
-/* Ultra-short (e.g. 1366x600, browser chrome docked): tighten further. */
-@media (max-height: 640px) and (min-width: 861px) {
-  .login-root { padding: 14px 16px; }
-  .login-form-col, .login-hero-col { padding: 24px 40px; }
-  .login-form-inner { max-height: calc(100vh - 76px); }
-  .login-card-header { margin-bottom: 18px; }
-  .login-form { gap: 14px; }
-  .login-hero-brand { margin-bottom: 14px; }
-  .login-hero-lead { margin-bottom: 12px; }
-  .login-health-pill { margin-bottom: 12px; }
+@media (max-height: 640px) {
+  .login-root {
+    padding-top: 16px;
+    padding-bottom: 22px;
+  }
+  .login-card {
+    padding: 30px 34px 28px;
+  }
+  .login-card-header {
+    margin-bottom: 20px;
+  }
+  .login-form {
+    gap: 16px;
+  }
+  .login-stage {
+    padding-top: 18px;
+  }
 }

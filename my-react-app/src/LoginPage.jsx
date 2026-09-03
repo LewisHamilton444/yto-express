@@ -81,10 +81,43 @@ const LoginPage = ({ onLogin }) => {
 
   return (
     <div className="login-root" role="main" aria-label="YTO Express Admin Login">
-      <div className={cardClasses}>
-        {/* ── LEFT COLUMN: Standard Authentication Form (50%) ── */}
-        <div className="login-form-col" role="region" aria-label="Sign in form">
-          <div className="login-form-inner">
+      {/* Decorative ambient glows floating over the photo */}
+      <div className="login-ornaments" aria-hidden="true">
+        <span className="login-orb login-orb--violet" />
+        <span className="login-orb login-orb--orange" />
+      </div>
+
+      {/* Page-level brand header — floats top-left over the backdrop */}
+      <header className="login-page-header">
+        <div className="login-header-brand anim-fade-up anim-d1">
+          <div className="login-logo-badge">
+            <img src="/assets/yto_express_logo.png" alt="YTO Express" className="login-official-logo" />
+          </div>
+          <div className="login-header-brand-text">
+            <h1 className="login-brand-name">
+              YTO <span>EXPRESS</span>
+            </h1>
+            <p className="login-brand-tagline">Logistics Management System</p>
+            <div className="login-brand-divider" />
+          </div>
+        </div>
+
+        <div className="login-header-meta anim-fade-up anim-d2">
+          <div className="login-health-pill" role="status" aria-live="polite" aria-label={`Server status: ${healthText}`}>
+            <span className={`login-health-dot ${apiHealth}`} aria-hidden="true" />
+            {healthText}
+          </div>
+          <div className="login-role-tags">
+            <span className="login-role-tag">Super Admin</span>
+            <span className="login-role-tag">Operations Staff</span>
+            <span className="login-role-tag">Hub Receiver</span>
+          </div>
+        </div>
+      </header>
+
+      <div className="login-stage">
+        <div className={cardClasses}>
+          <div className="login-glass-inner">
             <div className="login-card-header anim-fade-up anim-d1">
               <h2 className="login-card-title">Welcome back</h2>
               <p className="login-card-subtitle">Sign in to your admin account</p>
@@ -235,50 +268,6 @@ const LoginPage = ({ onLogin }) => {
                 )}
               </button>
             </form>
-          </div>
-        </div>
-
-        {/* ── RIGHT COLUMN: Atmospheric Courier Hero & Text Carousel (50%) ── */}
-        <div
-          className="login-hero-col"
-
-        >
-          <div className="login-hero-bg">
-            <div className="login-orb login-orb--violet" />
-            <div className="login-orb login-orb--orange" />
-          </div>
-
-          <div className="login-hero-content">
-            {/* Brand header badge with rounded orange logo */}
-            <div className="login-hero-brand anim-fade-up anim-d1">
-              <div className="login-logo-badge">
-                <img src="/assets/yto_express_logo.png" alt="YTO Express" className="login-official-logo" />
-              </div>
-              <h1 className="login-brand-name">
-                YTO <span>EXPRESS</span>
-              </h1>
-              <p className="login-brand-tagline">Logistics Management System</p>
-              <div className="login-brand-divider" />
-            </div>
-
-            {/* Left-aligned lead text */}
-            <p className="login-hero-lead anim-fade-up anim-d2">
-              Enterprise Logistics Management Portal for monitoring nationwide parcel telemetry, hub routing, and fleet dispatching across Luzon.
-            </p>
-
-            {/* Live backend health status pill */}
-            <div className="login-health-pill anim-fade-up anim-d3" role="status" aria-live="polite" aria-label={`Server status: ${healthText}`}>
-              <span className={`login-health-dot ${apiHealth}`} aria-hidden="true" />
-              {healthText}
-            </div>
-
-            {/* Role access tags */}
-            <div className="login-role-tags anim-fade-up anim-d4">
-              <span className="login-role-tag">Super Admin</span>
-              <span className="login-role-tag">Operations Staff</span>
-              <span className="login-role-tag">Hub Receiver</span>
-            </div>
-
           </div>
         </div>
       </div>
