@@ -1,0 +1,5 @@
+[
+  { "_id": "CS1", "customerId": "CUST-2026-STRESS1", "name": "Full Customer", "email": "c1@gmail.com", "phone": "09180000001", "statusHistory": [ { "status": "Registered", "changedAt": "2026-08-01T09:00:00.000Z" } ] },
+  { "_id": "CS2", "customerId": "CUST-2026-STRESS2", "name": null, "email": null, "phone": null },
+  { "_id": "CS3", "name": "Minimal Legacy Customer" }
+]

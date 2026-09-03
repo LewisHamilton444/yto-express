@@ -1,0 +1,5 @@
+[
+  { "_id": "RS1", "accountNumber": "YTO-RIDER-2026-STRESS1", "riderName": "Normal Rider", "email": "rider.n@yto.com", "phone": "09170000001", "status": "Active", "vehicleType": "Motorcycle", "rating": 4.9, "currentLocation": { "lat": 14.9085, "lng": 120.8545 } },
+  { "_id": "RS2", "accountNumber": "YTO-RIDER-2026-STRESS2", "riderName": "No Vehicle No Rating", "email": "rider.nv@yto.com", "phone": "09170000002", "status": "On Delivery", "vehicleType": null, "rating": null, "currentLocation": null, "liveGps": null },
+  { "_id": "RS3", "accountNumber": "YTO-RIDER-2026-STRESS3", "riderName": "Legacy Rider", "phone": "09170000003", "status": "Idle", "liveGps": { "latitude": "14.9200", "longitude": "120.8700" } }
+]

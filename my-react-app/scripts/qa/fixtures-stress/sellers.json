@@ -1,0 +1,5 @@
+[
+  { "_id": "SL1", "accountNumber": "YTO-SELL-2026-STRESS1", "fullName": "Full Seller", "storeName": "Store One", "email": "s1@yto.com", "phone": "09190000001", "status": "Active" },
+  { "_id": "SL2", "accountNumber": "YTO-SELL-2026-STRESS2", "fullName": null, "storeName": null, "email": null, "phone": null, "status": null },
+  { "_id": "SL3", "fullName": "Legacy Seller No Account Number" }
+]

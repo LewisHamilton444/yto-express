@@ -1,0 +1,5 @@
+[
+  { "_id": "IS1", "ticketId": "TICK-2026-STRESS1", "customerName": "Liza", "subject": "Lost package", "description": "Missing after transit.", "status": "Open", "priority": "High", "createdAt": "2026-08-10T10:00:00.000Z" },
+  { "_id": "IS2", "ticketId": "TICK-2026-STRESS2", "customerName": "Null Status Issue", "subject": null, "description": null, "status": null, "priority": null, "createdAt": null },
+  { "_id": "IS3", "subject": "Legacy Issue No Ticket Fields", "description": "Created before ticket standard.", "status": "In Progress" }
+]

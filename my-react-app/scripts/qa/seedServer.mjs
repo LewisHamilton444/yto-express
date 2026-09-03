@@ -235,7 +235,12 @@ const FIXTURE_ROUTES = {
   'dashboard-stats': '/dashboard/stats',
   'events-stats': '/events/stats',
 };
-const FIXTURES_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures');
+// Default: scripts/qa/fixtures/ (real exports). Override with QA_FIXTURES_DIR
+// to point at an alternate set, e.g. the committed stress fixtures:
+//   QA_FIXTURES_DIR=scripts/qa/fixtures-stress npm run qa:layout
+const FIXTURES_DIR = process.env.QA_FIXTURES_DIR
+  ? path.resolve(process.cwd(), process.env.QA_FIXTURES_DIR)
+  : path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures');
 if (fs.existsSync(FIXTURES_DIR)) {
   for (const file of fs.readdirSync(FIXTURES_DIR).filter((f) => f.endsWith('.json'))) {
     const base = file.slice(0, -5);
