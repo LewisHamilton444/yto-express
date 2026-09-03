@@ -1,6 +1,8 @@
 'use client';
 import React, { useState, useEffect } from 'react';
 import { parcelsApi } from './services/api';
+import { useToast } from './components/ui/ToastContext';
+import { CheckCircle2, Download, FileText, Loader2 } from 'lucide-react';
 
 const S = {
   wrap:    { display:'flex', flexDirection:'column', minHeight:'100vh', background:'#f5f5f5', fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif" },
@@ -48,6 +50,10 @@ const TABS = [
 const statusColor = (s) => s==='Delivered'?'#065f46':s==='In Transit'?'#f37021':'#390955';
 const statusBg    = (s) => s==='Delivered'?'#d1fae5':s==='In Transit'?'#fff4ec':'#f0eaf8';
 
+// Database-derived strings are interpolated into the printable HTML report —
+// escape them so an event text or address can never break out of the markup.
+const escHtml = (v) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
 export default function GenerateTrackingInformation({ reports: externalReports, onReportsChange }) {
   const [tab,            setTab]            = useState('generate');
   const [parcels,        setParcels]        = useState([]);
@@ -59,7 +65,7 @@ export default function GenerateTrackingInformation({ reports: externalReports, 
   const [endDate,        setEndDate]        = useState('');
   const [previewReport,  setPreviewReport]  = useState(null);
   const [generating,     setGenerating]     = useState(false);
-  const [successMsg,     setSuccessMsg]     = useState('');
+  const toast = useToast();
 
   const [_reports, _setReports] = useState([]);
   const reports    = externalReports ?? _reports;
@@ -69,7 +75,7 @@ export default function GenerateTrackingInformation({ reports: externalReports, 
     onReportsChange?.(next);
   };
 
-  const showSuccess = (msg) => { setSuccessMsg(msg); setTimeout(() => setSuccessMsg(''), 3000); };
+  const showSuccess = (msg) => toast(msg);
 
   // Fetch real parcels from MongoDB
   useEffect(() => {
@@ -125,27 +131,29 @@ export default function GenerateTrackingInformation({ reports: externalReports, 
   const handleDownload = (report) => {
     const evRows = (report.events || []).map((e, i) => `
       <tr style="background:${i%2===0?'white':'#f9f9f9'}">
-        <td style="padding:8px 12px;border-bottom:1px solid #eee;font-size:12px;">${e.time}</td>
-        <td style="padding:8px 12px;border-bottom:1px solid #eee;font-size:12px;">${e.event}</td>
-        <td style="padding:8px 12px;border-bottom:1px solid #eee;font-size:12px;">${e.location}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #eee;font-size:12px;">${escHtml(e.time)}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #eee;font-size:12px;">${escHtml(e.event)}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #eee;font-size:12px;">${escHtml(e.location)}</td>
         <td style="padding:8px 12px;border-bottom:1px solid #eee;font-size:12px;">
-          <span style="padding:2px 8px;border-radius:12px;font-size:11px;font-weight:700;background:${statusBg(e.status)};color:${statusColor(e.status)};">${e.status}</span>
+          <span style="padding:2px 8px;border-radius:12px;font-size:11px;font-weight:700;background:${statusBg(e.status)};color:${statusColor(e.status)};">${escHtml(e.status)}</span>
         </td>
       </tr>`).join('');
     const win = window.open('', '_blank');
-    win.document.write(`<!DOCTYPE html><html><head><title>Tracking Report — ${report.trackingNo}</title>
+    // Popup blockers return null — bail gracefully instead of crashing.
+    if (!win) return;
+    win.document.write(`<!DOCTYPE html><html><head><title>Tracking Report — ${escHtml(report.trackingNo)}</title>
       <style>body{font-family:-apple-system,sans-serif;padding:32px;color:#1a1a1a;}h1{font-size:22px;color:#390955;margin-bottom:4px;}.meta{font-size:12px;color:#666;margin-bottom:24px;}.info-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:24px;}.info-card{padding:12px 16px;background:#f9f7ff;border:1px solid #e5ddf0;border-radius:8px;}.info-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;color:#9b82b2;margin-bottom:4px;}.info-value{font-size:14px;font-weight:700;color:#390955;}table{width:100%;border-collapse:collapse;}th{padding:10px 12px;background:#390955;color:white;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:0.3px;}@media print{body{padding:16px;}}</style>
       </head><body>
-      <h1>📦 Tracking Report — YTO Express</h1>
-      <div class="meta">Generated: ${report.generatedDate} · Report ID: ${report.id} · Type: ${report.reportType} · Format: ${report.format}</div>
+      <h1>Tracking Report — YTO Express</h1>
+      <div class="meta">Generated: ${escHtml(report.generatedDate)} · Report ID: ${escHtml(report.id)} · Type: ${escHtml(report.reportType)} · Format: ${escHtml(report.format)}</div>
       <div class="info-grid">
-        <div class="info-card"><div class="info-label">Tracking Number</div><div class="info-value">${report.trackingNo}</div></div>
-        <div class="info-card"><div class="info-label">Location</div><div class="info-value">${report.location}</div></div>
-        <div class="info-card"><div class="info-label">Period</div><div class="info-value">${report.startDate||'—'} to ${report.endDate||'—'}</div></div>
+        <div class="info-card"><div class="info-label">Tracking Number</div><div class="info-value">${escHtml(report.trackingNo)}</div></div>
+        <div class="info-card"><div class="info-label">Location</div><div class="info-value">${escHtml(report.location)}</div></div>
+        <div class="info-card"><div class="info-label">Period</div><div class="info-value">${escHtml(report.startDate) || '—'} to ${escHtml(report.endDate) || '—'}</div></div>
       </div>
       <h3 style="color:#390955;margin-bottom:12px;">Tracking Events Timeline</h3>
       ${(report.events||[]).length>0
-        ? `<table><thead><tr><th>Date & Time</th><th>Event</th><th>Location</th><th>Status</th></tr></thead><tbody>${evRows}</tbody></table>`
+        ? `<table><thead><tr><th>Date &amp; Time</th><th>Event</th><th>Location</th><th>Status</th></tr></thead><tbody>${evRows}</tbody></table>`
         : `<p style="color:#aaa;font-size:13px;">No tracking events recorded.</p>`}
       <script>window.onload=function(){window.print();}<\/script>
       </body></html>`);
@@ -198,7 +206,7 @@ export default function GenerateTrackingInformation({ reports: externalReports, 
             </div>
             <div style={S.fa}>
               <button style={btnStyle('primary')} onClick={handleGenerate} disabled={generating || parcels.length === 0}>
-                {generating ? '⏳ Generating…' : '📄 Generate Report'}
+                {generating ? <><Loader2 size={14} className="animate-spin" aria-hidden="true" /> Generating…</> : <><FileText size={14} aria-hidden="true" /> Generate Report</>}
               </button>
               <button style={btnStyle('secondary')} onClick={handleClearForm}>Clear</button>
             </div>
@@ -208,10 +216,10 @@ export default function GenerateTrackingInformation({ reports: externalReports, 
             <div style={{ marginTop:24, background:'#f0eaf8', border:'1.5px solid #d4b8ee', borderRadius:12, padding:'20px 22px' }}>
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:14 }}>
                 <div>
-                  <div style={{ fontSize:14, fontWeight:800, color:'#390955' }}>✅ Report Generated — {previewReport.id}</div>
+                  <div style={{ fontSize:14, fontWeight:800, color:'#390955', display:'flex', alignItems:'center', gap:7 }}><CheckCircle2 size={17} color="#16a34a" aria-hidden="true" /> Report Generated — {previewReport.id}</div>
                   <div style={{ fontSize:12, color:'#9b82b2', marginTop:3 }}>{previewReport.trackingNo} · {previewReport.generatedDate}</div>
                 </div>
-                <button style={btnStyle('orange')} onClick={() => handleDownload(previewReport)}>⬇ Download Now</button>
+                <button style={{ ...btnStyle('orange'), display:'inline-flex', alignItems:'center', gap:6 }} onClick={() => handleDownload(previewReport)}><Download size={13} aria-hidden="true" /> Download Now</button>
               </div>
               {previewReport.events.length > 0 && (
                 <div style={{ background:'white', borderRadius:9, border:'1px solid #e5ddf0', overflow:'hidden' }}>
@@ -255,7 +263,7 @@ export default function GenerateTrackingInformation({ reports: externalReports, 
                         <td style={{ ...S.td, fontSize:12, color:'#888' }}>{r.generatedDate}</td>
                         <td style={S.td}>
                           <button style={{ padding:'6px 14px', borderRadius:7, fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:'inherit', background:'#f37021', color:'white', border:'none' }}
-                            onClick={() => handleDownload(r)}>⬇ Download</button>
+                            onClick={() => handleDownload(r)}><span style={{ display:'inline-flex', alignItems:'center', gap:5 }}><Download size={12} aria-hidden="true" /> Download</span></button>
                         </td>
                       </tr>
                     ))}
@@ -285,15 +293,7 @@ export default function GenerateTrackingInformation({ reports: externalReports, 
             ))}
           </nav>
         </div>
-      </header>
-
-      {successMsg && (
-        <div style={{ background:'#d4f4dd', color:'#22863a', padding:'12px 28px', fontSize:13, fontWeight:600, borderBottom:'1px solid #51cf66' }}>
-          ✅ {successMsg}
-        </div>
-      )}
-
-      <div style={S.tabs}>
+      </header>      <div style={S.tabs}>
         {TABS.map(t => <TabBtn key={t.key} active={tab===t.key} onClick={() => setTab(t.key)}>{t.label}</TabBtn>)}
       </div>
 

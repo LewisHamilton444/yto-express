@@ -1,17 +1,14 @@
-import { useCallback, useState } from 'react';
+'use client';
+import { useToast } from '../components/ui/ToastContext';
 
-let toastSeq = 0;
-
+// Compatibility shim — the verification flow used a private toast stack.
+// All feedback now flows through the single global ToastProvider (mounted in
+// App.jsx), so this hook just forwards calls there. `toasts` is always empty
+// because the provider owns the visible stack.
 export const useToasts = () => {
-  const [toasts, setToasts] = useState([]);
-
-  const pushToast = useCallback((message, type = 'success') => {
-    const id = ++toastSeq;
-    setToasts((prev) => [...prev, { id, message, type }]);
-    setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 3500);
-  }, []);
-
-  return { toasts, pushToast };
+  const push = useToast();
+  return {
+    toasts: [],
+    pushToast: (message, type = 'success') => push(message, type === 'error' ? 'error' : 'success'),
+  };
 };

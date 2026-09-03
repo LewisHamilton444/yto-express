@@ -1,4 +1,5 @@
 import React from 'react';
+import { AlertTriangle, CheckCircle2 } from 'lucide-react';
 
 const styles = {
   wrapper: {
@@ -26,7 +27,7 @@ const styles = {
   },
   success: { background: '#390955', color: 'white', border: '1px solid #57157a' },
   error:   { background: '#fdf2f2', color: '#9b1c1c', border: '1px solid #fecaca' },
-  icon:    { fontSize: '16px', lineHeight: 1 },
+  icon:    { display: 'flex', alignItems: 'center', flexShrink: 0 },
 };
 
 const Toast = ({ toasts }) => {
@@ -37,7 +38,7 @@ const Toast = ({ toasts }) => {
       <style>{`@keyframes yto-toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }`}</style>
       {toasts.map((t) => (
         <div key={t.id} style={{ ...styles.toast, ...(t.type === 'error' ? styles.error : styles.success) }}>
-          <span style={styles.icon}>{t.type === 'error' ? '⚠️' : '✅'}</span>
+          <span style={styles.icon}>{t.type === 'error' ? <AlertTriangle size={17} aria-hidden="true" /> : <CheckCircle2 size={17} aria-hidden="true" />}</span>
           <span>{t.message}</span>
         </div>
       ))}

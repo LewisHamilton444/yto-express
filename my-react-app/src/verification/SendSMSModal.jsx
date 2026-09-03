@@ -82,7 +82,7 @@ const SendSMSModal = ({ item, credentials, message, onCancel, onConfirm, sending
               <span>{sendError}</span>
               <div style={s.errorActions}>
                 <button style={s.btnCopy} onClick={handleCopyPassword}>
-                  {copied ? '✓ Copied!' : '📋 Copy Temp Password'}
+                  {copied ? 'Copied!' : 'Copy Temp Password'}
                 </button>
               </div>
             </div>
@@ -95,7 +95,7 @@ const SendSMSModal = ({ item, credentials, message, onCancel, onConfirm, sending
               onClick={() => onConfirm({ targetEmail: targetEmail.trim() })}
               disabled={sending || !targetEmail.trim()}
             >
-              {sending ? 'Sending…' : sendError ? '🔁 Resend Email' : 'Approve & Send Email'}
+              {sending ? 'Sending…' : sendError ? 'Resend Email' : 'Approve & Send Email'}
             </button>
           </div>
         </div>

@@ -1,4 +1,4 @@
-# AGENTS2.md — YTO Express Web Admin Platform — Architecture & Engineering Reference
+﻿# AGENTS2.md — YTO Express Web Admin Platform — Architecture & Engineering Reference
 
 > *Complete architecture, file mappings, and engineering rules for the Web Admin portal (React frontend + Node/Express backend), including the real-time SSE layer and the cross-platform bridge to the Android app.*
 
@@ -37,7 +37,9 @@
 `dashboard` → AnalyticsDashboard · `process-seller` → ProcessSellerInformation · `seller-report` → ViewSeller · `process-parcel` → ProcessParcelInformation · `manage-parcels` → ManageParcels · `process-rider` → ProcessRiderInformation · `monitor-rider` → MonitorRiderStatus · `rider-report` → GenerateRiderDataReport · `customer-list` → CustomerList · `activity-log` → ActivityLog · `manage-accounts` → ManageAccounts · `hub-parcels` → HubParcelReceiving · `manage-issues` → ManageIssues · `parcel-location` → ManageParcelLocation · `geofence` → MonitorParcel · `tracking-info` → GenerateTrackingInformation · `settings` → Settings · `logout` → Logout
 
 ### Design system (`src/components/ui/`)
-`Badge`, `Modal`, `AlertBanner`, `EmptyState`, `ListSkeleton`, `TableSkeleton`, `StatCard`, `PageHeader`, `CardSectionHeader`, `CardFooter`, `StatusBadge`, `statusColors.js` (canonical palettes: `PARCEL_STATUS_COLORS`, **`ACCOUNT_CATEGORY_TONE` = REAL green / DEMO slate gray**, `ACCOUNT_CATEGORY_LABEL`).
+`Badge`, `Modal`, `AlertBanner`, `EmptyState`, `ListSkeleton`, `TableSkeleton`, `StatCard`, `PageHeader`, `CardSectionHeader`, `CardFooter`, `StatusBadge`, `SimulatedFeedBadge` (honest-labeling for demo/simulated feeds), `ToastContext` (global toast provider — wraps the app in `App.jsx`, replaces per-screen toast stacks), `vehicleIcons` (`VehicleIcon` lucide component + `vehicleGlyphSvg` SVG data-URI + `vehicleTypeLabel` for Leaflet markers), `statusColors.js` (canonical palettes: `PARCEL_STATUS_COLORS`, `SELLER_STATUS_COLORS`, `RIDER_STATUS_COLORS`, `RIDER_STATUS_BADGE`, **`ACCOUNT_CATEGORY_TONE` = REAL green / DEMO slate gray**, `ACCOUNT_CATEGORY_LABEL`).
+
+**Icon rule** — no emoji/text glyphs as icons in UI strings; all use lucide-react SVGs (`aria-hidden`, icon-only buttons carry `aria-label`).
 
 ### Services
 - `src/services/api.js` — centralized client: `API_ROOT = import.meta.env.VITE_API_URL || 'https://yto-express.onrender.com'`; `apiFetch(path, opts)` attaches `Authorization: Bearer`; on 401 with token-expiry errors clears the token and dispatches `yto:auth_expired`. **Token key: `yto_token`** — `remember=true` → `localStorage`, `remember=false` → `sessionStorage` (session storage wins on read). `adminLogin(email, password, remember)`; `notificationsApi.sendEmail`; collection helpers (`sellersApi`, `ridersApi`, `parcelsApi`, `parcelLocationsApi`, `accountsApi`, `dashboardApi`).
@@ -188,6 +190,9 @@ C:\Users\ADMIN\React_Projects\YTO Latest\
 │  │  │   ManageAccounts, HubParcelReceiving, ManageIssues, ManageParcelLocation,
 │  │  │   MonitorParcel, GenerateTrackingInformation, Settings, SettingsArchiveView,
 │  │  │   LoginPage, Logout, GlobalHeader, GlobalSearch, NotificationBell, ...)
+│  │  │   (legacy GenerateParcelMovement / GenerateParcelConfirmationStatus /
+│  │  │   GenerateParcelStatusReport screens were removed 2026-09-03 — superseded
+│  │  │   by ManageParcels; do not re-import)
 │  │  ├─ components/ui/              (Badge, Modal, EmptyState, skeletons, statusColors.js, ...)
 │  │  ├─ services/                   (api.js, localApi.js, useSSE.js)
 │  │  ├─ verification/               (PendingVerificationsTable, ReviewModal, SendSMSModal, ...)
@@ -202,4 +207,39 @@ C:\Users\ADMIN\React_Projects\YTO Latest\
 │  ├─ public/                        (assets, server, vite.svg)
 │  └─ skills/                        (9 SKILL.md files)
 └─ __MACOSX/                         (junk from archive extraction — ignore)
+```
+
+## 11. Security: Known Issue — `.env` Credential Leak & Pending History Scrub (Future Fix)
+
+**Status:** LOCAL SCRUB COMPLETE — REMOTE PUSH BLOCKED (as of 2026-09-03).
+
+### What happened
+- `my-react-app/server/.env` was committed into git history from the initial commit (`426e719`) with live credentials. The repo is **public** on GitHub (`LewisHamilton444/yto-express`), and `origin/main` at `b6c89fc` **still contains the file** — the leak is live on the remote.
+- Local history was scrubbed with `git filter-repo`: `.env` and the junk `Icon\r` file were removed from all 25 commits. New local HEAD: `642ff8d`.
+- `.env` was restored to disk (from backup) and added to `.gitignore` — it must never be committed again.
+- Pre-scrub backup (contains original history incl. `.env`): `C:\Users\ADMIN\React_Projects\yto-express-backup.git`.
+- `vite build` passes; working tree clean; only `.gitignore` modified locally.
+
+### Why the remote still leaks
+A force-push was attempted but rejected (`403 denied`): this machine's cached GitHub credential (account `Natoy0123`) has no push rights to `LewisHamilton444/yto-express`, and the repo owner's credentials are not available on this machine.
+
+### Future fix — repo owner with push access
+1. From a machine/account with push rights to `LewisHamilton444/yto-express`:
+   ```bash
+   cd "C:\Users\ADMIN\React_Projects\YTO Latest"
+   git push origin main --force
+   ```
+2. Verify: `git ls-remote origin main` must return `642ff8d...` (not `b6c89fc...`).
+3. After the push: run `git reflog expire --expire=now --all && git gc --prune=now --aggressive` locally, and optionally ask GitHub Support to purge cached objects.
+
+### Mandatory credential rotation (leak is public — scrub alone is NOT a fix)
+Anyone who cloned or forked the repo before the force-push keeps the secrets. Rotate ALL of the following in the service dashboards, then update only the local (gitignored) `.env`:
+
+| Key | Service |
+|---|---|
+| `MONGO_URI` | MongoDB Atlas (regenerate user/password) |
+| `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER` | Twilio console |
+| `SEMAPHORE_API_KEY`, `SEMAPHORE_SENDER_NAME` | Semaphore SMS |
+| `EMAIL_USER`, `EMAIL_APP_PASSWORD` | Gmail app password |
+| `JWT_SECRET`, `BRIDGE_API_KEY`, `ANDROID_BRIDGE_API_KEY` | Internal — regenerate with any strong string |
 ```

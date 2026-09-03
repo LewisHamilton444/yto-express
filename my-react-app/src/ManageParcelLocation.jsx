@@ -2,7 +2,9 @@
 import React, { useState, useEffect } from 'react';
 import { apiFetch, parcelLocationsApi, parcelsApi, ridersApi } from './services/api';
 import Modal from './components/ui/Modal';
+import { useToast } from './components/ui/ToastContext';
 import './ManageParcelLocation.css';
+import { AlertTriangle, MapPin } from 'lucide-react';
 
 const now = () => new Date().toISOString().slice(0,16).replace('T',' ');
 const nowFull = () => new Date().toUTCString().replace(' GMT','  UTC');
@@ -84,7 +86,7 @@ function EditModal({ row, onSave, onClose }) {
             </select>
           </div>
         </div>
-        {!valid && <div style={{ fontSize:12, color:'#9b1c1c', marginTop:12, fontWeight:600 }}>⚠ Coordinates must be valid numeric values.</div>}
+        {!valid && <div style={{ fontSize:12, color:'#9b1c1c', marginTop:12, fontWeight:600, display:'flex', alignItems:'center', gap:6 }}><AlertTriangle size={14} aria-hidden="true" /> Coordinates must be valid numeric values.</div>}
         <div style={{ display:'flex', justifyContent:'flex-end', gap:'10px', marginTop:'24px' }}>
           <button className="process-parcel-location-btn process-parcel-location-btn--secondary" style={{ margin:0 }} onClick={onClose}>Cancel</button>
           <button className="process-parcel-location-btn process-parcel-location-btn--primary" style={{ margin:0, opacity:valid?1:0.5 }} onClick={()=>valid && onSave({ lat, lng, location:loc, type, status:stat, geofence:geo })}>
@@ -101,8 +103,7 @@ export default function ProcessParcelLocation() {
   const [activeTab,      setActiveTab]      = useState('parcel');
   const [editTarget,     setEditTarget]     = useState(null);
   const [search,         setSearch]         = useState('');
-  const [successMessage, setSuccessMessage] = useState('');
-  const [errorMessage,   setErrorMessage]   = useState('');
+  const toast = useToast();
   const [gpsQuery,       setGpsQuery]       = useState('');
   const [gpsResult,      setGpsResult]      = useState(null);
   const [gpsError,       setGpsError]       = useState('');
@@ -149,10 +150,7 @@ export default function ProcessParcelLocation() {
     return riderId ? (riderNameById[riderId] || riderId) : '';
   };
 
-  const showMessage = (msg, type = 'success') => {
-    if (type === 'success') { setSuccessMessage(msg); setTimeout(() => setSuccessMessage(''), 3000); }
-    else { setErrorMessage(msg); setTimeout(() => setErrorMessage(''), 3000); }
-  };
+  const showMessage = (msg, type = 'success') => toast(msg, type === 'error' ? 'error' : 'success');
 
   const handleSaveEdit = async (updates) => {
     try {
@@ -189,7 +187,7 @@ export default function ProcessParcelLocation() {
       }));
     }
     setGpsLastRefresh(nowFull());
-    showMessage('Satellite GPS telemetrics synchronized.');
+    showMessage('Location record refreshed (simulated demo drift).');
   };
 
   const filtered = locations.filter(r => {
@@ -223,9 +221,6 @@ export default function ProcessParcelLocation() {
             <span className="ppl-breadcrumb-item ppl-breadcrumb-item--active">Manage Parcel Location</span>
           </nav>
         </header>
-
-        {successMessage && <div className="process-parcel-location-message process-parcel-location-message--success">{successMessage}</div>}
-        {errorMessage   && <div className="process-parcel-location-message process-parcel-location-message--error">{errorMessage}</div>}
 
         <div className="process-parcel-location-tab-nav">
           {tabs.map(({ key, icon, label }) => (
@@ -275,7 +270,7 @@ export default function ProcessParcelLocation() {
                         return (
                           <tr key={row._id} style={{ borderBottom:'1px solid #f3eff7', background:i%2===0?'#ffffff':'#fcfbfe' }}>
                             <td style={{ padding:'14px 16px', fontFamily:'monospace', fontSize:12, fontWeight:700, color:'#f37021' }}>{row.parcelId}</td>
-                            <td style={{ padding:'14px 16px', fontWeight:700, color: rider ? '#390955' : '#bbb' }}>{rider ? `🛵 ${rider}` : 'Unassigned'}</td>
+                            <td style={{ padding:'14px 16px', fontWeight:700, color: rider ? '#390955' : '#bbb' }}>{rider ? <span style={{ display:'inline-flex', alignItems:'center', gap:6 }}><MapPin size={13} aria-hidden="true" /> {rider}</span> : 'Unassigned'}</td>
                             <td style={{ padding:'14px 16px', fontWeight:700, color:'#390955' }}>{row.location}</td>
                             <td style={{ padding:'14px 16px', fontFamily:'monospace', fontSize:12, color:'#6b21a8', fontWeight:600 }}>{row.lat}, {row.lng}</td>
                             <td style={{ padding:'14px 16px', fontSize:12, color:'#8c7f9d' }}>{row.updatedAt ? new Date(row.updatedAt).toLocaleString() : '—'}</td>
@@ -294,12 +289,16 @@ export default function ProcessParcelLocation() {
             <div className="process-parcel-location-section">
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'20px', gap:'12px', flexWrap:'wrap' }}>
                 <div>
-                  <h2 className="process-parcel-location-section-title" style={{ margin:0 }}>Satellite GPS Telematics Lookup</h2>
-                  <p style={{ margin:'4px 0 0 0', fontSize:'12px', color:'#8c7f9d', fontWeight:500 }}>Track and view real-time coordination data arrays</p>
+                  <h2 className="process-parcel-location-section-title" style={{ margin:0 }}>GPS Telematics Lookup</h2>
+                  <p style={{ margin:'4px 0 0 0', fontSize:'12px', color:'#8c7f9d', fontWeight:500 }}>View stored scan coordinates for a parcel</p>
                 </div>
                 <button onClick={handleGpsRefresh} style={{ display:'inline-flex', alignItems:'center', gap:'6px', background:'white', border:'1.5px solid #390955', color:'#390955', padding:'8px 14px', borderRadius:'8px', fontSize:'12px', fontWeight:'700', cursor:'pointer' }}>
-                  <Ico.Refresh/> Sync Satellite
+                  <Ico.Refresh/> Refresh Coordinates
                 </button>
+              </div>
+              <div style={{ marginBottom:'16px', fontSize:'12px', color:'#b45309', background:'#fff7ed', border:'1px solid #fed7aa', borderRadius:'8px', padding:'8px 12px', lineHeight:1.5 }}>
+                Coordinates are the stored record from rider scans. The Refresh button applies a small simulated drift for demonstration only —
+                live movement requires the mobile app to keep sending location pings.
               </div>
 
               <div style={{ display:'grid', gridTemplateColumns:'1fr auto', gap:12, alignItems:'end', background:'#fbf9fe', padding:'16px', borderRadius:'12px', border:'1px solid #edeaf2', marginBottom:'16px' }}>
@@ -307,7 +306,7 @@ export default function ProcessParcelLocation() {
                   <label style={{ color:'#390955' }}>Target Parcel ID</label>
                   <input placeholder="e.g. PRC-20240215-001" value={gpsQuery} onChange={e=>{ setGpsQuery(e.target.value); setGpsError(''); }} onKeyDown={e=>e.key==='Enter' && handleGpsLookup()}/>
                 </div>
-                <button className="process-parcel-location-btn process-parcel-location-btn--primary" style={{ padding:'11px 20px' }} onClick={handleGpsLookup}>Track Satellite Path</button>
+                <button className="process-parcel-location-btn process-parcel-location-btn--primary" style={{ padding:'11px 20px' }} onClick={handleGpsLookup}>Look Up Coordinates</button>
               </div>
 
               {locations.length > 0 && (
@@ -322,14 +321,14 @@ export default function ProcessParcelLocation() {
                 </div>
               )}
 
-              {gpsError && <div className="process-parcel-location-message process-parcel-location-message--error" style={{ marginBottom:'20px' }}>⚠ {gpsError}</div>}
+              {gpsError && <div className="process-parcel-location-message process-parcel-location-message--error" style={{ marginBottom:'20px', display:'flex', alignItems:'center', gap:6 }}><AlertTriangle size={14} aria-hidden="true" /> {gpsError}</div>}
 
               {gpsResult && (
                 <div style={{ display:'flex', flexDirection:'column', gap:'16px' }}>
                   <div style={{ background:'#390955', borderRadius:16, overflow:'hidden' }}>
                     <div style={{ padding:'14px 20px', borderBottom:'1px solid rgba(255,255,255,0.1)', display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:8 }}>
-                      <span style={{ fontSize:12, fontWeight:800, color:'white' }}>🛰️ LIVE GLOBAL POSITIONING — <span style={{ fontFamily:'monospace' }}>{gpsResult.parcelId}</span></span>
-                      <span style={{ fontSize:11, fontWeight:700, color:'rgba(255,255,255,0.7)', fontFamily:'monospace' }}>⚡ LINK: {gpsLastRefresh}</span>
+                      <span style={{ fontSize:12, fontWeight:800, color:'white' }}>GPS POSITION — <span style={{ fontFamily:'monospace' }}>{gpsResult.parcelId}</span></span>
+                      <span style={{ fontSize:11, fontWeight:700, color:'rgba(255,255,255,0.7)', fontFamily:'monospace' }}>Last refresh: {gpsLastRefresh}</span>
                     </div>
                     <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(160px, 1fr))' }}>
                       {[

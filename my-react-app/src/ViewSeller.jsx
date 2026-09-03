@@ -6,7 +6,9 @@ import PaginationControls from './PaginationControls';
 import { exportToCSV, exportToExcel } from './exportUtils';
 import { apiFetch } from './services/api';
 import StatusBadge from './components/ui/StatusBadge';
+import { SELLER_STATUS_COLORS } from './components/ui/statusColors';
 import Modal from './components/ui/Modal';
+import { useToast } from './components/ui/ToastContext';
 import { isDemoEmail } from './demoUtils';
 
 const SELLER_EXPORT_COLUMNS = [
@@ -18,12 +20,6 @@ const SELLER_EXPORT_COLUMNS = [
   { key: 'commissionRate', label: 'Commission Rate (%)' },
   { key: 'status', label: 'Status' },
 ];
-
-const SELLER_STATUS_COLORS = {
-  ACTIVE:                { bg: '#d1fae5', color: '#065f46' },
-  PENDING_VERIFICATION:  { bg: '#fef3c7', color: '#92400e' },
-  ARCHIVED:              { bg: '#fee2e2', color: '#991b1b' },
-};
 
 const GenerateSellerReport = ({ sellers: externalSellers, onUpdateSellers, currentUser }) => {
   const [sellers, setSellers] = useState(() => (externalSellers ?? []).map(normalizeSeller));
@@ -77,8 +73,7 @@ const GenerateSellerReport = ({ sellers: externalSellers, onUpdateSellers, curre
   const [timelineLoading, setTimelineLoading] = useState(false);
   const [currentPage,   setCurrentPage]   = useState(1);
   const [recordsPerPage,setRecordsPerPage]= useState(10);
-  const [saveError,     setSaveError]     = useState('');
-  const [saveSuccess,   setSaveSuccess]   = useState('');
+  const toast = useToast();
 
   // Archived sellers live in Settings > Archived Records now, not here.
   const filteredSellers = sellers.filter(seller => {
@@ -144,8 +139,6 @@ const GenerateSellerReport = ({ sellers: externalSellers, onUpdateSellers, curre
 
   const handleSaveChanges = async (e) => {
     e.preventDefault();
-    setSaveError('');
-    setSaveSuccess('');
     try {
       const updateData = {
         fullName:   editingSeller.fullName,
@@ -175,15 +168,14 @@ const GenerateSellerReport = ({ sellers: externalSellers, onUpdateSellers, curre
         s._id === editingSeller._id ? { ...s, ...editingSeller } : s
       );
       applyUpdate(next);
-      setSaveSuccess('Changes saved successfully!');
+      toast('Changes saved successfully!');
       setTimeout(() => {
         setShowEditModal(false);
         setEditingSeller(null);
-        setSaveSuccess('');
-      }, 1000);
+      }, 350);
     } catch (err) {
       console.error('Error saving changes:', err);
-      setSaveError('Failed to save. Check your backend connection.');
+      toast('Failed to save. Check your backend connection.', 'error');
     }
   };
 
@@ -436,12 +428,10 @@ const GenerateSellerReport = ({ sellers: externalSellers, onUpdateSellers, curre
         <Modal tint="rgba(26,6,40,0.5)" blur={false} maxWidth={500} padding={0} cardStyle={{ borderRadius: 16, overflow: 'hidden', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
             <div style={{ background: '#390955', padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ color: 'white', margin: 0, fontSize: '15px', fontWeight: 700 }}>Update Profile Details</h3>
-              <button onClick={() => { setShowEditModal(false); setEditingSeller(null); setSaveError(''); setSaveSuccess(''); }} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', fontSize: '20px', lineHeight: 1 }}>&times;</button>
+              <button onClick={() => { setShowEditModal(false); setEditingSeller(null); }} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', fontSize: '20px', lineHeight: 1 }}>&times;</button>
             </div>
             <form onSubmit={handleSaveChanges} style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px', overflowY: 'auto' }}>
 
-              {saveError   && <div style={{ background: '#fee2e2', color: '#991b1b', padding: '10px 14px', borderRadius: '8px', fontSize: '13px', fontWeight: 600 }}>❌ {saveError}</div>}
-              {saveSuccess && <div style={{ background: '#d1fae5', color: '#065f46', padding: '10px 14px', borderRadius: '8px', fontSize: '13px', fontWeight: 600 }}>✅ {saveSuccess}</div>}
 
               <div>
                 <label style={{ fontSize: '11px', fontWeight: 700, color: '#a890c0', textTransform: 'uppercase', display: 'block', marginBottom: '6px' }}>Full Name</label>
@@ -515,7 +505,7 @@ const GenerateSellerReport = ({ sellers: externalSellers, onUpdateSellers, curre
               </div>
 
               <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '8px' }}>
-                <button type="button" style={s.btnOutline} onClick={() => { setShowEditModal(false); setEditingSeller(null); setSaveError(''); setSaveSuccess(''); }}>Cancel</button>
+                <button type="button" style={s.btnOutline} onClick={() => { setShowEditModal(false); setEditingSeller(null); }}>Cancel</button>
                 <button type="submit" style={s.btnPrimary}>Save Changes</button>
               </div>
             </form>

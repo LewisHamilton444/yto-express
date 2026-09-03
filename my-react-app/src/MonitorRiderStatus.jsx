@@ -2,13 +2,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { normalizeRider, mockRiders, RIDER_STATUS } from './sellerRiderData';
 import { ridersApi } from './services/api';
-
-const vehicleIcon = (v) => {
-  const type = String(v).toLowerCase();
-  if (type.includes('bike') || type.includes('e-bike')) return '⚡';
-  if (type.includes('bicycle')) return '🚲';
-  return '🛵';
-};
+import SimulatedFeedBadge from './components/ui/SimulatedFeedBadge';
+import { VehicleIcon, vehicleGlyphSvg } from './components/ui/vehicleIcons';
+import { Archive, BatteryMedium, Check, Database, MapPin, RefreshCw, RotateCw, X } from 'lucide-react';
 
 const CITY_COORDS = {
   Manila:{lat:14.5995,lng:120.9842}, 'Quezon City':{lat:14.6760,lng:121.0437}, Makati:{lat:14.5547,lng:121.0244},
@@ -82,7 +78,7 @@ function MapView({ lat, lng, vehicle, uniqueId }) {
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
       const customIcon = L.divIcon({
         className: '',
-        html: `<div style="width:34px;height:34px;border-radius:50% 50% 50% 0;background:#f37021;border:2px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.2);transform:rotate(-45deg);display:flex;align-items:center;justify-content:center;"><div style="transform:rotate(45deg);font-size:14px;">${vehicleIcon(vehicle)}</div></div>`,
+        html: `<div style="width:34px;height:34px;border-radius:50% 50% 50% 0;background:#f37021;border:2px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.2);transform:rotate(-45deg);display:flex;align-items:center;justify-content:center;"><div style="transform:rotate(45deg);display:flex;"><img src="${vehicleGlyphSvg(vehicle, 'white')}" alt="" width="16" height="16" style="display:block;" /></div></div>`,
         iconSize: [34, 34],
         iconAnchor: [17, 34]
       });
@@ -263,18 +259,19 @@ export default function MonitorRiderStatus({ currentUser }) {
         </div>
         <div style={{ display:'flex', alignItems:'center', gap:8 }}>
           {lastUpdated && <span style={{ fontSize:10, color:'#9b82b2', fontFamily:'monospace' }}>Updated {lastUpdated}</span>}
-          <button onClick={fetchRiders} style={{ padding:'6px 14px', background:'white', border:'1.5px solid #e0d5f0', borderRadius:8, fontSize:11, fontWeight:700, color:'#390955', cursor:'pointer' }}>
-            🔄 Refresh
+          <button onClick={fetchRiders} style={{ padding:'6px 14px', background:'white', border:'1.5px solid #e0d5f0', borderRadius:8, fontSize:11, fontWeight:700, color:'#390955', cursor:'pointer', display:'inline-flex', alignItems:'center', gap:6 }}>
+            <RefreshCw size={13} aria-hidden="true" /> Refresh
           </button>
           {archivedCount > 0 && (
-            <span style={{ display:'flex', alignItems:'center', gap:4, padding:'6px 12px', background:'rgba(127,140,141,0.1)', borderRadius:8, fontSize:11, fontWeight:700, color:'#7f8c8d' }}>
-              🗄 {archivedCount} Archived (hidden)
+            <span style={{ display:'flex', alignItems:'center', gap:5, padding:'6px 12px', background:'rgba(127,140,141,0.1)', borderRadius:8, fontSize:11, fontWeight:700, color:'#7f8c8d' }}>
+              <Archive size={13} aria-hidden="true" /> {archivedCount} Archived (hidden)
             </span>
           )}
           <span style={{ display:'flex', alignItems:'center', gap:4, padding:'6px 12px', background:'rgba(34,197,94,0.1)', borderRadius:8, fontSize:11, fontWeight:700, color:'#16a34a' }}>
             <span style={{ width:6, height:6, borderRadius:'50%', background:'#22c55e', animation:'pulse 1.5s infinite', display:'inline-block' }}/>
-            {riders.length} Online
+            {riders.length} Riders Shown
           </span>
+          <SimulatedFeedBadge text="Simulated presence" />
         </div>
       </header>
 
@@ -291,6 +288,13 @@ export default function MonitorRiderStatus({ currentUser }) {
               {l}
             </button>
           ))}
+        </div>
+
+        {/* Honest-label strip: no real heartbeat/GPS feed exists yet — the
+            positions, battery %, and online states below are simulated. */}
+        <div style={{ marginBottom: 16, fontSize: 12, color: '#b45309', background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 8, padding: '8px 12px', lineHeight: 1.5 }}>
+          Rider positions, device battery, and online/moving state below are <strong>simulated</strong> — real
+          telemetry will appear here automatically once the mobile app sends location and heartbeat pings.
         </div>
 
         {/* TAB 1: GPS COORDINATES - Only active DB riders */}
@@ -312,8 +316,8 @@ export default function MonitorRiderStatus({ currentUser }) {
                   <div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '12px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: '#f0eaf8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px' }}>
-                          {vehicleIcon(r.vehicleType)}
+                        <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: '#f0eaf8', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#390955' }}>
+                          <VehicleIcon type={r.vehicleType} size={19} />
                         </div>
                         <div>
                           <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: '#1a1a1a' }}>{r.fullName}</h4>
@@ -331,14 +335,14 @@ export default function MonitorRiderStatus({ currentUser }) {
                             background: r.deviceHealth.battery > 50 ? '#e6f9ed' : r.deviceHealth.battery > 20 ? '#fff4ec' : '#fff0f0',
                             color: r.deviceHealth.battery > 50 ? '#1e7e34' : r.deviceHealth.battery > 20 ? '#c2540d' : '#b91c1c',
                           }}>
-                            🔋 {r.deviceHealth.battery}%
+                            <BatteryMedium size={10} aria-hidden="true" /> {r.deviceHealth.battery}%
                           </span>
                           <span title="App Sync Status" style={{
                             fontSize: '9px', fontWeight: 700, padding: '2px 7px', borderRadius: '8px',
                             background: r.deviceHealth.syncStatus === 'synced' ? '#f0eaf8' : '#fff4ec',
                             color: r.deviceHealth.syncStatus === 'synced' ? '#390955' : '#c2540d',
                           }}>
-                            {r.deviceHealth.syncStatus === 'synced' ? '✓ Synced' : '⟳ Syncing'}
+                            {r.deviceHealth.syncStatus === 'synced' ? <><Check size={10} aria-hidden="true" /> Synced</> : <><RotateCw size={10} aria-hidden="true" /> Syncing</>}
                           </span>
                         </div>
                       </div>
@@ -381,6 +385,10 @@ export default function MonitorRiderStatus({ currentUser }) {
 
         {/* TAB 2: GEOFENCE BOUNDARY */}
         {activeTab === 'geofence' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ fontSize: 12, color: '#b45309', background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 8, padding: '8px 12px', lineHeight: 1.5 }}>
+              Sample geofence zones listed below are a local demo list — toggling a zone is a preview only and is not persisted or enforced.
+            </div>
           <div style={{ background: 'white', borderRadius: 14, border: '1px solid #e0d5f0', overflow: 'hidden' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
@@ -389,7 +397,7 @@ export default function MonitorRiderStatus({ currentUser }) {
               <tbody>
                 {geofences.map((g, i) => (
                   <tr key={g.id} style={i % 2 === 0 ? {} : { background: 'rgba(57,9,85,0.015)' }}>
-                    <td style={{ ...td, fontWeight: 700, color: '#390955' }}>📍 {g.name}</td>
+                    <td style={{ ...td, fontWeight: 700, color: '#390955' }}><span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><MapPin size={13} aria-hidden="true" /> {g.name}</span></td>
                     <td style={{ ...td, fontFamily: 'monospace', fontSize: 12 }}>{g.center}</td>
                     <td style={{ ...td, fontWeight: 600 }}>{g.radius}</td>
                     <td style={td}>
@@ -405,6 +413,7 @@ export default function MonitorRiderStatus({ currentUser }) {
               </tbody>
             </table>
           </div>
+          </div>
         )}
 
       </div>
@@ -416,7 +425,7 @@ export default function MonitorRiderStatus({ currentUser }) {
             {/* Header */}
             <div style={{ background: 'linear-gradient(135deg, #390955, #5a1f80)', padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>{vehicleIcon(selectedRider.vehicleType)}</div>
+                <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white' }}><VehicleIcon type={selectedRider.vehicleType} size={22} /></div>
                 <div>
                   <h3 style={{ color: 'white', margin: 0, fontSize: 15, fontWeight: 700 }}>{selectedRider.fullName || 'Rider'}</h3>
                   <p style={{ color: 'rgba(255,255,255,0.6)', margin: '2px 0 0', fontSize: 12 }}>{selectedRider.riderId} · {selectedRider.vehicleType}</p>

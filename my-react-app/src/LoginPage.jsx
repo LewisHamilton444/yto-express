@@ -14,7 +14,6 @@ const LoginPage = ({ onLogin }) => {
   const [shaking, setShaking] = useState(false);
   const [apiHealth, setApiHealth] = useState('checking');
 
-  // Carousel state
   // Caps Lock detection
   const detectCapsLock = useCallback((e) => {
     try {
@@ -45,7 +44,6 @@ const LoginPage = ({ onLogin }) => {
     };
   }, []);
 
-  // Carousel auto-play
   // Form submission
   const handleSubmit = async (e) => {
     e.preventDefault();

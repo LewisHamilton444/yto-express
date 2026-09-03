@@ -4,9 +4,10 @@ import {
   TrendingUp, TrendingDown,
   Trophy, Star, Route,
   ClipboardList, Download, Share2,
-  Users, PackageSearch, BarChart3,
+  Users, PackageSearch, BarChart3, AlertTriangle,
 } from 'lucide-react';
 import { apiFetch, parcelsApi, ridersApi } from './services/api';
+import { exportToCSV } from './exportUtils';
 import useSSE from './services/useSSE';
 import './AnalyticsDashboard.css';
 import yto_logo from './yto_express_logo.png';
@@ -31,6 +32,46 @@ import ConnectionHistoryChart             from "./ConnectionHistoryChart";
 import PeakAlertBanner                   from "./PeakAlertBanner";
 import GlobalHeader                      from "./GlobalHeader";
 import { initialPendingSellers, initialPendingRiders } from "./verification/mockPendingRegistrations";
+
+// ── Dashboard parcel-report exports (CSV + printable PDF) ───────────────
+const DASH_PARCEL_COLUMNS = [
+  { key: 'trackingNumber', label: 'Tracking Number' },
+  { key: 'senderName',     label: 'Sender' },
+  { key: 'receiverName',   label: 'Receiver' },
+  { key: 'destination',    label: 'Destination' },
+  { key: 'status',         label: 'Status' },
+  { key: 'createdAt',      label: 'Created' },
+];
+
+const escHtml = (v) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+function dashboardExportCSV(parcels) {
+  exportToCSV(parcels, DASH_PARCEL_COLUMNS, `yto-parcel-report-${new Date().toISOString().slice(0, 10)}`);
+}
+
+function dashboardExportPDF(parcels) {
+  const w = window.open('', '_blank');
+  if (!w) return;
+  const head = DASH_PARCEL_COLUMNS.map((c) => `<th>${escHtml(c.label)}</th>`).join('');
+  const rows = parcels.map((p) =>
+    `<tr>${DASH_PARCEL_COLUMNS.map((c) => `<td>${escHtml(p[c.key])}</td>`).join('')}</tr>`
+  ).join('');
+  w.document.write(`<html><head><title>YTO Parcel Report</title><style>
+    body{font-family:Arial,sans-serif;margin:24px;color:#1a1a1a}
+    h1{color:#390955;margin-bottom:2px}
+    p{color:#666;margin-top:0}
+    table{width:100%;border-collapse:collapse;margin-top:16px}
+    th,td{border:1px solid #e5e7eb;padding:8px 10px;text-align:left;font-size:12px}
+    th{background:#390955;color:white;text-transform:uppercase;letter-spacing:0.4px}
+    tr:nth-child(even){background:#faf8ff}
+  </style></head><body>
+    <h1>YTO Express — Parcel Report</h1>
+    <p>Generated ${new Date().toLocaleString()} · ${parcels.length} parcel(s)</p>
+    <table><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table>
+    <script>window.print();</script>
+  </body></html>`);
+  w.document.close();
+}
 
 // Menu is built per-role — Super Admin gets everything, Staff gets day-to-day
 // operations (no GPS tracking or account management), Hub Receiver gets only
@@ -211,6 +252,23 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
   const [activeMenuItem, setActiveMenuItem] = useState('dashboard');
   const [openSection, setOpenSection]       = useState(null);
 
+  // Collapsible sidebar: remembered per-browser, defaults to expanded.
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    try { return localStorage.getItem('yto_sidebar_collapsed') === '1'; } catch { return false; }
+  });
+  const [sidebarHover, setSidebarHover] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
+  const toggleSidebar = () => {
+    setSidebarCollapsed(prev => {
+      const next = !prev;
+      try { localStorage.setItem('yto_sidebar_collapsed', next ? '1' : '0'); } catch {}
+      return next;
+    });
+  };
+
+  const sidebarExpanded = !sidebarCollapsed || sidebarHover;
+
   const [sharedSellers, setSharedSellers] = useState([
     { id: 1, companyName: 'Fresh Express Store', displayName: 'Fresh Express Store', registrationId: 'SH-20220101-12345', status: 'Active', sellerType: 'Business', email: 'info@freshexpress.com', phone: '13823456789', totalParcels: 0 }
   ]);
@@ -252,10 +310,26 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
   }, []);
 
   const toggleSection   = (key) => setOpenSection(prev => (prev === key ? null : key));
-  const handleMenuClick = (key) => setActiveMenuItem(key);
-  const goToSettings    = () => setActiveMenuItem('settings');
+  const handleMenuClick = (key) => {
+    setActiveMenuItem(key);
+    // Auto-open the parent section whenever a nested child is activated, so
+    // the current page is never hidden behind a collapsed group (deep links
+    // from the header/search land with the right group expanded).
+    const parent = visibleMenuItems.find(item => item.children?.some(c => c.key === key));
+    if (parent) setOpenSection(parent.key);
+    setMobileNavOpen(false);
+  };
+  const goToSettings    = () => { setActiveMenuItem('settings'); setMobileNavOpen(false); };
 
   const visibleMenuItems = getMenuItems(currentUser?.role);
+
+  // Keep the sidebar's open section in sync whenever the active page is a
+  // nested child — covers header/search navigation and Logout's page resets.
+  useEffect(() => {
+    const parent = visibleMenuItems.find(item => item.children?.some(c => c.key === activeMenuItem));
+    if (parent) setOpenSection(parent.key);
+  }, [activeMenuItem, visibleMenuItems]);
+
 
   // ── Real data from the backend — no more hardcoded numbers ────────────────
   const [parcels, setParcels]         = useState([]);
@@ -407,9 +481,23 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
   };
 
   return (
-    <div className="ad-wrapper">
-      <aside className="ad-sidebar">
+    <div className={`ad-wrapper ${sidebarCollapsed ? 'ad-sidebar--collapsed' : ''}`}>
+      {/* Mobile backdrop — closes the drawer when tapping outside it */}
+      {mobileNavOpen && <div className="ad-mobile-backdrop" onClick={() => setMobileNavOpen(false)} aria-hidden="true" />}
+      <button className="ad-nav-hamburger" onClick={() => setMobileNavOpen(true)} aria-label="Open navigation menu">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+
+      <aside
+        className={`ad-sidebar ${mobileNavOpen ? 'ad-sidebar--mobile-open' : ''} ${sidebarCollapsed && sidebarHover ? 'ad-sidebar--hover-expanded' : ''}`}
+        onMouseEnter={() => setSidebarHover(true)}
+        onMouseLeave={() => setSidebarHover(false)}
+        aria-label="Main navigation"
+      >
         <div className="ad-sidebar-header">
+          <button className="ad-sidebar-collapse-btn" onClick={toggleSidebar} aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'} title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points={sidebarExpanded ? '15 18 9 12 15 6' : '9 18 15 12 9 6'} /></svg>
+          </button>
           <div className="ad-sidebar-logo">
             <div className="ad-sidebar-logo-circle">
               <img src={yto_logo} alt="YTO Express" className="ad-sidebar-logo-img" onError={(e) => { e.target.src = 'https://via.placeholder.com/150?text=YTO'; }} />
@@ -420,7 +508,7 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
 
         {/* Show logged in user info if available */}
         {currentUser && (
-          <div style={{ padding: '10px 16px 12px', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+          <div className="ad-sidebar-user" style={{ padding: '10px 16px 12px', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
             <div style={{ fontSize: '12px', fontWeight: 700, color: 'white', marginBottom: '2px' }}>{currentUser.name}</div>
             <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.45)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
               {{ super_admin: 'Super Admin', staff: 'Staff', hub_receiver: 'Hub Receiver' }[currentUser.role] || currentUser.role}
@@ -436,7 +524,7 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
                 <li key={item.key}>
                   {item.children ? (
                     <div className="ad-sidebar-dropdown">
-                      <button className={`ad-sidebar-nav-item ad-sidebar-nav-parent ${item.children.some(c => c.key === activeMenuItem) ? 'ad-sidebar-nav-parent--active' : ''}`} onClick={() => toggleSection(item.key)} type="button">
+                      <button className={`ad-sidebar-nav-item ad-sidebar-nav-parent ${item.children.some(c => c.key === activeMenuItem) ? 'ad-sidebar-nav-parent--active' : ''}`} onClick={() => toggleSection(item.key)} type="button" aria-expanded={openSection === item.key}>
                         {getIcon(item.key)}
                         <span className="ad-sidebar-nav-text">{item.label}</span>
                         <svg className={`ad-sidebar-chevron ${openSection === item.key ? 'ad-sidebar-chevron--rotated' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"/></svg>
@@ -444,19 +532,19 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
                       <ul className={`ad-sidebar-submenu ${openSection === item.key ? 'ad-sidebar-submenu--open' : ''}`}>
                         {item.children.map(child => (
                           <li key={child.key}>
-                            <a href="#" className={`ad-sidebar-submenu-link ${activeMenuItem === child.key ? 'ad-sidebar-submenu-link--active' : ''}`} onClick={(e) => { e.preventDefault(); handleMenuClick(child.key); }}>
+                            <button type="button" className={`ad-sidebar-submenu-link ${activeMenuItem === child.key ? 'ad-sidebar-submenu-link--active' : ''}`} onClick={() => handleMenuClick(child.key)}>
                               {icons.sub}
                               <span className="ad-sidebar-nav-text">{child.label}</span>
-                            </a>
+                            </button>
                           </li>
                         ))}
                       </ul>
                     </div>
                   ) : (
-                    <a href="#" className={`ad-sidebar-nav-item ${activeMenuItem === item.key ? 'ad-sidebar-nav-item--active' : ''}`} onClick={(e) => { e.preventDefault(); handleMenuClick(item.key); }}>
+                    <button type="button" className={`ad-sidebar-nav-item ${activeMenuItem === item.key ? 'ad-sidebar-nav-item--active' : ''}`} onClick={() => handleMenuClick(item.key)}>
                       {getIcon(item.key)}
                       <span className="ad-sidebar-nav-text">{item.label}</span>
-                    </a>
+                    </button>
                   )}
                 </li>
               ))}
@@ -516,7 +604,7 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
               <>
                 {statsError && (
                   <div style={{ fontSize: '11px', fontWeight: 600, color: '#c2410c', background: '#fff4ec', padding: '6px 12px', borderRadius: '8px', marginBottom: '10px', display: 'inline-block' }}>
-                    ⚠️ Stats endpoint unreachable — KPIs below are computed from the full parcel/rider lists instead.
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><AlertTriangle size={13} aria-hidden="true" /> Stats endpoint unreachable — KPIs below are computed from the full parcel/rider lists instead.</span>
                   </div>
                 )}
                 <div className="ed-kpi-row">
@@ -648,11 +736,11 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
                       <button className="ed-action-btn primary" onClick={() => handleMenuClick('manage-parcels')}>
                         <ClipboardList size={15} /> Generate Full Report
                       </button>
-                      <button className="ed-action-btn secondary">
+                      <button className="ed-action-btn secondary" disabled={parcels.length === 0} onClick={() => dashboardExportPDF(parcels)}>
                         <Download size={15} /> Download PDF
                       </button>
-                      <button className="ed-action-btn secondary">
-                        <Share2 size={15} /> Export
+                      <button className="ed-action-btn secondary" disabled={parcels.length === 0} onClick={() => dashboardExportCSV(parcels)}>
+                        <Share2 size={15} /> Export CSV
                       </button>
                     </div>
                   </section>

@@ -1,5 +1,6 @@
 'use client';
 import React from 'react';
+import { AlertTriangle, Check } from 'lucide-react';
 
 const STAGES = ['Picked Up', 'Arrived at Hub', 'In Transit', 'Out for Delivery', 'Delivered'];
 
@@ -44,7 +45,7 @@ export default function ParcelProgressTimeline({ parcel }) {
   if (isException) {
     return (
       <div style={{ padding: '12px 14px', background: '#fee2e2', border: '1.5px solid #fca5a5', borderRadius: 10, fontSize: 12.5, fontWeight: 700, color: '#991b1b', display: 'flex', alignItems: 'center', gap: 8 }}>
-        ⚠ {parcel?.status || 'Exception'} — this parcel left the standard delivery path.
+        <AlertTriangle size={15} aria-hidden="true" /> <span>{parcel?.status || 'Exception'} — this parcel left the standard delivery path.</span>
       </div>
     );
   }
@@ -65,7 +66,7 @@ export default function ParcelProgressTimeline({ parcel }) {
                 boxShadow: isCurrent ? '0 0 0 4px rgba(243,112,33,0.15)' : 'none',
                 flexShrink: 0,
               }}>
-                {done && !isCurrent && <span style={{ color: 'white', fontSize: 10, fontWeight: 800 }}>✓</span>}
+                {done && !isCurrent && <Check size={11} color="white" strokeWidth={3} aria-hidden="true" />}
               </div>
               <span style={{ fontSize: 10.5, fontWeight: isCurrent ? 800 : 600, color: done ? '#1a1a1a' : '#bbb', textAlign: 'center', lineHeight: 1.3, maxWidth: 74 }}>
                 {label}

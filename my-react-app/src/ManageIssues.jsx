@@ -7,8 +7,8 @@ import Badge from './components/ui/Badge';
 import PageHeader from './components/ui/PageHeader';
 import CardSectionHeader from './components/ui/CardSectionHeader';
 import CardFooter from './components/ui/CardFooter';
-import AlertBanner from './components/ui/AlertBanner';
 import TableSkeleton from './components/ui/TableSkeleton';
+import { useToast } from './components/ui/ToastContext';
 import { ACCOUNT_CATEGORY_TONE, ACCOUNT_CATEGORY_LABEL } from './components/ui/statusColors';
 import PaginationControls from './PaginationControls';
 import { isDemoEmail } from './demoUtils';
@@ -54,8 +54,7 @@ export default function ManageIssues({ currentUser }) {
   const [adminNotes, setAdminNotes] = useState('');
   const [newStatus, setNewStatus] = useState('Open');
   const [zoomedImage, setZoomedImage] = useState(null);
-  const [toastMsg, setToastMsg] = useState('');
-  const [toastType, setToastType] = useState('success');
+  const toast = useToast();
 
   const { lastEvent } = useSSE();
 
@@ -89,11 +88,7 @@ export default function ManageIssues({ currentUser }) {
     }
   }, [lastEvent]);
 
-  const showToast = (msg, type = 'success') => {
-    setToastMsg(msg);
-    setToastType(type);
-    setTimeout(() => setToastMsg(''), 3500);
-  };
+  const showToast = (msg, type = 'success') => toast(msg, type === 'error' ? 'error' : 'success');
 
   const handleOpenDetail = (issue) => {
     setSelectedIssue(issue);
@@ -162,7 +157,6 @@ export default function ManageIssues({ currentUser }) {
         breadcrumb={['Dashboard', 'Customer Management', 'Customer Issues']}
       />
 
-      {toastMsg && <AlertBanner variant={toastType === 'error' ? 'error' : 'success'} title={toastMsg} />}
 
       {/* Main table card */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">

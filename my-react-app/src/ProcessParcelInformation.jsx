@@ -1,5 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { apiFetch, parcelsApi, ridersApi, sellersApi } from './services/api';
+import { useToast } from './components/ui/ToastContext';
+import { PARCEL_STATUS_COLORS } from './components/ui/statusColors';
+import StatusBadge from './components/ui/StatusBadge';
+import { Plus, Pencil, X, Search, Bike } from 'lucide-react';
 import './ProcessParcelInformation.css';
 
 const generateTrackingNumber = () => {
@@ -9,21 +13,23 @@ const generateTrackingNumber = () => {
   return `PKG-${datePart}-${rand}`;
 };
 
-const STATUS_META = {
-  pending:      { label: 'Pending',    color: '#f59e0b' },
-  'in-transit': { label: 'In Transit', color: '#3b82f6' },
-  delivered:    { label: 'Delivered',  color: '#10b981' },
-  returned:     { label: 'Returned',   color: '#6b7280' },
-  failed:       { label: 'Failed',     color: '#ef4444' },
+// Status keys are stored lowercase-kebab in this legacy screen ('in-transit'),
+// while the canonical palette + shared StatusBadge speak Title Case ('In Transit').
+const normalizeStatusKey = (raw) => {
+  const s = String(raw || '').trim();
+  if (!s) return 'Pending';
+  // Already canonical (Title Case / single word)?
+  if (/^[A-Z]/.test(s) && !s.includes('-')) return s;
+  return s
+    .split(/[-_\s]+/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
 };
 
-const StatusBadge = ({ status }) => {
-  const meta = STATUS_META[status] || { label: status, color: '#999' };
-  return (
-    <span className="ppi-badge" style={{ background: meta.color + '20', color: meta.color, border: `1px solid ${meta.color}40` }}>
-      {meta.label}
-    </span>
-  );
+const ParcelStatusBadge = ({ status }) => {
+  const canonical = normalizeStatusKey(status);
+  return <StatusBadge status={canonical} colorMap={PARCEL_STATUS_COLORS} fallback="Pending" />;
 };
 
 const emptyAddForm = {
@@ -51,12 +57,9 @@ export default function ProcessParcelInformation() {
   const [retrieveSearch, setRetrieveSearch] = useState('');
   const [filterStatus,   setFilterStatus]   = useState('all');
   const [viewParcel,     setViewParcel]     = useState(null);
-  const [message,        setMessage]        = useState({ text: '', type: '' });
 
-  const showMsg = (text, type = 'success') => {
-    setMessage({ text, type });
-    setTimeout(() => setMessage({ text: '', type: '' }), 3500);
-  };
+  const toast = useToast();
+  const showMsg = (text, type = 'success') => toast(text, type === 'error' ? 'error' : 'success');
 
   // ── Fetch all data from MongoDB ──
   const fetchAll = async () => {
@@ -178,10 +181,10 @@ export default function ProcessParcelInformation() {
   });
 
   const tabs = [
-    { key: 'add',      icon: '＋', label: 'Add Parcel'      },
-    { key: 'update',   icon: '✎',  label: 'Update Parcel'   },
-    { key: 'delete',   icon: '✕',  label: 'Delete Parcel'   },
-    { key: 'retrieve', icon: '⊙',  label: 'Retrieve Parcel' },
+    { key: 'add',      Icon: Plus,   label: 'Add Parcel'      },
+    { key: 'update',   Icon: Pencil, label: 'Update Parcel'   },
+    { key: 'delete',   Icon: X,      label: 'Delete Parcel'   },
+    { key: 'retrieve', Icon: Search, label: 'Retrieve Parcel' },
   ];
 
   const CITIES = ['Manila','Makati','Quezon City','Pasig','BGC','Hagonoy','Bulacan','Caloocan','Marikina','Mandaluyong','Cebu','Davao','Other'];
@@ -200,10 +203,6 @@ export default function ProcessParcelInformation() {
           </nav>
         </div>
       </header>
-
-      {message.text && (
-        <div className={`ppi-toast ppi-toast--${message.type}`}>{message.text}</div>
-      )}
 
       {/* Stats Row */}
       <div className="ppi-stats-row">
@@ -233,7 +232,7 @@ export default function ProcessParcelInformation() {
         {tabs.map(t => (
           <button key={t.key} className={`ppi-tab ${activeTab === t.key ? 'ppi-tab--active' : ''}`}
             onClick={() => { setActiveTab(t.key); setSelectedParcel(null); }}>
-            <span className="ppi-tab-icon">{t.icon}</span>
+            <span className="ppi-tab-icon">{t.Icon ? <t.Icon size={14} strokeWidth={2.5} aria-hidden="true" /> : null}</span>
             {t.label}
           </button>
         ))}
@@ -409,7 +408,7 @@ export default function ProcessParcelInformation() {
                       <span className="ppi-parcel-route">{p.senderName} → {p.recipientName}</span>
                       <span className="ppi-parcel-meta">{p.weight}kg · {p.content || 'N/A'} · {p.destination || '—'}</span>
                     </div>
-                    <StatusBadge status={p.status} />
+                    <ParcelStatusBadge status={p.status} />
                   </div>
                 ))}
               </div>
@@ -500,7 +499,7 @@ export default function ProcessParcelInformation() {
                     </div>
                   </div>
                   <div className="ppi-delete-row-right">
-                    <StatusBadge status={p.status} />
+                    <ParcelStatusBadge status={p.status} />
                     <button className="ppi-btn ppi-btn--danger" onClick={() => setDeleteConfirm(p)}>Delete</button>
                   </div>
                 </div>
@@ -556,9 +555,9 @@ export default function ProcessParcelInformation() {
                           <td>{p.weight}kg</td>
                           <td>{p.destination || '—'}</td>
                           <td style={{ textTransform:'capitalize' }}>{p.serviceType}</td>
-                          <td><StatusBadge status={p.status}/></td>
+                          <td><ParcelStatusBadge status={p.status}/></td>
                           <td style={{ fontSize:11, color: assignedRider ? '#390955' : '#bbb', fontWeight: assignedRider ? 600 : 400 }}>
-                            {assignedRider ? `🛵 ${assignedRider.riderName}` : 'Unassigned'}
+                            {assignedRider ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><Bike size={13} aria-hidden="true" /> {assignedRider.riderName}</span> : 'Unassigned'}
                           </td>
                           <td><button className="ppi-btn-sm" onClick={() => setViewParcel(p)}>View</button></td>
                         </tr>
@@ -578,8 +577,8 @@ export default function ProcessParcelInformation() {
         <div className="ppi-overlay" onClick={() => setViewParcel(null)}>
           <div className="ppi-modal" onClick={e => e.stopPropagation()}>
             <div className="ppi-modal-head">
-              <div><h3>{viewParcel.trackingNumber}</h3><StatusBadge status={viewParcel.status} /></div>
-              <button className="ppi-modal-close" onClick={() => setViewParcel(null)}>✕</button>
+              <div><h3>{viewParcel.trackingNumber}</h3><ParcelStatusBadge status={viewParcel.status} /></div>
+              <button className="ppi-modal-close" onClick={() => setViewParcel(null)} aria-label="Close parcel details"><X size={16} strokeWidth={2.5} /></button>
             </div>
             <div className="ppi-modal-body">
               {[
@@ -633,7 +632,7 @@ export default function ProcessParcelInformation() {
       {deleteConfirm && (
         <div className="ppi-overlay">
           <div className="ppi-modal ppi-modal--sm">
-            <div className="ppi-modal-head"><h3>Confirm Deletion</h3></div>
+            <div className="ppi-modal-head ppi-modal-head--danger"><h3>Confirm Deletion</h3></div>
             <div className="ppi-modal-body">
               <p style={{ fontSize:'14px', lineHeight:1.6 }}>
                 Are you sure you want to permanently delete parcel <strong>{deleteConfirm.trackingNumber}</strong>? This cannot be undone.

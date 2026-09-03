@@ -3,6 +3,8 @@ import React, { useEffect, useState } from 'react';
 import { normalizeSeller, normalizeRider, SELLER_STATUS, RIDER_STATUS } from './sellerRiderData';
 import { apiFetch, sellersApi, ridersApi } from './services/api';
 import Modal from './components/ui/Modal';
+import { useToast } from './components/ui/ToastContext';
+import { Package, Bike } from 'lucide-react';
 
 // Archiving/Restoring/Permanently-Deleting sellers & riders all live here now
 // — the seller/rider ledger pages (View Seller, Generate Rider Data Report)
@@ -15,14 +17,11 @@ export default function SettingsArchiveView({ onCountsChange = () => {} }) {
   const [allSellers, setAllSellers] = useState([]);
   const [allRiders, setAllRiders]   = useState([]);
   const [loading, setLoading]   = useState(true);
-  const [notice, setNotice]     = useState({ show: false, message: '', type: '' });
   const [confirmDelete, setConfirmDelete] = useState(null); // { kind: 'seller'|'rider', record }
   const [confirmArchive, setConfirmArchive] = useState(null); // { kind: 'seller'|'rider', record }
+  const toast = useToast();
 
-  const showNotice = (message, type = 'success') => {
-    setNotice({ show: true, message, type });
-    setTimeout(() => setNotice({ show: false, message: '', type: '' }), 3000);
-  };
+  const showNotice = (message, type = 'success') => toast(message, type === 'error' ? 'error' : 'success');
 
   const fetchAll = async () => {
     setLoading(true);
@@ -153,7 +152,6 @@ export default function SettingsArchiveView({ onCountsChange = () => {} }) {
     btnArchive: { padding: '6px 14px', background: '#fee2e2', color: '#991b1b', border: '1px solid #fca5a5', borderRadius: 7, fontWeight: 700, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' },
     btnDelete:  { padding: '6px 14px', background: '#fee2e2', color: '#991b1b', border: '1px solid #fca5a5', borderRadius: 7, fontWeight: 700, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' },
     emptyState: { textAlign: 'center', padding: '36px 24px', color: '#bbb', fontSize: 13, background: '#fdfcfe', borderRadius: 10, border: '1.5px dashed #e0d0f0' },
-    notice:     (type) => ({ padding: '10px 16px', borderRadius: 8, marginBottom: 14, fontWeight: 600, fontSize: 13, background: type === 'error' ? '#fde8f0' : '#e8f5e9', color: type === 'error' ? '#c0392b' : '#2e7d32', border: `1px solid ${type === 'error' ? '#f5c6d0' : '#a5d6a7'}` }),
     archivedBadge: { display: 'inline-block', padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: '#ede4f5', color: '#6d1a9c', border: '1px solid rgba(109,26,156,0.2)' },
     activeBadge:   { display: 'inline-block', padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: '#d1fae5', color: '#065f46', border: '1px solid rgba(6,95,70,0.2)' },
   };
@@ -163,8 +161,6 @@ export default function SettingsArchiveView({ onCountsChange = () => {} }) {
 
   return (
     <div>
-      {notice.show && <div style={s.notice(notice.type)}>{notice.message}</div>}
-
       <div style={s.tabs}>
         <button style={s.tabBtn(subTab === 'sellers')} onClick={() => { setSubTab('sellers'); setSearch(''); }}>
           Sellers
@@ -197,7 +193,7 @@ export default function SettingsArchiveView({ onCountsChange = () => {} }) {
       ) : subTab === 'sellers' ? (
         sellersToShow.length === 0 ? (
           <div style={s.emptyState}>
-            <div style={{ fontSize: 28, marginBottom: 8 }}>📦</div>
+            <div style={{ fontSize: 28, marginBottom: 8, color: '#c4a8d8', display: 'flex' }}><Package size={28} aria-hidden="true" /></div>
             No {view} sellers{search.trim() ? ' match your search.' : ' at the moment.'}
           </div>
         ) : (
@@ -234,7 +230,7 @@ export default function SettingsArchiveView({ onCountsChange = () => {} }) {
       ) : (
         ridersToShow.length === 0 ? (
           <div style={s.emptyState}>
-            <div style={{ fontSize: 28, marginBottom: 8 }}>🏍️</div>
+            <div style={{ fontSize: 28, marginBottom: 8, color: '#c4a8d8', display: 'flex' }}><Bike size={28} aria-hidden="true" /></div>
             No {view} riders{search.trim() ? ' match your search.' : ' at the moment.'}
           </div>
         ) : (

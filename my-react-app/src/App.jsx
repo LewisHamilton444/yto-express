@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { setAuthToken, getAuthToken } from './services/api';
 import { isDemoEmail } from './demoUtils';
+import { ToastProvider } from './components/ui/ToastContext';
 
 import LoginPage from './LoginPage';
 import AnalyticsDashboard from "./AnalyticsDashboard"
@@ -91,16 +92,18 @@ function App() {
 
   return (
     <div style={{ flex: 1 }}>
-      <PageComponent
-        activePage={activePage}
-        setActivePage={setActivePage}
-        currentUser={currentUser}
-        onLogout={() => {
-          setAuthToken(null);
-          setCurrentUser(null);
-          setActivePage('dashboard');
-        }}
-      />
+      <ToastProvider>
+        <PageComponent
+          activePage={activePage}
+          setActivePage={setActivePage}
+          currentUser={currentUser}
+          onLogout={() => {
+            setAuthToken(null);
+            setCurrentUser(null);
+            setActivePage('dashboard');
+          }}
+        />
+      </ToastProvider>
     </div>
   );
 }

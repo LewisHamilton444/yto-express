@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import SettingsArchiveView from './SettingsArchiveView';
+import { FileText } from 'lucide-react';
+import { useToast } from './components/ui/ToastContext';
 
 export default function Settings({
   /* ── Archived tracking reports still come from AnalyticsDashboard; archived
@@ -8,19 +10,15 @@ export default function Settings({
   onRestoreReport = () => {},
 }) {
   const [archiveCounts, setArchiveCounts] = useState({ sellers: 0, riders: 0 });
-  const [notification, setNotification] = useState({ show: false, message: '', type: '' });
+  const toast = useToast();
 
-  const showNotification = (message, type = 'success') => {
-    setNotification({ show: true, message, type });
-    setTimeout(() => setNotification({ show: false, message: '', type: '' }), 3000);
-  };
+  const showNotification = (message, type = 'success') => toast(message, type === 'error' ? 'error' : 'success');
 
   const s = {
     wrapper:      { padding: '30px', background: '#f7f4fa', minHeight: '100vh' },
     header:       { marginBottom: 28, paddingBottom: 24, borderBottom: '1px solid #e0d0f0' },
     h1:           { fontSize: 28, fontWeight: 700, color: '#1a1a1a', margin: 0 },
     subtitle:     { fontSize: 14, color: '#888', margin: '6px 0 0' },
-    notification: (type) => ({ padding: '12px 20px', borderRadius: 8, marginBottom: 20, fontWeight: 600, fontSize: 13, background: type === 'error' ? '#fde8f0' : '#e8f5e9', color: type === 'error' ? '#c0392b' : '#2e7d32', border: `1px solid ${type === 'error' ? '#f5c6d0' : '#a5d6a7'}` }),
     section:      { background: 'white', borderRadius: 12, padding: 28, marginBottom: 20, boxShadow: '0 1px 3px rgba(57,9,85,0.06)', border: '1px solid rgba(57,9,85,0.07)', position: 'relative', overflow: 'hidden' },
     sectionAccent:{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: 'linear-gradient(90deg, #390955, #7b3fa0)' },
     sectionH2:    { fontSize: 16, fontWeight: 700, color: '#1a1a1a', margin: '0 0 4px' },
@@ -42,8 +40,6 @@ export default function Settings({
         <h1 style={s.h1}>Settings</h1>
         <p style={s.subtitle}>Inspect and manage archived sellers, riders, and tracking reports</p>
       </div>
-
-      {notification.show && <div style={s.notification(notification.type)}>{notification.message}</div>}
 
       {/* ══════════════════════════════════════════════
           ARCHIVED RECORDS — the sole view on this page
@@ -84,7 +80,7 @@ export default function Settings({
           </div>
           <p style={s.sectionP}>Restore a tracking report to make it available for download again.</p>
           {archivedReports.length === 0 ? (
-            <div style={s.emptyState}><div style={{ fontSize: 28, marginBottom: 8 }}>📄</div>No archived tracking reports at the moment.</div>
+            <div style={s.emptyState}><div style={{ fontSize: 28, marginBottom: 8, color: '#c4a8d8', display: 'flex' }}><FileText size={28} aria-hidden="true" /></div>No archived tracking reports at the moment.</div>
           ) : (
             <div style={{ overflowX: 'auto', borderRadius: 10, border: '1px solid #ede4f5' }}>
               <table style={s.table}>

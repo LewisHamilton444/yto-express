@@ -3,13 +3,8 @@ import React, { useState, useEffect } from 'react';
 import LiveRiderMap from './LiveRiderMap';
 import { CITY_COORDS } from './luzonCityCoords';
 import { ridersApi, parcelsApi } from './services/api';
-
-const vehicleIcon = (v) => {
-  const t = String(v).toLowerCase();
-  if (t.includes('e-bike')) return '⚡';
-  if (t.includes('bicycle')) return '🚲';
-  return '🛵';
-};
+import { VehicleIcon } from './components/ui/vehicleIcons';
+import { Package, RefreshCw } from 'lucide-react';
 
 export default function MonitorGeofenceBoundary() {
   const [riders,        setRiders]        = useState([]);
@@ -111,8 +106,8 @@ export default function MonitorGeofenceBoundary() {
         </div>
         <div style={{display:'flex',alignItems:'center',gap:8}}>
           {lastUpdated&&<span style={{fontSize:10,color:'#9b82b2',fontFamily:'monospace'}}>Updated {lastUpdated}</span>}
-          <button onClick={fetchData} style={{padding:'5px 12px',background:'white',border:'1.5px solid #e0d5f0',borderRadius:8,fontSize:11,fontWeight:700,color:'#390955',cursor:'pointer'}}>🔄 Refresh</button>
-          <span style={{display:'flex',alignItems:'center',gap:4,padding:'5px 12px',background:'rgba(57,9,85,0.08)',borderRadius:8,fontSize:11,fontWeight:700,color:'#390955'}}>📦 {parcels.length} Parcels</span>
+          <button onClick={fetchData} style={{padding:'5px 12px',background:'white',border:'1.5px solid #e0d5f0',borderRadius:8,fontSize:11,fontWeight:700,color:'#390955',cursor:'pointer',display:'inline-flex',alignItems:'center',gap:5}}><RefreshCw size={12} aria-hidden="true" /> Refresh</button>
+          <span style={{display:'inline-flex',alignItems:'center',gap:5,padding:'5px 12px',background:'rgba(57,9,85,0.08)',borderRadius:8,fontSize:11,fontWeight:700,color:'#390955'}}><Package size={12} aria-hidden="true" /> {parcels.length} Parcels</span>
           <span style={{display:'flex',alignItems:'center',gap:4,padding:'5px 12px',background:'rgba(34,197,94,0.1)',borderRadius:8,fontSize:11,fontWeight:700,color:'#16a34a'}}>
             <span style={{width:6,height:6,borderRadius:'50%',background:'#22c55e',animation:'pulse 1.5s infinite',display:'inline-block'}}/>
             Live · {riders.length} Riders
@@ -142,6 +137,9 @@ export default function MonitorGeofenceBoundary() {
                 {t}
               </button>
             ))}
+          </div>
+          <div style={{margin:'0 16px 12px',fontSize:11,color:'#92400e',background:'#fff7ed',border:'1px solid #fcd34d',borderRadius:8,padding:'6px 10px',lineHeight:1.4}}>
+            Sample alert feed — live geofence events will appear here automatically as they stream in via SSE.
           </div>
           <div style={{padding:'12px',display:'flex',flexDirection:'column',gap:8,maxHeight:200,overflowY:'auto'}}>
             {filteredAlerts.length===0 ? (
@@ -185,7 +183,7 @@ export default function MonitorGeofenceBoundary() {
                         style={{background:i%2===0?'white':'rgba(57,9,85,0.015)'}}>
                         <td style={{padding:'12px 16px',fontFamily:'monospace',fontSize:11,fontWeight:700,color:'#f37021'}}>{r.id}</td>
                         <td style={{padding:'12px 16px',fontWeight:700,color:'#1a0a2e'}}>
-                          <span style={{marginRight:6}}>{vehicleIcon(r.vehicle)}</span>{r.name}
+                          <span style={{marginRight:6, verticalAlign:'middle', color:'#390955'}}><VehicleIcon type={r.vehicle} size={16} /></span>{r.name}
                         </td>
                         <td style={{padding:'12px 16px',color:'#555'}}>{r.vehicle}</td>
                         <td style={{padding:'12px 16px'}}>
@@ -196,7 +194,7 @@ export default function MonitorGeofenceBoundary() {
                         </td>
                         <td style={{padding:'12px 16px',fontSize:11,color:'#888'}}>{r.barangay||'—'}</td>
                         <td style={{padding:'12px 16px',fontSize:11,color:rParcel?'#f37021':'#bbb',fontWeight:rParcel?600:400}}>
-                          {rParcel?`📦 ${rParcel.trackingNumber}`:'Unassigned'}
+                          {rParcel ? <span style={{display:'inline-flex',alignItems:'center',gap:4}}><Package size={11} aria-hidden="true" /> {rParcel.trackingNumber}</span> : 'Unassigned'}
                         </td>
                       </tr>
                     );

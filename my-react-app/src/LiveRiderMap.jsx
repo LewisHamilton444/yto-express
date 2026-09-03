@@ -6,6 +6,9 @@ import { CITY_COORDS, LUZON_FALLBACK_COORDS } from './luzonCityCoords';
 import { MOCK_LUZON_RIDERS, MOCK_LUZON_PARCELS } from './luzonMockData';
 import { useRouteAnimation } from './useRouteAnimation';
 import { buildLiveAlerts } from './alertsFeed';
+import { vehicleGlyphSvg, vehicleTypeLabel } from './components/ui/vehicleIcons';
+import { VehicleIcon } from './components/ui/vehicleIcons';
+import { AlertTriangle, CircleDot, Flame, Map, Package, RefreshCw, Satellite, TrafficCone, X } from 'lucide-react';
 import { ridersApi, parcelsApi } from './services/api';
 import useSSE from './services/useSSE';
 
@@ -25,13 +28,6 @@ function congestionColor(rider) {
   return '#22c55e';
 }
 
-const vehicleEmoji = (v) => {
-  const t = String(v).toLowerCase();
-  if (t.includes('e-bike')) return '⚡';
-  if (t.includes('bicycle')) return '🚲';
-  if (t.includes('van')) return '🚐';
-  return '🛵';
-};
 
 // Nearest hub to a point — used as the destination for any real rider, since
 // MongoDB rider records don't store a hub assignment or a route directly.
@@ -54,7 +50,7 @@ function buildRiderIcon(L, vehicleType, bearing, selected) {
     <div style="position:relative;width:${size}px;height:${size}px;transform:rotate(${bearing}deg);">
       <div style="position:absolute;top:-7px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-bottom:9px solid ${bg};"></div>
       <div style="width:${size}px;height:${size}px;border-radius:50%;background:${bg};border:2.5px solid white;box-shadow:0 3px 10px rgba(0,0,0,0.35);display:flex;align-items:center;justify-content:center;transform:rotate(${-bearing}deg);">
-        <span style="font-size:${selected ? 16 : 14}px;">${vehicleEmoji(vehicleType)}</span>
+        <img src="${vehicleGlyphSvg(vehicleType, 'white')}" alt="" width="${selected ? 18 : 14}" height="${selected ? 18 : 14}" style="display:block;" />
       </div>
     </div>
   `;
@@ -67,10 +63,10 @@ function buildRiderPopupHtml(rider) {
     <div style="font-family:sans-serif;font-size:12px;line-height:1.8;min-width:180px;">
       <b style="color:#390955;font-size:13px;">${rider.fullName}</b><br/>
       <span style="color:#9b82b2;font-size:11px;font-family:monospace;">${rider.riderId}</span><br/>
-      <span style="color:#555;">${vehicleEmoji(rider.vehicleType)} ${rider.vehicleType}</span><br/>
+      <span style="color:#555;">${vehicleTypeLabel(rider.vehicleType)} · ${rider.vehicleType}</span><br/>
       <span style="color:#16a34a;font-weight:700;">● Moving • ${rider.speedKmh || 30} km/h</span><br/>
-      <span style="color:#888;">📍 ${rider.city || 'Luzon'}</span><br/>
-      <span style="color:#f37021;">🏭 ${hub ? hub.hubName : '—'}</span>
+      <span style="color:#888;">${rider.city || 'Luzon'}</span><br/>
+      <span style="color:#f37021;">${hub ? hub.hubName : '—'}</span>
     </div>
   `;
 }
@@ -250,7 +246,7 @@ export default function LiveRiderMap() {
         const hubMarker = L.marker([lat, lng], {
           icon: L.divIcon({
             className: '',
-            html: `<div style="width:32px;height:32px;border-radius:9px;background:${color};border:2.5px solid white;box-shadow:0 2px 10px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;font-size:15px;">🏭</div>`,
+            html: `<div style="width:32px;height:32px;border-radius:9px;background:${color};border:2.5px solid white;box-shadow:0 2px 10px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;"><img src="${vehicleGlyphSvg('van', 'white')}" alt="" width="17" height="17" style="display:block;" /></div>`,
             iconSize: [32, 32], iconAnchor: [16, 16], popupAnchor: [0, -18],
           }),
         })
@@ -376,7 +372,7 @@ export default function LiveRiderMap() {
     <div style={card}>
       <div style={{ padding: '14px 20px', borderBottom: '1px solid rgba(57,9,85,0.07)', background: 'rgba(57,9,85,0.02)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ width: 30, height: 30, borderRadius: 8, background: '#390955', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15 }}>🗺️</div>
+          <div style={{ width: 30, height: 30, borderRadius: 8, background: '#390955', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Map size={15} color="white" aria-hidden="true" /></div>
           <div>
             <div style={{ fontSize: 14, fontWeight: 800, color: '#1a0a2e' }}>Live Rider Map</div>
             <div style={{ fontSize: 11, color: '#9b82b2' }}>{LOGISTICS_HUBS.length} hubs · {riders.length} riders in motion · Luzon-only coverage</div>
@@ -385,27 +381,27 @@ export default function LiveRiderMap() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {usingMock && <span style={{ fontSize: 10, fontWeight: 700, color: '#c2410c', background: '#fff4ec', padding: '3px 9px', borderRadius: 20 }}>Showing sample Luzon data (backend unreachable)</span>}
           {lastUpdated && <span style={{ fontSize: 10, color: '#9b82b2', fontFamily: 'monospace' }}>Updated {lastUpdated}</span>}
-          <button onClick={fetchData} style={{ padding: '5px 12px', background: 'white', border: '1.5px solid #e0d5f0', borderRadius: 8, fontSize: 11, fontWeight: 700, color: '#390955', cursor: 'pointer' }}>🔄 Refresh</button>
+          <button onClick={fetchData} style={{ padding: '5px 12px', background: 'white', border: '1.5px solid #e0d5f0', borderRadius: 8, fontSize: 11, fontWeight: 700, color: '#390955', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}><RefreshCw size={12} aria-hidden="true" /> Refresh</button>
         </div>
       </div>
 
       {topAlert && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 20px', background: topAlert.severity === 'danger' ? '#fee2e2' : '#fff4ec', borderBottom: `1px solid ${topAlert.severity === 'danger' ? '#fca5a5' : '#f9d4b6'}` }}>
-          <span style={{ fontSize: 16 }}>{topAlert.severity === 'danger' ? '🚨' : '⚠️'}</span>
+          <span style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>{topAlert.severity === 'danger' ? <AlertTriangle size={17} color="#991b1b" aria-hidden="true" /> : <AlertTriangle size={17} color="#c2410c" aria-hidden="true" />}</span>
           <span style={{ fontSize: 12.5, fontWeight: 700, color: topAlert.severity === 'danger' ? '#991b1b' : '#c2410c', flex: 1 }}>
             {topAlert.type} — {topAlert.riderName} in {topAlert.zone} ({topAlert.minutesAgo} min ago)
             {activeAlerts.length > 1 && <span style={{ fontWeight: 500, opacity: 0.75 }}> · +{activeAlerts.length - 1} more active alert{activeAlerts.length - 1 !== 1 ? 's' : ''}</span>}
           </span>
-          <button onClick={() => setDismissedAlertIds(prev => [...prev, topAlert.id])} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: topAlert.severity === 'danger' ? '#991b1b' : '#c2410c', lineHeight: 1 }}>✕</button>
+          <button onClick={() => setDismissedAlertIds(prev => [...prev, topAlert.id])} aria-label="Dismiss alert" style={{ background: 'none', border: 'none', cursor: 'pointer', color: topAlert.severity === 'danger' ? '#991b1b' : '#c2410c', lineHeight: 1, display: 'inline-flex', padding: 2 }}><X size={16} aria-hidden="true" /></button>
         </div>
       )}
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 20px', borderBottom: '1px solid rgba(57,9,85,0.07)', flexWrap: 'wrap' }}>
         <span style={{ fontSize: 11, fontWeight: 700, color: '#9b82b2', textTransform: 'uppercase', letterSpacing: 0.4 }}>Map Layers</span>
-        <button style={layerBtn(layers.traffic)} onClick={() => toggleLayer('traffic')}>🚦 Traffic</button>
-        <button style={layerBtn(layers.satellite)} onClick={() => toggleLayer('satellite')}>🛰️ Satellite</button>
-        <button style={layerBtn(layers.geofences)} onClick={() => toggleLayer('geofences')}>⭕ Geofences</button>
-        <button style={layerBtn(layers.heatmap)} onClick={() => toggleLayer('heatmap')}>🔥 Heatmap</button>
+        <button style={{ ...layerBtn(layers.traffic), display: 'inline-flex', alignItems: 'center', gap: 5 }} onClick={() => toggleLayer('traffic')}><TrafficCone size={12} aria-hidden="true" /> Traffic</button>
+        <button style={{ ...layerBtn(layers.satellite), display: 'inline-flex', alignItems: 'center', gap: 5 }} onClick={() => toggleLayer('satellite')}><Satellite size={12} aria-hidden="true" /> Satellite</button>
+        <button style={{ ...layerBtn(layers.geofences), display: 'inline-flex', alignItems: 'center', gap: 5 }} onClick={() => toggleLayer('geofences')}><CircleDot size={12} aria-hidden="true" /> Geofences</button>
+        <button style={{ ...layerBtn(layers.heatmap), display: 'inline-flex', alignItems: 'center', gap: 5 }} onClick={() => toggleLayer('heatmap')}><Flame size={12} aria-hidden="true" /> Heatmap</button>
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 20px', borderBottom: '1px solid rgba(57,9,85,0.07)', flexWrap: 'wrap' }}>
@@ -452,6 +448,9 @@ export default function LiveRiderMap() {
                 {x.label}
               </div>
             ))}
+            <div style={{ fontSize: 9, opacity: 0.7, color: '#b45309' }}>
+              Rider routes &amp; speeds are simulated — real positions appear as location pings stream in.
+            </div>
           </div>
         </div>
 
@@ -469,7 +468,7 @@ export default function LiveRiderMap() {
                       <span style={{ fontSize: 12, fontWeight: 700, color: '#1a0a2e' }}>{h.hubName}</span>
                       <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 20, background: colors.bg, color: colors.color }}>{h.status}</span>
                     </div>
-                    <div style={{ fontSize: 11, color: '#9b82b2', marginTop: 4 }}>📦 {h.activeParcelsCount} parcels · 🛵 {h.assignedRidersCount} riders</div>
+                    <div style={{ fontSize: 11, color: '#9b82b2', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}><Package size={11} aria-hidden="true" /> {h.activeParcelsCount} parcels · <VehicleIcon type="motorcycle" size={12} /> {h.assignedRidersCount} riders</div>
                   </div>
                 );
               })}
@@ -481,7 +480,7 @@ export default function LiveRiderMap() {
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
                 <div style={{ fontSize: 15, fontWeight: 800, color: '#1a0a2e' }}>{hub.hubName}</div>
-                <button onClick={() => setSelectedHub(null)} style={{ width: 22, height: 22, borderRadius: 6, border: '1.5px solid rgba(57,9,85,0.15)', background: 'white', cursor: 'pointer', color: '#9b82b2', fontSize: 12 }}>✕</button>
+                <button onClick={() => setSelectedHub(null)} aria-label="Close hub details" style={{ width: 22, height: 22, borderRadius: 6, border: '1.5px solid rgba(57,9,85,0.15)', background: 'white', cursor: 'pointer', color: '#9b82b2', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><X size={13} aria-hidden="true" /></button>
               </div>
               <div style={{ fontSize: 11, color: '#9b82b2', marginBottom: 12, fontFamily: 'monospace' }}>{hub.hubId} · {hub.region}</div>
               <div style={statRow}><span style={{ color: '#888' }}>Status</span><span style={{ fontWeight: 700 }}>{hub.status}</span></div>
@@ -508,8 +507,8 @@ export default function LiveRiderMap() {
           {rider && (
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
-                <div style={{ fontSize: 15, fontWeight: 800, color: '#1a0a2e' }}>{vehicleEmoji(rider.vehicleType)} {rider.fullName}</div>
-                <button onClick={() => setSelectedRider(null)} style={{ width: 22, height: 22, borderRadius: 6, border: '1.5px solid rgba(57,9,85,0.15)', background: 'white', cursor: 'pointer', color: '#9b82b2', fontSize: 12 }}>✕</button>
+                <div style={{ fontSize: 15, fontWeight: 800, color: '#1a0a2e', display: 'flex', alignItems: 'center', gap: 6 }}><VehicleIcon type={rider.vehicleType} size={16} /> {rider.fullName}</div>
+                <button onClick={() => setSelectedRider(null)} aria-label="Close rider details" style={{ width: 22, height: 22, borderRadius: 6, border: '1.5px solid rgba(57,9,85,0.15)', background: 'white', cursor: 'pointer', color: '#9b82b2', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><X size={13} aria-hidden="true" /></button>
               </div>
               <div style={{ fontSize: 11, color: '#9b82b2', marginBottom: 12, fontFamily: 'monospace' }}>{rider.riderId}</div>
               <div style={statRow}><span style={{ color: '#888' }}>Vehicle Type</span><span style={{ fontWeight: 700 }}>{rider.vehicleType}</span></div>

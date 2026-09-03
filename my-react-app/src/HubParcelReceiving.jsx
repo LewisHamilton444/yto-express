@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { apiFetch, parcelsApi } from './services/api';
 import StatusBadge from './components/ui/StatusBadge';
+import { useToast } from './components/ui/ToastContext';
+import Modal from './components/ui/Modal';
 import { PARCEL_STATUS_COLORS } from './components/ui/statusColors';
 
 // Hub receiving adds two statuses on top of the shared parcel-status
@@ -16,8 +18,7 @@ export default function HubParcelReceiving() {
   const [loading,    setLoading]    = useState(true);
   const [search,     setSearch]     = useState('');
   const [updatingId, setUpdatingId] = useState(null);
-  const [successMsg, setSuccessMsg] = useState('');
-  const [errorMsg,   setErrorMsg]   = useState('');
+  const [confirmReturn, setConfirmReturn] = useState(null);
 
   useEffect(() => {
     fetchParcels();
@@ -35,10 +36,8 @@ export default function HubParcelReceiving() {
     }
   };
 
-  const flash = (msg, type) => {
-    if (type === 'success') { setSuccessMsg(msg); setTimeout(() => setSuccessMsg(''), 3000); }
-    else                    { setErrorMsg(msg);   setTimeout(() => setErrorMsg(''), 3000); }
-  };
+  const toast = useToast();
+  const flash = (msg, type = 'success') => toast(msg, type === 'error' ? 'error' : 'success');
 
   const markStatus = async (parcel, status) => {
     setUpdatingId(parcel._id);
@@ -82,16 +81,6 @@ export default function HubParcelReceiving() {
       </header>
 
       <div style={{ padding: '24px 32px' }}>
-        {successMsg && (
-          <div style={{ padding: '10px 16px', borderRadius: '8px', background: '#d1fae5', color: '#065f46', fontSize: '13px', fontWeight: 600, marginBottom: '16px' }}>
-            {successMsg}
-          </div>
-        )}
-        {errorMsg && (
-          <div style={{ padding: '10px 16px', borderRadius: '8px', background: '#fee2e2', color: '#991b1b', fontSize: '13px', fontWeight: 600, marginBottom: '16px' }}>
-            {errorMsg}
-          </div>
-        )}
 
         <div style={{ background: 'white', borderRadius: '12px', border: '1px solid #e8e0f0', boxShadow: '0 2px 8px rgba(57,9,85,0.05)', overflow: 'hidden' }}>
           <div style={{ padding: '16px 20px', borderBottom: '1.5px solid #f0eaf8', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
@@ -121,7 +110,17 @@ export default function HubParcelReceiving() {
               <tbody>
                 {loading ? (
                   <tr><td colSpan={6} style={{ padding: '40px 16px', textAlign: 'center', color: '#aaa', fontSize: '13px' }}>Loading parcels…</td></tr>
-                ) : filtered.length > 0 ? filtered.map((p, idx) => (
+                ) : filtered.length > 0 ? filtered.map((p, idx) => {
+                  const st = String(p.status || '').toLowerCase();
+                  const alreadyReceived = st === 'received at hub';
+                  const alreadyReturned = st === 'returned' || st === 'returned to hub';
+                  const terminal = st === 'delivered' || st === 'failed';
+                  const busy = updatingId === p._id;
+                  // Received only makes sense while a parcel is still on the
+                  // way; Returned is a guarded (confirmed) reversal.
+                  const receivedDisabled = busy || alreadyReceived || alreadyReturned || terminal;
+                  const returnedDisabled  = busy || alreadyReturned;
+                  return (
                   <tr key={p._id} style={{ background: idx % 2 === 0 ? 'white' : '#faf9ff' }}>
                     <td style={{ padding: '12px 16px', fontFamily: 'monospace', color: '#390955', fontWeight: 700, whiteSpace: 'nowrap', borderBottom: '1px solid #f3f0f8' }}>{p.trackingNumber}</td>
                     <td style={{ padding: '12px 16px', color: '#1a1a1a', fontWeight: 600, whiteSpace: 'nowrap', borderBottom: '1px solid #f3f0f8' }}>{p.senderName}</td>
@@ -132,24 +131,27 @@ export default function HubParcelReceiving() {
                       <div style={{ display: 'flex', gap: '6px' }}>
                         <button
                           type="button"
-                          disabled={updatingId === p._id}
+                          disabled={receivedDisabled}
                           onClick={() => markStatus(p, 'Received at Hub')}
-                          style={{ padding: '6px 10px', borderRadius: '6px', border: 'none', cursor: updatingId === p._id ? 'default' : 'pointer', background: '#065f46', color: 'white', fontSize: '11px', fontWeight: 700, opacity: updatingId === p._id ? 0.6 : 1 }}
+                          title={alreadyReceived ? 'Already marked as received at hub' : 'Mark parcel as received at the hub'}
+                          style={{ padding: '6px 10px', borderRadius: '6px', border: 'none', cursor: receivedDisabled ? 'default' : 'pointer', background: '#065f46', color: 'white', fontSize: '11px', fontWeight: 700, opacity: receivedDisabled ? 0.45 : 1 }}
                         >
                           Received at Hub
                         </button>
                         <button
                           type="button"
-                          disabled={updatingId === p._id}
-                          onClick={() => markStatus(p, 'Returned to Hub')}
-                          style={{ padding: '6px 10px', borderRadius: '6px', border: 'none', cursor: updatingId === p._id ? 'default' : 'pointer', background: '#991b1b', color: 'white', fontSize: '11px', fontWeight: 700, opacity: updatingId === p._id ? 0.6 : 1 }}
+                          disabled={returnedDisabled}
+                          onClick={() => setConfirmReturn(p)}
+                          title="Return parcel to the hub (requires confirmation)"
+                          style={{ padding: '6px 10px', borderRadius: '6px', border: 'none', cursor: returnedDisabled ? 'default' : 'pointer', background: '#991b1b', color: 'white', fontSize: '11px', fontWeight: 700, opacity: returnedDisabled ? 0.45 : 1 }}
                         >
                           Returned to Hub
                         </button>
                       </div>
                     </td>
                   </tr>
-                )) : (
+                  );
+                }) : (
                   <tr><td colSpan={6} style={{ padding: '40px 16px', textAlign: 'center', color: '#aaa', fontSize: '13px' }}>No parcels found.</td></tr>
                 )}
               </tbody>
@@ -157,6 +159,31 @@ export default function HubParcelReceiving() {
           </div>
         </div>
       </div>
+
+      {/* Return-to-Hub confirmation — reversal of an in-flow parcel */}
+      {confirmReturn && (
+        <Modal onBackdropClick={() => setConfirmReturn(null)} tint="rgba(26,6,40,0.55)" blur={false} maxWidth={400} padding={24} cardStyle={{ borderRadius: 16 }}>
+          <h3 style={{ margin: '0 0 10px', fontSize: 17, fontWeight: 800, color: '#991b1b' }}>Return parcel to hub?</h3>
+          <p style={{ margin: 0, fontSize: 13, color: '#555', lineHeight: 1.6 }}>
+            <strong>{confirmReturn.trackingNumber}</strong> ({confirmReturn.senderName} to {confirmReturn.receiverName}) will be
+            marked as <strong>Returned to Hub</strong>. This updates the parcel status and notifies connected screens.
+          </p>
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 20 }}>
+            <button
+              onClick={() => setConfirmReturn(null)}
+              style={{ padding: '9px 18px', borderRadius: 8, border: '1.5px solid #e0d5f0', background: 'white', color: '#390955', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => { const p = confirmReturn; setConfirmReturn(null); markStatus(p, 'Returned to Hub'); }}
+              style={{ padding: '9px 18px', borderRadius: 8, border: 'none', background: '#991b1b', color: 'white', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
+            >
+              Yes, Return to Hub
+            </button>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

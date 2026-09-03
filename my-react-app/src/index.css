@@ -11,3 +11,15 @@ body {
 html, body, #root {
   height: 100%;
 }
+
+/* Respect users who ask their OS to reduce motion — kill decorative
+   animation (pulse dots, toast slide-ins, keyframe loops) while keeping
+   layout transitions functional. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

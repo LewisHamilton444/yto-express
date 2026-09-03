@@ -1,6 +1,7 @@
 'use client';
 import React, { useEffect, useRef, useState } from 'react';
 import { parcelsApi, ridersApi, sellersApi } from './services/api';
+import { Package, Bike, Store } from 'lucide-react';
 
 const s = {
   wrap:     { position: 'relative', width: 340 },
@@ -9,7 +10,8 @@ const s = {
   dropdown: { position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0, background: 'white', borderRadius: 12, boxShadow: '0 12px 32px rgba(57,9,85,0.18)', border: '1px solid #ede4f5', zIndex: 3000, maxHeight: 360, overflowY: 'auto' },
   groupLabel: { fontSize: 10, fontWeight: 800, color: '#a890c0', textTransform: 'uppercase', letterSpacing: 0.5, padding: '10px 14px 4px' },
   resultRow: { display: 'flex', flexDirection: 'column', gap: 2, padding: '9px 14px', cursor: 'pointer', borderBottom: '1px solid #f7f2fc' },
-  resultTitle: { fontSize: 13, fontWeight: 700, color: '#1a1a1a' },
+  resultTitle: { fontSize: 13, fontWeight: 700, color: '#1a1a1a', display: 'flex', alignItems: 'center', gap: 6 },
+  resultTitleIcon: { color: '#9b82b2', display: 'flex', flexShrink: 0 },
   resultSub:   { fontSize: 11, color: '#9b82b2' },
   empty:    { padding: '20px 14px', textAlign: 'center', color: '#bbb', fontSize: 12.5 },
 };
@@ -95,7 +97,7 @@ export default function GlobalSearch({ onNavigate }) {
                   <div style={s.groupLabel}>Parcels</div>
                   {results.parcels.map(p => (
                     <div key={p._id} style={s.resultRow} onClick={() => go('manage-parcels')}>
-                      <span style={s.resultTitle}>📦 {p.trackingNumber}</span>
+                      <span style={s.resultTitle}><span style={s.resultTitleIcon}><Package size={14} aria-hidden="true" /></span> {p.trackingNumber}</span>
                       <span style={s.resultSub}>{p.status} · {p.destination || '—'}</span>
                     </div>
                   ))}
@@ -106,7 +108,7 @@ export default function GlobalSearch({ onNavigate }) {
                   <div style={s.groupLabel}>Riders</div>
                   {results.riders.map(r => (
                     <div key={r._id} style={s.resultRow} onClick={() => go('rider-report')}>
-                      <span style={s.resultTitle}>🛵 {r.riderName}</span>
+                      <span style={s.resultTitle}><span style={s.resultTitleIcon}><Bike size={14} aria-hidden="true" /></span> {r.riderName}</span>
                       <span style={s.resultSub}>{r.registrationId}</span>
                     </div>
                   ))}
@@ -117,7 +119,7 @@ export default function GlobalSearch({ onNavigate }) {
                   <div style={s.groupLabel}>Sellers</div>
                   {results.sellers.map(sl => (
                     <div key={sl._id} style={s.resultRow} onClick={() => go('seller-report')}>
-                      <span style={s.resultTitle}>🏪 {sl.fullName}</span>
+                      <span style={s.resultTitle}><span style={s.resultTitleIcon}><Store size={14} aria-hidden="true" /></span> {sl.fullName}</span>
                       <span style={s.resultSub}>{sl.registrationId}</span>
                     </div>
                   ))}

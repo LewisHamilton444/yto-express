@@ -1,6 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { apiFetch } from './services/api';
 import Modal from './components/ui/Modal';
+import TableSkeleton from './components/ui/TableSkeleton';
+import EmptyState from './components/ui/EmptyState';
+import { useToast } from './components/ui/ToastContext';
+import { Users, AlertTriangle, ClipboardList, Package } from 'lucide-react';
 import { isDemoEmail } from './demoUtils';
 
 const ROLE_LABELS = {
@@ -35,11 +39,10 @@ export default function ManageAccounts({ currentUser }) {
   const [categoryFilter, setCategoryFilter] = useState('All');
   const [showModal,    setShowModal]    = useState(false);
   const [editingAccount, setEditingAccount] = useState(null);
-  const [successMsg,   setSuccessMsg]   = useState('');
-  const [errorMsg,     setErrorMsg]     = useState('');
   const [showDeactivateConfirm, setShowDeactivateConfirm] = useState(null);
   const [showFormPass, setShowFormPass] = useState(false);
   const [usingMockData, setUsingMockData] = useState(false);
+  const toast = useToast();
 
   const blankForm = { name: '', email: '', phone: '', role: 'staff', password: '' };
   const [formData, setFormData] = useState(blankForm);
@@ -81,10 +84,7 @@ export default function ManageAccounts({ currentUser }) {
     }
   };
 
-  const flash = (msg, type) => {
-    if (type === 'success') { setSuccessMsg(msg); setTimeout(() => setSuccessMsg(''), 3000); }
-    else                    { setErrorMsg(msg);   setTimeout(() => setErrorMsg(''), 3000); }
-  };
+  const flash = (msg, type = 'success') => toast(msg, type === 'error' ? 'error' : 'success');
 
   const openAddModal = () => {
     setEditingAccount(null);
@@ -251,11 +251,9 @@ export default function ManageAccounts({ currentUser }) {
         </div>
       </header>
 
-      {successMsg && <div style={{ padding: '14px 20px', background: '#e6f9ed', color: '#1e7e34', border: '1px solid #bbf7d0', borderRadius: '12px', fontSize: '13px', fontWeight: 600, marginBottom: '16px' }}>{successMsg}</div>}
-      {errorMsg   && <div style={{ padding: '14px 20px', background: '#fdf2f2', color: '#9b1c1c', border: '1px solid #fecaca', borderRadius: '12px', fontSize: '13px', fontWeight: 600, marginBottom: '16px' }}>{errorMsg}</div>}
       {usingMockData && !loading && (
         <div style={{ padding: '14px 20px', background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a', borderRadius: '12px', fontSize: '13px', fontWeight: 600, marginBottom: '16px' }}>
-          ⚠️ Showing sample accounts — the server didn't return live data. Actions below won't be saved until it's back.
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}><AlertTriangle size={15} aria-hidden="true" /> Showing sample accounts — the server didn't return live data. Actions below won't be saved until it's back.</span>
         </div>
       )}
 
@@ -329,9 +327,18 @@ export default function ManageAccounts({ currentUser }) {
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan="8" style={{ ...s.td, textAlign: 'center', padding: '48px', color: '#a890c0' }}>Loading accounts...</td></tr>
+                  <TableSkeleton rows={6} columns={8} />
                 ) : filtered.length === 0 ? (
-                  <tr><td colSpan="8" style={{ ...s.td, textAlign: 'center', padding: '48px', color: '#a890c0', fontWeight: 500 }}>No accounts found in this category.</td></tr>
+                  <tr>
+                    <td colSpan={8} style={{ ...s.td, padding: 0 }}>
+                      <EmptyState
+                        icon={Users}
+                        title="No accounts found in this category"
+                        description={accounts.length === 0 ? 'Create a Staff or Hub Receiver account to get started.' : 'Try a different search, role, status, or category filter.'}
+                        className="m-4"
+                      />
+                    </td>
+                  </tr>
                 ) : filtered.map((account, idx) => (
                   <tr key={account._id} style={{ background: idx % 2 === 0 ? 'white' : '#faf7fd' }}>
                     <td style={{ ...s.td, fontWeight: 700 }}>
@@ -411,8 +418,8 @@ export default function ManageAccounts({ currentUser }) {
               </div>
               <div style={{ background: '#faf7fd', border: '1px solid #e4d8f2', borderRadius: '10px', padding: '12px 16px', fontSize: '12px', color: '#7b6d8d', lineHeight: 1.6 }}>
                 {formData.role === 'staff'
-                  ? '📋 Staff can manage sellers, parcels, and riders. No access to system settings or account management.'
-                  : '📦 Hub Receiver can only mark parcels as Received or Returned at the hub. Limited access.'}
+                  ? <span style={{ display: 'flex', alignItems: 'flex-start', gap: 7 }}><ClipboardList size={14} aria-hidden="true" /> Staff can manage sellers, parcels, and riders. No access to system settings or account management.</span>
+                  : <span style={{ display: 'flex', alignItems: 'flex-start', gap: 7 }}><Package size={14} aria-hidden="true" /> Hub Receiver can only mark parcels as Received or Returned at the hub. Limited access.</span>}
               </div>
               <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '4px' }}>
                 <button type="button" style={s.btnOutline} onClick={() => setShowModal(false)}>Cancel</button>

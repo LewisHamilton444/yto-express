@@ -20,3 +20,25 @@ export const PARCEL_STATUS_COLORS = {
 // long-standing inline badges in ManageAccounts / ViewSeller / ManageParcels.
 export const ACCOUNT_CATEGORY_TONE = { REAL: 'green', DEMO: 'slate' };
 export const ACCOUNT_CATEGORY_LABEL = { REAL: 'Real (Verified)', DEMO: 'Demo' };
+
+// Canonical account-status palettes for seller & rider ledgers. ViewSeller and
+// GenerateRiderDataReport used to each define their own local copies (one solid
+// purple, one tinted-pill style) that drifted apart — now a single source of
+// truth, still passable to <StatusBadge colorMap={...} />.
+export const SELLER_STATUS_COLORS = {
+  ACTIVE:               { bg: '#d1fae5', color: '#065f46' },
+  PENDING_VERIFICATION: { bg: '#fef3c7', color: '#92400e' },
+  ARCHIVED:             { bg: '#fee2e2', color: '#991b1b' },
+};
+
+export const RIDER_STATUS_COLORS = {
+  ACTIVE:               { bg: '#e6f9ed', color: '#1e7e34' },
+  PENDING_VERIFICATION: { bg: '#fef3c7', color: '#92400e' },
+  ARCHIVED:             { bg: '#f3f4f6', color: '#6b7280' },
+};
+
+export const RIDER_STATUS_BADGE = {
+  ACTIVE:               { bg: '#390955', color: 'white',    border: 'none',                 dot: '#a8ffb0' },
+  PENDING_VERIFICATION: { bg: 'white',   color: '#390955',  border: '1.5px solid #390955',  dot: '#f37021' },
+  ARCHIVED:             { bg: '#7f8c8d', color: 'white',    border: 'none',                 dot: '#ddd' },
+};

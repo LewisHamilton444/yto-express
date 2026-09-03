@@ -4,7 +4,9 @@ import { apiFetch } from './services/api';
 import StatusBadge from './components/ui/StatusBadge';
 import { PARCEL_STATUS_COLORS } from './components/ui/statusColors';
 import Modal from './components/ui/Modal';
+import SimulatedFeedBadge from './components/ui/SimulatedFeedBadge';
 import { isDemoEmail } from './demoUtils';
+import { AlertTriangle, Check, CheckCircle2, CircleDot, FileDown, FileText, X, XCircle } from 'lucide-react';
 
 /**
  * ManageParcels.jsx
@@ -239,6 +241,12 @@ const FALLBACK_PARCELS = RAW_PARCELS.map((p) => {
 // this page's display shape. Fields the real schema doesn't have yet
 // (sender/receiver phone & email, dimensions, service tier, free-text
 // instructions) get an honest placeholder rather than a fabricated value.
+const SERVICE_LABELS = { express: 'Express', standard: 'Standard', overnight: 'Overnight', international: 'International' };
+function mapServiceLabel(rawServiceType) {
+  const key = String(rawServiceType || '').trim().toLowerCase();
+  return SERVICE_LABELS[key] || '—';
+}
+
 function normalizeParcel(raw, riderNameById) {
   const city = raw.destination || raw.origin || '';
   const base = PH_CITY_COORDS[city] || NCR_FALLBACK_CENTER;
@@ -256,16 +264,17 @@ function normalizeParcel(raw, riderNameById) {
     dimensions: '—',
     contents: raw.item || '—',
     value: raw.value || '—',
-    // The backend doesn't persist a service tier yet — Standard is a display
-    // default, not a real recorded value.
-    service: 'Standard',
+    // Real parcels persist serviceType (express/standard/overnight/...);
+    // anything else renders '—' rather than an invented tier.
+    service: mapServiceLabel(raw.serviceType),
     status: mapRealStatus(raw.status),
     registeredDate: createdAt,
     riderId,
     assignedRider: riderId ? (riderNameById[riderId] || riderId) : '',
-    instructions: 'No special instructions.',
+    instructions: raw.instructions || '—',
     trackingNumber: raw.trackingNumber || '—',
-    estimatedDelivery: addDays(createdAt, 3).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }),
+    // No real ETA field exists yet — '—' instead of a fabricated date.
+    estimatedDelivery: '—',
     lat: base.lat,
     lng: base.lng,
     podPhoto: raw.podPhoto || '',
@@ -308,11 +317,15 @@ function exportCSV(rows) {
   URL.revokeObjectURL(url);
 }
 
+// DB-derived values are interpolated into printable HTML — escape them so a
+// name/address/status can never break out of the report markup.
+const escHtml = (v) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
 function exportPDF(rows) {
   const w = window.open('', '_blank');
   if (!w) return;
-  const head = EXPORT_COLUMNS.map((c) => `<th>${c}</th>`).join('');
-  const body = rows.map((p) => `<tr>${rowValues(p).map((v) => `<td>${v}</td>`).join('')}</tr>`).join('');
+  const head = EXPORT_COLUMNS.map(escHtml).join('');
+  const body = rows.map((p) => `<tr>${rowValues(p).map((v) => `<td>${escHtml(v)}</td>`).join('')}</tr>`).join('');
   w.document.write(`<html><head><title>Manage Parcels Report</title><style>
     body{font-family:Arial,sans-serif;margin:24px;color:#1a1a1a}
     h1{color:#390955;margin-bottom:2px}
@@ -396,7 +409,7 @@ function MiniMap({ parcel, gps, geofence, allParcels }) {
         </text>
       </svg>
       <div style={{ position: 'absolute', top: 8, left: 8, background: geofence?.inside ? '#390955' : 'white', color: geofence?.inside ? 'white' : '#390955', border: '1.5px solid #390955', fontSize: 10, fontWeight: 700, padding: '3px 9px', borderRadius: 20 }}>
-        {geofence ? (geofence.inside ? '✓ Inside Zone' : '✗ Outside Zone') : '● Live GPS'}
+        {geofence ? (geofence.inside ? <><Check size={11} aria-hidden="true" /> Inside Zone</> : <><X size={11} aria-hidden="true" /> Outside Zone</>) : <><CircleDot size={10} aria-hidden="true" /> Live GPS</>}
       </div>
       <div style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(255,255,255,0.9)', fontSize: 10, color: '#666', padding: '3px 8px', borderRadius: 4, fontFamily: 'monospace' }}>
         {gps.satellites} sats · ±{gps.accuracy}m
@@ -509,7 +522,7 @@ function ParcelModal({ parcel, onClose, allParcels }) {
   const handlePrint = () => {
     const w = window.open('', '_blank');
     if (!w) return;
-    w.document.write(`<html><head><title>Delivery Report</title><style>body{font-family:Arial,sans-serif;margin:20px}h1{color:#390955}table{width:100%;border-collapse:collapse}th,td{border:1px solid #e5e7eb;padding:10px;text-align:left}th{background:#f0eaf8}</style></head><body><h1>Delivery Status Report</h1><p>${reportId} · ${reportDate}</p><p><strong>Parcel:</strong> ${parcel.id} | <strong>Tracking:</strong> ${parcel.trackingNumber} | <strong>Status:</strong> ${parcel.status}</p><h3>Parcel Details</h3><p>Recipient: ${parcel.receiver.name}<br>Sender: ${parcel.sender.name}<br>Address: ${parcel.address}<br>Weight: ${parcel.weight} | Value: ${parcel.value} | Service: ${parcel.service}</p><h3>Delivery Timeline</h3><table><tr><th>Timestamp</th><th>Event</th><th>Location</th></tr>${parcel.timeline.map((e) => `<tr><td>${e.timestamp}</td><td>${e.label}</td><td>${e.location}</td></tr>`).join('')}</table><script>window.print();</script></body></html>`);
+    w.document.write(`<html><head><title>Delivery Report</title><style>body{font-family:Arial,sans-serif;margin:20px}h1{color:#390955}table{width:100%;border-collapse:collapse}th,td{border:1px solid #e5e7eb;padding:10px;text-align:left}th{background:#f0eaf8}</style></head><body><h1>Delivery Status Report</h1><p>${escHtml(reportId)} · ${escHtml(reportDate)}</p><p><strong>Parcel:</strong> ${escHtml(parcel.id)} | <strong>Tracking:</strong> ${escHtml(parcel.trackingNumber)} | <strong>Status:</strong> ${escHtml(parcel.status)}</p><h3>Parcel Details</h3><p>Recipient: ${escHtml(parcel.receiver.name)}<br>Sender: ${escHtml(parcel.sender.name)}<br>Address: ${escHtml(parcel.address)}<br>Weight: ${escHtml(parcel.weight)} | Value: ${escHtml(parcel.value)} | Service: ${escHtml(parcel.service)}</p><h3>Delivery Timeline</h3><table><tr><th>Timestamp</th><th>Event</th><th>Location</th></tr>${parcel.timeline.map((e) => `<tr><td>${escHtml(e.timestamp)}</td><td>${escHtml(e.label)}</td><td>${escHtml(e.location)}</td></tr>`).join('')}</table><script>window.print();</script></body></html>`);
     w.document.close();
   };
 
@@ -539,7 +552,7 @@ function ParcelModal({ parcel, onClose, allParcels }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <RiderBadge name={parcel.assignedRider} />
             <span style={{ fontSize: 10, fontWeight: 700, padding: '4px 10px', borderRadius: 6, background: svc.bg, color: svc.color }}>{parcel.service}</span>
-            <button onClick={onClose} style={{ width: 30, height: 30, borderRadius: 8, border: '1.5px solid #e0d5f0', background: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999', fontSize: 14 }}>✕</button>
+            <button onClick={onClose} aria-label="Close parcel details" style={{ width: 30, height: 30, borderRadius: 8, border: '1.5px solid #e0d5f0', background: 'white', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: '#999' }}><X size={15} aria-hidden="true" /></button>
           </div>
         </div>
 
@@ -642,9 +655,13 @@ function ParcelModal({ parcel, onClose, allParcels }) {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
               {/* GPS & Geofence */}
               <div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 12 }}>
                   <div style={{ fontSize: 10, fontWeight: 800, color: '#390955', textTransform: 'uppercase', letterSpacing: 0.7 }}>Live GPS &amp; Geofence</div>
-                  {mapLoading && <span style={{ fontSize: 11, color: '#390955', fontWeight: 700 }}>Locating…</span>}
+                  {mapLoading ? (
+                    <span style={{ fontSize: 11, color: '#390955', fontWeight: 700 }}>Locating…</span>
+                  ) : (
+                    gps && <SimulatedFeedBadge text="Simulated GPS preview" />
+                  )}
                 </div>
                 {mapLoading ? (
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '40px 16px', background: '#faf8ff', border: '1.5px dashed #d4c8e8', borderRadius: 10, textAlign: 'center' }}>
@@ -668,7 +685,7 @@ function ParcelModal({ parcel, onClose, allParcels }) {
                           <div style={{ fontSize: 12, fontWeight: 800, color: geofence.inside ? 'white' : '#390955' }}>{geofence.status}</div>
                           <div style={{ fontSize: 10, color: geofence.inside ? 'rgba(255,255,255,0.7)' : '#aaa', marginTop: 2 }}>{geofence.zone} · r={geofence.radius}km · d={geofence.distance}km</div>
                         </div>
-                        <span style={{ fontSize: 22 }}>{geofence.inside ? '✅' : '⚠️'}</span>
+                        <span style={{ display: 'flex', color: geofence.inside ? 'white' : '#f37021' }}>{geofence.inside ? <CheckCircle2 size={26} aria-hidden="true" /> : <AlertTriangle size={26} aria-hidden="true" />}</span>
                       </div>
                     )}
                     <button onClick={handleRefreshGPS} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, padding: '10px 16px', background: '#390955', color: 'white', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', width: '100%', fontFamily: 'inherit', marginTop: 12 }}>
@@ -683,7 +700,7 @@ function ParcelModal({ parcel, onClose, allParcels }) {
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                   <div style={{ fontSize: 10, fontWeight: 800, color: '#390955', textTransform: 'uppercase', letterSpacing: 0.7 }}>Delivery Confirmation &amp; Signature</div>
-                  {signature && <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20, background: '#f37021', color: 'white' }}>✓ Confirmed</span>}
+                  {signature && <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20, background: '#f37021', color: 'white', display: 'inline-flex', alignItems: 'center', gap: 4 }}><Check size={12} aria-hidden="true" /> Confirmed</span>}
                 </div>
                 <div style={{ fontSize: 11, color: '#aaa', marginBottom: 12 }}>{confirmCode}</div>
                 <button onClick={handleGenerateSignature} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, padding: 10, background: 'white', color: '#390955', border: '2px solid #390955', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', width: '100%', fontFamily: 'inherit', marginBottom: 16 }}>
@@ -814,8 +831,8 @@ function Toolbar({ search, setSearch, statusFilter, setStatusFilter, categoryFil
         </button>
         {menuOpen && (
           <div style={{ position: 'absolute', right: 0, top: 'calc(100% + 6px)', background: 'white', border: '1px solid #e0d5f0', borderRadius: 10, boxShadow: '0 12px 32px rgba(57,9,85,0.14)', overflow: 'hidden', minWidth: 170, zIndex: 20 }}>
-            <button onClick={() => { onExportCSV(); setMenuOpen(false); }} style={menuItemStyle}>📄 Export as CSV</button>
-            <button onClick={() => { onExportPDF(); setMenuOpen(false); }} style={menuItemStyle}>🖨️ Export as PDF</button>
+            <button onClick={() => { onExportCSV(); setMenuOpen(false); }} style={{ ...menuItemStyle, display: 'flex', alignItems: 'center', gap: 8 }}><FileDown size={14} aria-hidden="true" /> Export as CSV</button>
+            <button onClick={() => { onExportPDF(); setMenuOpen(false); }} style={{ ...menuItemStyle, display: 'flex', alignItems: 'center', gap: 8 }}><FileText size={14} aria-hidden="true" /> Export as PDF</button>
           </div>
         )}
       </div>
@@ -855,7 +872,7 @@ function AssignRiderButton({ parcel, riders, onAssign }) {
           ) : riders.map((r) => (
             <button key={r.riderId} onClick={() => { onAssign(parcel, r); setOpen(false); }}
               style={{ ...menuItemStyle, background: parcel.riderId === r.riderId ? '#f0eaf8' : 'transparent', color: parcel.riderId === r.riderId ? '#390955' : '#1a1a1a', fontWeight: parcel.riderId === r.riderId ? 700 : 600 }}>
-              {parcel.riderId === r.riderId ? '✓ ' : ''}{r.riderName}
+              {parcel.riderId === r.riderId && <Check size={13} aria-hidden="true" />} <span style={{ flex: 1 }}>{r.riderName}</span>
             </button>
           ))}
         </div>
@@ -999,12 +1016,12 @@ export default function ManageParcels({ currentUser }) {
       <div style={{ padding: '24px 32px', display: 'flex', flexDirection: 'column', gap: 20 }}>
         {usingFallback && !loading && (
           <div style={{ padding: '12px 16px', background: '#fff4ec', color: '#c2410c', border: '1px solid #f9d4b6', borderRadius: 10, fontSize: 12.5, fontWeight: 600 }}>
-            ⚠️ Showing demo test parcels (Demo Mode active).
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}><AlertTriangle size={15} aria-hidden="true" /> Showing demo test parcels (Demo Mode active).</span>
           </div>
         )}
         {actionError && (
           <div style={{ padding: '12px 16px', background: '#fdf2f2', color: '#9b1c1c', border: '1px solid #fecaca', borderRadius: 10, fontSize: 12.5, fontWeight: 600 }}>
-            ❌ {actionError}
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}><XCircle size={15} aria-hidden="true" /> {actionError}</span>
           </div>
         )}
         <div style={{ background: 'white', borderRadius: 12, border: '1px solid #e8e0f0', boxShadow: '0 2px 8px rgba(57,9,85,0.05)', overflow: 'hidden' }}>

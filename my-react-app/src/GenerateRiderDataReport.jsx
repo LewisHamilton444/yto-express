@@ -6,6 +6,9 @@ import { exportToCSV, exportToExcel } from './exportUtils';
 import ParcelProgressTimeline from './ParcelProgressTimeline';
 import { apiFetch, ridersApi, parcelsApi } from './services/api';
 import Modal from './components/ui/Modal';
+import { VehicleIcon } from './components/ui/vehicleIcons';
+import { RIDER_STATUS_BADGE } from './components/ui/statusColors';
+import { ArrowLeft, ArrowRight, CheckCircle2, XCircle } from 'lucide-react';
 
 const RIDER_EXPORT_COLUMNS = [
   { key: 'riderId', label: 'Rider ID' },
@@ -14,13 +17,6 @@ const RIDER_EXPORT_COLUMNS = [
   { key: 'phone', label: 'Phone' },
   { key: 'status', label: 'Status' },
 ];
-
-const vehicleIcon = (v) => {
-  const type = String(v).toLowerCase();
-  if (type.includes('e-bike')) return '⚡';
-  if (type.includes('bicycle')) return '🚲';
-  return '🛵';
-};
 
 function Stars({ rating }) {
   return (
@@ -36,12 +32,6 @@ function Stars({ rating }) {
     </div>
   );
 }
-
-const STATUS_BADGE = {
-  ACTIVE:               { bg: '#390955', color: 'white',   border: 'none',              dot: '#a8ffb0' },
-  PENDING_VERIFICATION: { bg: 'white',   color: '#390955',  border: '1.5px solid #390955', dot: '#f37021' },
-  ARCHIVED:             { bg: '#7f8c8d', color: 'white',   border: 'none',              dot: '#ddd' },
-};
 
 // On Duty used to be a plain Active/Inactive flag derived only from whether a
 // rider is currently holding a parcel — which contradicted the account
@@ -320,7 +310,7 @@ export default function GenerateRiderDataReport() {
                     </thead>
                     <tbody>
                       {paginatedData.map((r, i) => {
-                        const badge = STATUS_BADGE[r.status] || STATUS_BADGE.ACTIVE;
+                        const badge = RIDER_STATUS_BADGE[r.status] || RIDER_STATUS_BADGE.ACTIVE;
                         const duty = getDutyState(r);
                         const dutyBadge = DUTY_BADGE[duty];
                         return (
@@ -354,8 +344,8 @@ export default function GenerateRiderDataReport() {
                           <td style={td} onClick={e => e.stopPropagation()}>
                             <div style={{ display:'flex', gap:6 }}>
                               <button onClick={(e) => { e.stopPropagation(); setSelectedRider(r.riderId); }}
-                                style={{ padding: '5px 10px', border: 'none', borderRadius: 6, background: '#390955', color: 'white', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
-                                View →
+                                style={{ padding: '5px 10px', border: 'none', borderRadius: 6, background: '#390955', color: 'white', fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                                View <ArrowRight size={12} aria-hidden="true" />
                               </button>
                             </div>
                           </td>
@@ -382,8 +372,8 @@ export default function GenerateRiderDataReport() {
           /* PROFILE VIEW */
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <button onClick={() => setSelectedRider(null)}
-              style={{ padding: '8px 16px', border: '1.5px solid #e0d5f0', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', background: 'white', color: '#390955', alignSelf: 'flex-start' }}>
-              ← Back to Report Records
+              style={{ padding: '8px 16px', border: '1.5px solid #e0d5f0', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', background: 'white', color: '#390955', alignSelf: 'flex-start', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <ArrowLeft size={13} aria-hidden="true" /> Back to Report Records
             </button>
 
             {rider && (
@@ -391,7 +381,7 @@ export default function GenerateRiderDataReport() {
                 <div style={{ background: 'linear-gradient(135deg,#390955,#5c1285)', borderRadius: 16, padding: '24px 28px', color: 'white', position: 'relative', overflow: 'hidden' }}>
                   <div style={{ position: 'absolute', top: -20, right: -20, width: 120, height: 120, borderRadius: '50%', background: 'rgba(255,255,255,0.06)' }}/>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 18, position: 'relative' }}>
-                    <div style={{ width: 64, height: 64, borderRadius: '50%', background: '#f37021', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28, flexShrink: 0, boxShadow: '0 4px 18px rgba(243,112,33,0.4)', border: '3px solid rgba(255,255,255,0.3)' }}>{vehicleIcon(rider.vehicleType)}</div>
+                    <div style={{ width: 64, height: 64, borderRadius: '50%', background: '#f37021', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', flexShrink: 0, boxShadow: '0 4px 18px rgba(243,112,33,0.4)', border: '3px solid rgba(255,255,255,0.3)' }}><VehicleIcon type={rider.vehicleType} size={32} /></div>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: -0.5 }}>{rider.fullName}</div>
                       <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginTop: 3 }}>{rider.riderId} · {rider.vehicleType} · Joined {rider.joined}</div>
@@ -572,8 +562,8 @@ export default function GenerateRiderDataReport() {
               <button type="button" onClick={() => setEditingRider(null)} style={{ background: 'none', border: 'none', color: 'white', fontSize: 24, cursor: 'pointer' }}>×</button>
             </div>
 
-            {saveMsg && <div style={{ background: '#d1fae5', color: '#065f46', padding: '10px 24px', fontSize: 13, fontWeight: 600 }}>✅ {saveMsg}</div>}
-            {saveErr && <div style={{ background: '#fee2e2', color: '#991b1b', padding: '10px 24px', fontSize: 13, fontWeight: 600 }}>❌ {saveErr}</div>}
+            {saveMsg && <div style={{ background: '#d1fae5', color: '#065f46', padding: '10px 24px', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 7 }}><CheckCircle2 size={15} aria-hidden="true" /> {saveMsg}</div>}
+            {saveErr && <div style={{ background: '#fee2e2', color: '#991b1b', padding: '10px 24px', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 7 }}><XCircle size={15} aria-hidden="true" /> {saveErr}</div>}
 
             <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: 14, maxHeight: '60vh', overflowY: 'auto' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>

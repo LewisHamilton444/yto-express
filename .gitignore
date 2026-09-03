@@ -6,3 +6,4 @@ Icon
 dist
 my-react-app/dist
 __MACOSX/
+my-react-app/server/.env

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import Modal from '../components/ui/Modal';
+import { FileText } from 'lucide-react';
 
 const s = {
   header:      { background: '#390955', padding: '18px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0 },
@@ -14,7 +15,7 @@ const s = {
   infoValue:   { fontSize: '14px', fontWeight: 700, color: '#390955', wordBreak: 'break-word' },
   docList:     { display: 'flex', flexDirection: 'column', gap: '8px' },
   docRow:      { display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', background: '#faf7fd', border: '1px solid #e4d8f2', borderRadius: '10px', fontSize: '13px', color: '#390955', fontWeight: 600 },
-  docIcon:     { fontSize: '16px' },
+  docIcon:     { display: 'flex', alignItems: 'center', color: '#9b82b2', flexShrink: 0 },
   actions:     { display: 'flex', gap: '10px', justifyContent: 'flex-end', paddingTop: '4px', borderTop: '1px solid #f3edfb', marginTop: '4px' },
   btnDanger:   { padding: '10px 20px', borderRadius: '10px', fontSize: '13px', fontWeight: 700, cursor: 'pointer', background: '#fee2e2', color: '#991b1b', border: '1px solid #fca5a5', fontFamily: 'inherit' },
   btnOutline:  { padding: '10px 20px', borderRadius: '10px', fontSize: '13px', fontWeight: 700, cursor: 'pointer', background: 'white', color: '#390955', border: '1.5px solid #e4d8f2', fontFamily: 'inherit' },
@@ -25,9 +26,12 @@ const s = {
   reasonActions: { display: 'flex', gap: '8px', justifyContent: 'flex-end' },
 };
 
+const isImageFile = (fileName) => /\.(png|jpe?g|webp|gif|heic)$/i.test(fileName || '');
+
 const ReviewModal = ({ item, type, onClose, onApprove, onReject }) => {
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState('');
+  const [zoomDoc, setZoomDoc] = useState(null);
 
   if (!item) return null;
 
@@ -39,6 +43,7 @@ const ReviewModal = ({ item, type, onClose, onApprove, onReject }) => {
   };
 
   return (
+    <>
     <Modal onBackdropClick={handleClose} blur={false} tint="rgba(26,6,40,0.5)" maxWidth={560} padding={0} cardStyle={{ borderRadius: 16, boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)', fontFamily: "'DM Sans', sans-serif" }}>
         <div style={s.header}>
           <div>
@@ -108,13 +113,38 @@ const ReviewModal = ({ item, type, onClose, onApprove, onReject }) => {
           <div>
             <p style={s.sectionTitle}>Submitted Documents</p>
             <div style={s.docList}>
-              {item.documents.map((doc) => (
-                <div key={doc.fileName} style={s.docRow}>
-                  <span style={s.docIcon}>📄</span>
-                  <span>{doc.label}</span>
-                  <span style={{ marginLeft: 'auto', color: '#a890c0', fontWeight: 500, fontFamily: "'DM Mono', monospace", fontSize: '12px' }}>{doc.fileName}</span>
-                </div>
-              ))}
+              {item.documents.map((doc) => {
+                const isImg = isImageFile(doc.fileName);
+                const src = doc.url || doc.dataUrl || '';
+                const canPreview = isImg && !!src;
+                return (
+                  <div
+                    key={doc.fileName}
+                    style={{ ...s.docRow, alignItems: canPreview ? 'center' : 'flex-start', cursor: canPreview ? 'pointer' : 'default' }}
+                    onClick={canPreview ? () => setZoomDoc(doc) : undefined}
+                    title={canPreview ? 'Click to enlarge' : undefined}
+                  >
+                    {canPreview ? (
+                      <img
+                        src={src}
+                        alt={doc.label}
+                        style={{ width: 46, height: 46, borderRadius: 8, objectFit: 'cover', border: '1px solid #e4d8f2', flexShrink: 0 }}
+                      />
+                    ) : (
+                      <span style={s.docIcon}><FileText size={20} aria-hidden="true" /></span>
+                    )}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, color: '#390955', fontWeight: 600 }}>{doc.label}</div>
+                      <div style={{ color: '#a890c0', fontWeight: 500, fontFamily: "'DM Mono', monospace", fontSize: '11px', marginTop: 2 }}>{doc.fileName}</div>
+                      {isImg && !canPreview && (
+                        <div style={{ fontSize: 10.5, color: '#b45309', marginTop: 3 }}>
+                          Preview unavailable — the image was not uploaded with this registration.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
 
@@ -142,6 +172,34 @@ const ReviewModal = ({ item, type, onClose, onApprove, onReject }) => {
           </div>
         </div>
     </Modal>
+
+      {/* Zoomed document preview — fixed overlay, rendered outside the modal card */}
+      {zoomDoc && (
+        <div
+          onClick={() => setZoomDoc(null)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(10,2,16,0.88)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999, padding: 24 }}
+          role="dialog"
+          aria-modal="true"
+          aria-label={zoomDoc.label}
+        >
+          <button
+            onClick={() => setZoomDoc(null)}
+            aria-label="Close document preview"
+            style={{ position: 'absolute', top: 18, right: 22, background: 'none', border: 'none', color: 'white', fontSize: 28, lineHeight: 1, cursor: 'pointer' }}
+          >
+            &times;
+          </button>
+          <div style={{ maxWidth: '92vw', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+            <img
+              src={zoomDoc.url || zoomDoc.dataUrl}
+              alt={zoomDoc.label}
+              style={{ maxWidth: '92vw', maxHeight: '80vh', borderRadius: 10, boxShadow: '0 24px 70px rgba(0,0,0,0.55)', objectFit: 'contain', background: 'white' }}
+            />
+            <div style={{ color: 'rgba(255,255,255,0.85)', fontSize: 12, fontWeight: 600 }}>{zoomDoc.label} — {zoomDoc.fileName}</div>
+          </div>
+        </div>
+      )}
+    </>
   );
 };
 
