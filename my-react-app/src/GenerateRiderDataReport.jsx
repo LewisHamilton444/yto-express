@@ -319,7 +319,7 @@ export default function GenerateRiderDataReport() {
                           <td style={{ ...td, fontWeight: 700, color: '#390955', fontFamily: 'monospace', fontSize: 11 }}>{r.riderId}</td>
                           <td style={td}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-                              <div style={{ width: 30, height: 30, borderRadius: '50%', background: '#fff4ec', border: '2px solid #f37021', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, flexShrink: 0 }}>{vehicleIcon(r.vehicleType)}</div>
+                              <div style={{ width: 30, height: 30, borderRadius: '50%', background: '#fff4ec', border: '2px solid #f37021', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f37021', flexShrink: 0 }}><VehicleIcon type={r.vehicleType} size={16} /></div>
                               <div style={{ fontWeight: 700, color: '#1a1a1a' }}>{r.fullName}</div>
                             </div>
                           </td>
