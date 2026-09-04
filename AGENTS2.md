@@ -45,7 +45,7 @@
 - `src/services/api.js` — centralized client: `API_ROOT = import.meta.env.VITE_API_URL || 'https://yto-express.onrender.com'`; `apiFetch(path, opts)` attaches `Authorization: Bearer`; on 401 with token-expiry errors clears the token and dispatches `yto:auth_expired`. **Token key: `yto_token`** — `remember=true` → `localStorage`, `remember=false` → `sessionStorage` (session storage wins on read). `adminLogin(email, password, remember)`; `notificationsApi.sendEmail`; collection helpers (`sellersApi`, `ridersApi`, `parcelsApi`, `parcelLocationsApi`, `accountsApi`, `dashboardApi`).
 - `src/services/localApi.js` — same API shape but defaults to `http://localhost:3001`; used by the newer views (`ManageIssues`, `CustomerList`, `ActivityLog`) whose routes are not yet deployed to production.
 - `src/services/useSSE.js` — real-time hook (see §5).
-- `src/demoUtils.js` — `isDemoEmail()`: demo if domain ∈ `['yto.com','example.com','ytoexpress.com']` OR email starts with `demo`.
+- `src/demoUtils.js` — `isDemoEmail()`: demo if the email is an allowlisted demo login (`superadmin@gmail.com`, `staff@gmail.com`, `hub@gmail.com` — mirrors the Android app's `customer/seller/rider@gmail.com` convention), domain ∈ `['yto.com','example.com','ytoexpress.com']`, OR email starts with `demo`.
 
 ### Auth screens
 - `LoginPage.jsx` / `LoginPage.css` — enterprise login, remember-me checkbox (session vs persistent token), server health pill, role tags. `Logout.jsx` / `Logout.css` — secure session termination.
@@ -60,7 +60,7 @@
 ### JWT & category partition
 - `authenticateToken` middleware: Bearer token → `req.user = { id, email, role, isDemo, ... }`; sets `req.category = decoded.isDemo ? 'DEMO' : 'REAL'`; 401 on missing/expired, 403 on invalid.
 - `getCategoryFilter(req)`: `?category=ALL` → no filter; `REAL`/`DEMO` → that partition; **default = the authenticated admin's own realm** (`req.category`).
-- `isDemoEmail()` mirrors `demoUtils.js` (yto.com / example.com / ytoexpress.com / `demo` prefix).
+- `isDemoEmail()` mirrors `demoUtils.js` (allowlisted `@gmail.com` demo logins + yto.com / example.com / ytoexpress.com / `demo` prefix).
 
 ### Route table
 | Endpoint | Methods | Notes |
@@ -150,7 +150,8 @@ Bidirectional REST bridge with the Android backend (`yto_express_backend`). Ever
 1. **Login & session flag**: `/api/accounts/login` embeds `isDemo` in the 24h JWT from `isDemoEmail()`; `App.jsx` propagates `currentUser.isDemo` everywhere.
 2. **Clean empty states**: real admins (`!isDemo`) with 0 records see clean empty-state graphics — zero synthetic/mock injections. Demo admins load test datasets (`FALLBACK_PARCELS`, `MOCK_ACCOUNTS`, `mockSellers`, `mockRiders`) under a yellow `[DEMO MODE]` banner.
 3. **Category filtering**: every data grid has an `Account Category` column + `All`/`Real Records`/`Demo Records` filter; **badge scheme: green `REAL` (#43A047) / gray `DEMO` (#9CA3AF)** — centralized in `components/ui/statusColors.js` (`ACCOUNT_CATEGORY_TONE`). ManageParcels additionally treats `DEMO-` tracking-number prefixes as demo.
-4. **Known asymmetry (intentional)**: the Android app treats `customer/seller/rider@gmail.com` as demo/test logins; the Web portal treats gmail as REAL unless the account/record was seeded with `accountCategory: DEMO` (see `seed_official_demo_accounts.js`).
+4. **Demo logins (canonical, 2026-09-03)**: the three Web Admin demo logins are **`superadmin@gmail.com`** (super_admin; password env-managed via `DEMO_ADMIN_PASSWORD_SUPERADMIN`), **`staff@gmail.com`** (staff; `DEMO_ADMIN_PASSWORD_STAFF`), **`hub@gmail.com`** (hub_receiver; `DEMO_ADMIN_PASSWORD_HUB`) — all `accountCategory: DEMO`. This mirrors the Android app, which treats `customer/seller/rider@gmail.com` as demo logins. Those exact addresses are allowlisted in `demoUtils.js` + `Server.js` so they stay DEMO even though gmail normally defaults to REAL; every other gmail address remains REAL.
+5. **Deployment skew — plaintext demo passwords (2026-09-03)**: the LIVE Render backend (`https://yto-express.onrender.com`) still runs `origin/main` `b6c89fc` (Aug 27) which authenticates demo accounts with a **plaintext compare** (`account.password !== password`) and issues no JWT. A Sep 1 re-seed wrote bcrypt hashes, so every demo login 401'd until the live DB was re-written to PLAINTEXT (approved hotfix). The newer local backend hashes with bcrypt (`Account.pre('save')`) but `Account.comparePassword` also accepts plaintext via its legacy fallback and upgrades it to bcrypt on the first successful login. Until the new backend is deployed, demo accounts in the live DB must stay plaintext — do NOT re-run the bcrypt seed against it (`DEMO_PLAINTEXT=1 node seed_official_demo_accounts.js` for the legacy server). **UPDATE 2026-09-04:** the `DEMO_PLAINTEXT=1` compatibility mode was removed from the seed script; the plaintext rows in the live DB are rotated to bcrypt by `server/rotate_demo_admin_credentials.js` during the deploy window, after which the new bcrypt/JWT backend is the only auth path.
 
 ---
 
@@ -167,7 +168,8 @@ Bidirectional REST bridge with the Android backend (`yto_express_backend`). Ever
 
 ## 9. Scripts & Tooling (`server/`, `scripts/`)
 
-- `server/seed_official_demo_accounts.js` — upserts official demo records (e.g., `seller@gmail.com` → `YTO-SELL-2026-DEMO1`, `accountCategory: DEMO`) for seller/customer/rider.
+- `server/seed_official_demo_accounts.js` — upserts official demo records: seller/customer/rider (`seller@gmail.com`/`customer@gmail.com`/`rider@gmail.com` → DEMO) plus the three admin logins `superadmin@gmail.com` / `staff@gmail.com` / `hub@gmail.com`. Passwords are bcrypt-hashed from `DEMO_ADMIN_PASSWORD_*` env vars (a random one is generated and logged once when a var is missing); the plaintext `DEMO_PLAINTEXT=1` mode was removed 2026-09-04.
+- `Server.js` boot — `ensureDemoAdminAccounts()` runs after `mongoose.connect` and INSERT-ONLY upserts the same three demo admins (`$setOnInsert`, never overwrites an existing account), so a fresh/cleaned DB can never 401 on the demo logins again. **Opt-in since 2026-09-04:** runs only when `ENABLE_DEMO_BOOTSTRAP=1` (plus `ALLOW_DEMO_BOOTSTRAP_IN_PROD=1` when `NODE_ENV=production`); passwords bcrypt-hashed from env, never stored plaintext in source.
 - `server/clean_web_db.js` — wipes test records while **preserving** `seller@gmail.com`, `customer@gmail.com`, `rider@gmail.com`.
 - `scripts/dev.cjs` — `npm run dev:all` launcher (frontend + server).
 - `package.json` scripts: `dev` (vite), `dev:server`, `dev:all`, `start` (dev.cjs), `build` (`vite build`), `lint`, `preview`.
@@ -241,8 +243,19 @@ Anyone who cloned or forked the repo before the force-push keeps the secrets. Ro
 | `MONGO_URI` | MongoDB Atlas (regenerate user/password) |
 | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER` | Twilio console |
 | `SEMAPHORE_API_KEY`, `SEMAPHORE_SENDER_NAME` | Semaphore SMS |
-| `EMAIL_USER`, `EMAIL_APP_PASSWORD` | Gmail app password || `JWT_SECRET`, `BRIDGE_API_KEY`, `ANDROID_BRIDGE_API_KEY` | Internal — regenerate with any strong string |
+| `EMAIL_USER`, `EMAIL_APP_PASSWORD` | Gmail app password |
+| `JWT_SECRET`, `BRIDGE_API_KEY`, `ANDROID_BRIDGE_API_KEY` | Internal — regenerate with any strong string |
 ```
+
+---
+
+### Remediation status — 2026-09-04 (N1 + N2 emergency batch)
+
+- **Code scrub complete (local, uncommitted):** `Server.js` demo bootstrap is now **opt-in** (`ENABLE_DEMO_BOOTSTRAP=1`, plus `ALLOW_DEMO_BOOTSTRAP_IN_PROD=1` when `NODE_ENV=production`), bcrypt-only, with passwords sourced from `DEMO_ADMIN_PASSWORD_*` env vars — all hardcoded plaintext credentials removed from source.
+- **`DEMO_PLAINTEXT=1` removed** from `seed_official_demo_accounts.js`; both it and `server/clean_web_db.js` now require `MONGO_URI` from env (the hardcoded Atlas connection string with credentials is gone from source).
+- **New `server/rotate_demo_admin_credentials.js`** (gated behind `ROTATE_CONFIRM=YES`): re-hashes any plaintext demo admin password to bcrypt and audits the `Account` collection for other non-bcrypt rows. Run it against production **in the same window as the deploy** (the legacy plaintext-compare server cannot verify bcrypt hashes).
+- **Local `.env` secrets rotated:** `JWT_SECRET` (new 64-char value), `BRIDGE_API_KEY` + `ANDROID_BRIDGE_API_KEY` (new shared value, synced to the mobile backend `WEB_BRIDGE_API_KEY`). Demo admin passwords now live in `DEMO_ADMIN_PASSWORD_*` env vars.
+- **Still pending (manual):** Atlas DB user password rotation (then update `MONGO_URI` in `.env` + Render), Gmail app password rotation, Render env var updates, run the rotation script against production, commit/push/deploy, then the full verification matrix. Demo plaintext passwords redacted from this document (they never reached the remote — remote is still at `b6c89fc`).
 
 ---
 

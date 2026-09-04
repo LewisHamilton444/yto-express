@@ -1,7 +1,9 @@
 const dns = require('node:dns');
 dns.setServers(['8.8.8.8', '8.8.4.4']);
 const mongoose = require('mongoose');
-require('dotenv').config();
+const path = require('node:path');
+const crypto = require('node:crypto');
+require('dotenv').config({ path: path.resolve(__dirname, '.env') });
 
 const Seller = require('./models/Seller');
 const Customer = require('./models/Customer');
@@ -9,7 +11,14 @@ const Rider = require('./models/Rider');
 const Account = require('./models/Account');
 const bcrypt = require('bcryptjs');
 
-const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://ianjayaguinaldo3_db_user:wadu09269592382@cluster0.qv8m83a.mongodb.net/?appName=Cluster0';
+// Credentials never live in source. MONGO_URI must come from server/.env or
+// the environment; demo admin passwords come from DEMO_ADMIN_PASSWORD_* vars
+// (a random one is generated and logged once when a var is missing).
+const MONGO_URI = process.env.MONGO_URI;
+if (!MONGO_URI) {
+  console.error('[Seed Error] MONGO_URI is required. Set it in server/.env or the environment (never hardcode credentials in source).');
+  process.exit(1);
+}
 
 async function seedOfficialDemoAccounts() {
   try {
@@ -87,35 +96,26 @@ async function seedOfficialDemoAccounts() {
     );
     console.log('✓ Seeded Demo Rider (rider@gmail.com)');
 
-    // 4. Seed / Upsert Official Demo Admin Account
-    const adminSalt = await bcrypt.genSalt(10);
-    const adminHash = await bcrypt.hash('Admin@123', adminSalt);
-    await Account.findOneAndUpdate(
-      { email: 'admin@yto.com' },
-      {
-        name: 'YTO Super Admin',
-        email: 'admin@yto.com',
-        phone: '09170000000',
-        role: 'super_admin',
-        password: adminHash,
-        status: 'Active',
-        accountCategory: 'DEMO',
-        createdDate: new Date().toISOString().split('T')[0],
-      },
-      { upsert: true, new: true }
-    );
-    console.log('✓ Seeded Demo Admin (admin@yto.com / Admin@123)');
-
-    // 5. Seed / Upsert YTO Express demo admin accounts used by the login
-    //    fast-fill selector on the web admin portal (DEMO realm).
+    // 4. Seed / Upsert Official Demo Admin Accounts (@gmail.com trio -
+    //    mirrors the Android app's customer/seller/rider@gmail.com convention).
+    //    Passwords are ALWAYS bcrypt-hashed before storage (the plaintext
+    //    compatibility mode was removed - rotate legacy rows with
+    //    rotate_demo_admin_credentials.js instead). Sources, in order:
+    //      1. DEMO_ADMIN_PASSWORD_SUPERADMIN / _STAFF / _HUB env vars
+    //      2. A random generated password, logged once so the operator can
+    //         record it (never hardcoded, never re-printed on later runs).
     const demoAdmins = [
-      { name: 'YTO Super Admin (Demo)',   email: 'superadmin@ytoexpress.com', role: 'super_admin',  password: 'admin123' },
-      { name: 'YTO Operations Staff (Demo)', email: 'staff@ytoexpress.com',     role: 'staff',        password: 'staff123' },
-      { name: 'YTO Hub Receiver (Demo)',  email: 'hub@ytoexpress.com',         role: 'hub_receiver', password: 'sub123' },
+      { name: 'YTO Super Admin (Demo)',      email: 'superadmin@gmail.com', role: 'super_admin',  passwordEnv: 'DEMO_ADMIN_PASSWORD_SUPERADMIN' },
+      { name: 'YTO Operations Staff (Demo)', email: 'staff@gmail.com',      role: 'staff',        passwordEnv: 'DEMO_ADMIN_PASSWORD_STAFF' },
+      { name: 'YTO Hub Receiver (Demo)',     email: 'hub@gmail.com',        role: 'hub_receiver', passwordEnv: 'DEMO_ADMIN_PASSWORD_HUB' },
     ];
     for (const admin of demoAdmins) {
-      const demoSalt = await bcrypt.genSalt(10);
-      const demoHash = await bcrypt.hash(admin.password, demoSalt);
+      let plainPassword = process.env[admin.passwordEnv];
+      if (!plainPassword || !plainPassword.trim()) {
+        plainPassword = crypto.randomBytes(12).toString('base64url');
+        console.log('[Seed] No ' + admin.passwordEnv + ' set for ' + admin.email + '. Generated a one-time password (record it now): ' + plainPassword);
+      }
+      const passwordHash = await bcrypt.hash(plainPassword.trim(), 10);
       await Account.findOneAndUpdate(
         { email: admin.email },
         {
@@ -123,17 +123,17 @@ async function seedOfficialDemoAccounts() {
           email: admin.email,
           phone: '09170000000',
           role: admin.role,
-          password: demoHash,
+          password: passwordHash,
           status: 'Active',
           accountCategory: 'DEMO',
           createdDate: new Date().toISOString().split('T')[0],
         },
         { upsert: true, new: true }
       );
-      console.log(`✓ Seeded Demo Admin (${admin.email})`);
+      console.log('Seeded Demo Admin (' + admin.email + ')');
     }
 
-    console.log('All 7 official demo accounts successfully seeded into Web MongoDB Atlas.');
+    console.log('All 6 official demo accounts successfully seeded into Web MongoDB Atlas.');
   } catch (err) {
     console.error('Seeding Error:', err.message);
   } finally {

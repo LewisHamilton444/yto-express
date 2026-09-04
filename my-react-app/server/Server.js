@@ -9,6 +9,8 @@ const twilio = require('twilio');
 const nodemailer = require('nodemailer');
 const dotenv = require('dotenv');
 const path = require('node:path');
+const bcrypt = require('bcryptjs');
+const crypto = require('node:crypto');
 // Load .env anchored to this file (not process.cwd()) so the server
 // starts regardless of which directory it is invoked from.
 dotenv.config({ path: path.resolve(__dirname, '.env') });
@@ -61,14 +63,19 @@ function getCategoryFilter(req) {
 }
 
 // ── DEMO / REAL ACCOUNT CLASSIFICATION ──────────────────────────────────
-// Demo accounts live on @yto.com / @example.com / @ytoexpress.com, or any
-// email starting with "demo". Everything else defaults to REAL (safer —
-// never silently treat an unknown domain as a throwaway test account).
+// Demo accounts live on @yto.com / @example.com / @ytoexpress.com, are
+// allowlisted demo logins on @gmail.com (mirroring the Android app's
+// customer/seller/rider@gmail.com convention), or start with "demo".
+// Everything else defaults to REAL (safer — never silently treat an
+// unknown domain as a throwaway test account). Mirrors demoUtils.js.
 const DEMO_DOMAINS = ['yto.com', 'example.com', 'ytoexpress.com'];
+// Canonical demo logins on @gmail.com (Web Admin roles). Exact-match only,
+// so gmail stays REAL for everyone else.
+const DEMO_EMAILS = ['superadmin@gmail.com', 'staff@gmail.com', 'hub@gmail.com'];
 function isDemoEmail(email) {
     const value = String(email || '').toLowerCase().trim();
     const domain = value.split('@')[1] || '';
-    return DEMO_DOMAINS.includes(domain) || value.startsWith('demo');
+    return DEMO_EMAILS.includes(value) || DEMO_DOMAINS.includes(domain) || value.startsWith('demo');
 }
 
 // ── ROOT ROUTE ──
@@ -834,8 +841,70 @@ if (!MONGO_URI) {
   process.exit(1);
 }
 
+// ── DEMO ADMIN BOOTSTRAP (opt-in, bcrypt-only) ──────────────────────────────────────
+// SECURITY: disabled by default. Auto-inserting admin accounts into whatever
+// database this server connects to is only safe as an explicit, opted-in
+// action. Never hardcode credentials in this file.
+//   ENABLE_DEMO_BOOTSTRAP=1            required to run at all
+//   ALLOW_DEMO_BOOTSTRAP_IN_PROD=1     additionally required when NODE_ENV=production
+// Passwords come from DEMO_ADMIN_PASSWORD_* env vars; when a var is missing a
+// random password is generated and logged once so the operator can record it.
+// Passwords are always stored bcrypt-hashed. Inserts are $setOnInsert only:
+// existing accounts (including password changes made in Manage Accounts) are
+// never touched. Prefer seed_official_demo_accounts.js for deliberate runs.
+const DEMO_ADMIN_BOOTSTRAP = [
+  { email: 'superadmin@gmail.com', name: 'YTO Super Admin (Demo)',      role: 'super_admin',  passwordEnv: 'DEMO_ADMIN_PASSWORD_SUPERADMIN', phone: '09170000000' },
+  { email: 'staff@gmail.com',      name: 'YTO Operations Staff (Demo)', role: 'staff',        passwordEnv: 'DEMO_ADMIN_PASSWORD_STAFF',      phone: '09170000000' },
+  { email: 'hub@gmail.com',        name: 'YTO Hub Receiver (Demo)',     role: 'hub_receiver', passwordEnv: 'DEMO_ADMIN_PASSWORD_HUB',        phone: '09170000000' },
+];
+
+function resolveDemoPassword(entry) {
+  const fromEnv = process.env[entry.passwordEnv];
+  if (fromEnv && fromEnv.trim()) return fromEnv.trim();
+  const generated = crypto.randomBytes(12).toString('base64url');
+  console.log('[Bootstrap] No ' + entry.passwordEnv + ' set for ' + entry.email + '. Generated a one-time password (record it now): ' + generated);
+  return generated;
+}
+
+async function ensureDemoAdminAccounts() {
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    for (const d of DEMO_ADMIN_BOOTSTRAP) {
+      const passwordHash = await bcrypt.hash(resolveDemoPassword(d), 10);
+      await Account.collection.updateOne(
+        { email: d.email },
+        {
+          $setOnInsert: {
+            email: d.email,
+            name: d.name,
+            phone: d.phone,
+            role: d.role,
+            password: passwordHash,
+            status: 'Active',
+            accountCategory: 'DEMO',
+            createdDate: today,
+          },
+        },
+        { upsert: true }
+      );
+    }
+    console.log('[Bootstrap] Demo admin accounts ensured (bcrypt-hashed, insert-only).');
+  } catch (err) {
+    console.error('[Bootstrap Warning] Could not ensure demo admin accounts:', err.message);
+  }
+}
+
+const bootstrapRequested = process.env.ENABLE_DEMO_BOOTSTRAP === '1';
+const bootstrapAllowedInProd = process.env.ALLOW_DEMO_BOOTSTRAP_IN_PROD === '1';
+const bootstrapActive = bootstrapRequested && (process.env.NODE_ENV !== 'production' || bootstrapAllowedInProd);
+
 mongoose.connect(MONGO_URI, { serverSelectionTimeoutMS: 15000 })
-  .then(() => {
+  .then(async () => {
+    if (bootstrapActive) {
+      await ensureDemoAdminAccounts();
+    } else if (bootstrapRequested) {
+      console.log('[Bootstrap] ENABLE_DEMO_BOOTSTRAP=1 while NODE_ENV=production without ALLOW_DEMO_BOOTSTRAP_IN_PROD=1 - skipped for safety.');
+    }
     app.listen(PORT, () => console.log(`Server running on port ${PORT}and Connected to MongoDB!`));
   })
   .catch(err => console.error('[Startup Error] DB Connection Error:', err.message));

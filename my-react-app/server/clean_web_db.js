@@ -1,9 +1,16 @@
 const dns = require('node:dns');
 dns.setServers(['8.8.8.8', '8.8.4.4']);
 const mongoose = require('mongoose');
-require('dotenv').config();
+const path = require('node:path');
+require('dotenv').config({ path: path.resolve(__dirname, '.env') });
 
-const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://ianjayaguinaldo3_db_user:wadu09269592382@cluster0.qv8m83a.mongodb.net/?appName=Cluster0';
+// Credentials never live in source. MONGO_URI must come from server/.env or
+// the environment.
+const MONGO_URI = process.env.MONGO_URI;
+if (!MONGO_URI) {
+  console.error('[Clean Error] MONGO_URI is required. Set it in server/.env or the environment (never hardcode credentials in source).');
+  process.exit(1);
+}
 
 const Customer = require('./models/Customer');
 const Seller = require('./models/Seller');
