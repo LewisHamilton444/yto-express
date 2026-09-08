@@ -1,4 +1,5 @@
 const dns = require('node:dns');
+// Force Node's default global DNS resolver to use IPv4 addresses first
 dns.setServers(['8.8.8.8', '8.8.4.4']);
 
 const express = require('express');
@@ -16,7 +17,13 @@ const crypto = require('node:crypto');
 dotenv.config({ path: path.resolve(__dirname, '.env') });
 
 const app = express();
-app.use(cors({ origin: '*' }));
+
+// Ensure CORS headers are attached to EVERY response (even on errors)
+app.use(cors({
+    origin: '*',
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+}));
 app.use(express.json());
 
 const Seller          = require('./models/Seller');
@@ -733,18 +740,23 @@ app.post('/api/sms/send', authenticateToken, async (req, res) => {
     }
 });
 
-// ── EMAIL ROUTES (FIXED FOR RENDER / PORT 587 STARTTLS) ──
+// ── EMAIL ROUTES (FIXED FOR RENDER / IPV4 ENETUNREACH & CORS 502) ──
 let emailTransporter = null;
+
 function getEmailTransporter() {
     if (emailTransporter) return emailTransporter;
+
     emailTransporter = nodemailer.createTransport({
         host: 'smtp.gmail.com',
-        port: 587,
-        secure: false, // false for port 587 (uses STARTTLS)
-        requireTLS: true,
+        port: 465,
+        secure: true,
+        // Override DNS lookup to strictly enforce Node IPv4 resolution on cloud platforms
         dnsLookup: (hostname, options, callback) => {
             dns.lookup(hostname, { family: 4 }, callback);
         },
+        connectionTimeout: 10000, // 10s socket connection limit
+        greetingTimeout: 5000,
+        socketTimeout: 10000,
         auth: {
             user: process.env.EMAIL_USER,
             pass: process.env.EMAIL_APP_PASSWORD,
@@ -753,6 +765,7 @@ function getEmailTransporter() {
             rejectUnauthorized: false
         }
     });
+
     return emailTransporter;
 }
 
@@ -780,7 +793,8 @@ app.post('/api/email/send', authenticateToken, async (req, res) => {
         res.json({ success: true, provider: 'gmail', result: { messageId: info.messageId } });
     } catch (error) {
         console.error('[Nodemailer Error]:', error);
-        res.status(502).json({ error: error.message });
+        // Explicitly return JSON with proper status so CORS headers are preserved
+        res.status(502).json({ error: `Failed to send email: ${error.message}` });
     }
 });
 
