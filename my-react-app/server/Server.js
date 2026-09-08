@@ -11,6 +11,7 @@ const dotenv = require('dotenv');
 const path = require('node:path');
 const bcrypt = require('bcryptjs');
 const crypto = require('node:crypto');
+
 // Load .env anchored to this file (not process.cwd()) so the server
 // starts regardless of which directory it is invoked from.
 dotenv.config({ path: path.resolve(__dirname, '.env') });
@@ -63,14 +64,7 @@ function getCategoryFilter(req) {
 }
 
 // ── DEMO / REAL ACCOUNT CLASSIFICATION ──────────────────────────────────
-// Demo accounts live on @yto.com / @example.com / @ytoexpress.com, are
-// allowlisted demo logins on @gmail.com (mirroring the Android app's
-// customer/seller/rider@gmail.com convention), or start with "demo".
-// Everything else defaults to REAL (safer — never silently treat an
-// unknown domain as a throwaway test account). Mirrors demoUtils.js.
 const DEMO_DOMAINS = ['yto.com', 'example.com', 'ytoexpress.com'];
-// Canonical demo logins on @gmail.com (Web Admin roles). Exact-match only,
-// so gmail stays REAL for everyone else.
 const DEMO_EMAILS = ['superadmin@gmail.com', 'staff@gmail.com', 'hub@gmail.com'];
 function isDemoEmail(email) {
     const value = String(email || '').toLowerCase().trim();
@@ -84,9 +78,6 @@ app.get('/', (req, res) => {
 });
 
 // ── SSE EVENT STREAM ───────────────────────────────────────────────────
-// Admin clients connect here to receive real-time bridge events.
-// No JWT required for the stream itself (the admin already authenticated
-// via login). Keeps connection alive with 30s heartbeat.
 app.get('/api/events/stream', (req, res) => {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
@@ -145,9 +136,6 @@ app.put('/api/events/threshold', authenticateToken, (req, res) => {
 });
 
 // ── BRIDGE ROUTES ──
-// Cross-platform sync from the Android app's backend (yto_express_backend)
-// into this backend's schema — see bridgeRoutes.js for the transformation
-// logic (role routing, field renames, enterprise ID generation, etc.).
 app.use('/api/bridge', require('./bridgeRoutes'));
 
 // ── SELLER ROUTES ──
@@ -181,7 +169,6 @@ app.put('/api/sellers/:id', authenticateToken, async (req, res) => {
             { new: true, runValidators: false }
         );
 
-        // Bridge Sync: Push status change to Android backend (non-blocking)
         if (req.body.status && updated.email) {
             BridgeClient.sendApproval(updated.email, 'seller', req.body.status)
                 .catch(e => console.warn('[Bridge→Android] sendApproval failed:', e.message));
@@ -233,7 +220,6 @@ app.put('/api/riders/:id', authenticateToken, async (req, res) => {
             { new: true, runValidators: false }
         );
 
-        // Bridge Sync: Push status change to Android backend (non-blocking)
         if (req.body.status && updated.email) {
             BridgeClient.sendApproval(updated.email, 'rider', req.body.status)
                 .catch(e => console.warn('[Bridge→Android] sendApproval failed:', e.message));
@@ -294,11 +280,10 @@ app.get('/api/customers/:id/orders', authenticateToken, async (req, res) => {
 app.get('/api/activity-log', authenticateToken, async (req, res) => {
     try {
         const limit = Math.min(parseInt(req.query.limit) || 50, 200);
-        const roleFilter = req.query.role; // optional: 'customer', 'seller', 'rider'
+        const roleFilter = req.query.role;
         const catFilter = getCategoryFilter(req);
         const events = [];
 
-        // 1. Customer registration + status history
         if (!roleFilter || roleFilter === 'customer') {
             const customers = await Customer.find(catFilter);
             customers.forEach(c => {
@@ -327,7 +312,6 @@ app.get('/api/activity-log', authenticateToken, async (req, res) => {
             });
         }
 
-        // 2. Seller registration + status history
         if (!roleFilter || roleFilter === 'seller') {
             const sellers = await Seller.find(catFilter);
             sellers.forEach(s => {
@@ -356,7 +340,6 @@ app.get('/api/activity-log', authenticateToken, async (req, res) => {
             });
         }
 
-        // 3. Rider registration + status history
         if (!roleFilter || roleFilter === 'rider') {
             const riders = await Rider.find(catFilter);
             riders.forEach(r => {
@@ -385,7 +368,6 @@ app.get('/api/activity-log', authenticateToken, async (req, res) => {
             });
         }
 
-        // Sort newest first, apply limit
         events.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
         res.json(events.slice(0, limit));
     } catch (error) {
@@ -424,13 +406,11 @@ app.put('/api/parcels/:id', authenticateToken, async (req, res) => {
             { new: true, runValidators: false }
         );
 
-        // Bridge Sync: Push status change to Android backend (non-blocking)
         if (req.body.status && updated.trackingNumber) {
             BridgeClient.sendStatus(updated.trackingNumber, req.body.status)
                 .catch(e => console.warn('[Bridge→Android] sendStatus failed:', e.message));
         }
 
-        // SSE: Notify connected admin clients of parcel update
         sseBroadcaster.broadcast('parcel-updated', {
             trackingNumber: updated.trackingNumber,
             status: req.body.status || updated.status,
@@ -496,7 +476,6 @@ app.delete('/api/parcel-locations/:id', authenticateToken, async (req, res) => {
 });
 
 // ── DASHBOARD ANALYTICS ──
-// Aggregates filtered by session realm (REAL or DEMO)
 app.get('/api/dashboard/stats', authenticateToken, async (req, res) => {
     try {
         const catFilter = getCategoryFilter(req);
@@ -534,7 +513,6 @@ app.get('/api/dashboard/stats', authenticateToken, async (req, res) => {
 });
 
 // ── ACCOUNT ROUTES ──
-
 app.get('/api/accounts', authenticateToken, async (req, res) => {
     try {
         const accounts = await Account.find(getCategoryFilter(req)).select('-password');
@@ -574,7 +552,6 @@ app.put('/api/accounts/:id', authenticateToken, async (req, res) => {
             updateData.accountCategory = isDemoEmail(updateData.email) ? 'DEMO' : 'REAL';
         }
         if (updateData.password && updateData.password.trim()) {
-            const bcrypt = require('bcryptjs');
             const salt = await bcrypt.genSalt(10);
             updateData.password = await bcrypt.hash(updateData.password, salt);
         } else {
@@ -638,7 +615,6 @@ app.post('/api/accounts/login', async (req, res) => {
 });
 
 // ── SUPPORT TICKET / ISSUE ROUTES ──
-
 app.get('/api/issues', authenticateToken, async (req, res) => {
     try {
         const issues = await Issue.find(getCategoryFilter(req)).sort({ createdAt: -1 });
@@ -664,11 +640,9 @@ app.put('/api/issues/:id/status', authenticateToken, async (req, res) => {
         issue.updatedAt = new Date();
         await issue.save();
 
-        // Sync status back to Android app
         BridgeClient.sendIssueStatus(issue.ticketId, issue.status, issue.adminNotes)
             .catch(e => console.warn('[Bridge] sendIssueStatus failed:', e.message));
 
-        // Broadcast SSE to all connected web clients
         sseBroadcaster.broadcast('issue-status-updated', {
             ticketId: issue.ticketId,
             status: issue.status,
@@ -763,12 +737,16 @@ app.post('/api/sms/send', authenticateToken, async (req, res) => {
     }
 });
 
-// ── EMAIL ROUTES ──
+// ── EMAIL ROUTES (FIXED FOR RENDER / IPV4 ENETUNREACH) ──
 let emailTransporter = null;
 function getEmailTransporter() {
     if (emailTransporter) return emailTransporter;
     emailTransporter = nodemailer.createTransport({
         service: 'gmail',
+        host: 'smtp.gmail.com',
+        port: 465,
+        secure: true,
+        family: 4, // <-- Explicit IPv4 connection fix for Render networks
         auth: {
             user: process.env.EMAIL_USER,
             pass: process.env.EMAIL_APP_PASSWORD,
@@ -800,13 +778,13 @@ app.post('/api/email/send', authenticateToken, async (req, res) => {
 
         res.json({ success: true, provider: 'gmail', result: { messageId: info.messageId } });
     } catch (error) {
+        console.error('[Nodemailer Error]:', error);
         res.status(502).json({ error: error.message });
     }
 });
 
 // ── ADMIN: DATABASE RESET ──
 app.delete('/api/admin/reset-database', authenticateToken, async (req, res) => {
-    // RBAC Gate: Restrict to Super Admin only
     if (req.user?.role !== 'super_admin') {
         return res.status(403).json({ error: 'Access denied. Only Super Admin can reset the database.' });
     }
@@ -825,33 +803,22 @@ app.delete('/api/admin/reset-database', authenticateToken, async (req, res) => {
                 sellers: sellersResult.deletedCount,
                 riders: ridersResult.deletedCount,
             },
-         
         });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
 });
 
-// Use dynamic port for Render
+// ── PORT & DATABASE STARTUP ──
 const PORT = process.env.PORT || 3001;
-
 const MONGO_URI = process.env.MONGO_URI;
+
 if (!MONGO_URI) {
   console.error('[Startup Error] MONGO_URI is not set. Add it to server/.env or set it as a deployment env variable.');
   process.exit(1);
 }
 
-// ── DEMO ADMIN BOOTSTRAP (opt-in, bcrypt-only) ──────────────────────────────────────
-// SECURITY: disabled by default. Auto-inserting admin accounts into whatever
-// database this server connects to is only safe as an explicit, opted-in
-// action. Never hardcode credentials in this file.
-//   ENABLE_DEMO_BOOTSTRAP=1            required to run at all
-//   ALLOW_DEMO_BOOTSTRAP_IN_PROD=1     additionally required when NODE_ENV=production
-// Passwords come from DEMO_ADMIN_PASSWORD_* env vars; when a var is missing a
-// random password is generated and logged once so the operator can record it.
-// Passwords are always stored bcrypt-hashed. Inserts are $setOnInsert only:
-// existing accounts (including password changes made in Manage Accounts) are
-// never touched. Prefer seed_official_demo_accounts.js for deliberate runs.
+// ── DEMO ADMIN BOOTSTRAP ──
 const DEMO_ADMIN_BOOTSTRAP = [
   { email: 'superadmin@gmail.com', name: 'YTO Super Admin (Demo)',      role: 'super_admin',  passwordEnv: 'DEMO_ADMIN_PASSWORD_SUPERADMIN', phone: '09170000000' },
   { email: 'staff@gmail.com',      name: 'YTO Operations Staff (Demo)', role: 'staff',        passwordEnv: 'DEMO_ADMIN_PASSWORD_STAFF',      phone: '09170000000' },
@@ -905,10 +872,11 @@ mongoose.connect(MONGO_URI, { serverSelectionTimeoutMS: 15000 })
     } else if (bootstrapRequested) {
       console.log('[Bootstrap] ENABLE_DEMO_BOOTSTRAP=1 while NODE_ENV=production without ALLOW_DEMO_BOOTSTRAP_IN_PROD=1 - skipped for safety.');
     }
-    app.listen(PORT, () => console.log(`Server running on port ${PORT}and Connected to MongoDB!`));
+    app.listen(PORT, () => console.log(`Server running on port ${PORT} and Connected to MongoDB!`));
   })
   .catch(err => console.error('[Startup Error] DB Connection Error:', err.message));
-// ── GLOBAL ERROR HANDLER: Normalize error responses to { success, message } format ──
+
+// ── GLOBAL ERROR HANDLER ──
 app.use((err, req, res, next) => {
   console.error('[Server Error]', err.message);
   const statusCode = err.statusCode || err.status || 500;

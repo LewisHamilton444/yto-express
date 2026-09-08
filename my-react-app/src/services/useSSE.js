@@ -133,7 +133,7 @@ export default function useSSE() {
         }
 
         const token = getAuthToken();
-        const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+        const baseUrl = import.meta.env.VITE_API_URL || 'https://yto-express-backend.onrender.com';
 
         // SSE doesn't support custom headers, so we pass token as query param
         const url = token
