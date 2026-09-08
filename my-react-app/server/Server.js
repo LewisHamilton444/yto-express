@@ -12,8 +12,7 @@ const path = require('node:path');
 const bcrypt = require('bcryptjs');
 const crypto = require('node:crypto');
 
-// Load .env anchored to this file (not process.cwd()) so the server
-// starts regardless of which directory it is invoked from.
+// Load .env anchored to this file
 dotenv.config({ path: path.resolve(__dirname, '.env') });
 
 const app = express();
@@ -35,7 +34,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'ytoexpressappandwebcapstoneproject
 
 function authenticateToken(req, res, next) {
     const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+    const token = authHeader && authHeader.split(' ')[1];
 
     if (!token) {
         return res.status(401).json({ error: 'Access denied. No token provided.' });
@@ -43,7 +42,7 @@ function authenticateToken(req, res, next) {
 
     try {
         const decoded = jwt.verify(token, JWT_SECRET);
-        req.user = decoded; // { id, email, role, isDemo, iat, exp }
+        req.user = decoded;
         req.category = decoded.isDemo ? 'DEMO' : 'REAL';
         next();
     } catch (error) {
@@ -59,7 +58,6 @@ function getCategoryFilter(req) {
     const requested = (req.query.category || '').toUpperCase();
     if (requested === 'ALL') return {};
     if (requested === 'REAL' || requested === 'DEMO') return { accountCategory: requested };
-    // Default to the authenticated user's realm (REAL for real admins, DEMO for demo admins)
     return { accountCategory: req.category || 'REAL' };
 }
 
@@ -82,15 +80,13 @@ app.get('/api/events/stream', (req, res) => {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
-    res.setHeader('X-Accel-Buffering', 'no'); // nginx proxy compat
+    res.setHeader('X-Accel-Buffering', 'no');
     res.flushHeaders();
 
-    // Send initial connection event
     res.write(`event: connected\ndata: ${JSON.stringify({ message: 'SSE connected', timestamp: new Date().toISOString() })}\n\n`);
 
     sseBroadcaster.addClient(res);
 
-    // Heartbeat to keep connection alive
     const heartbeat = setInterval(() => {
         res.write(`: heartbeat\n\n`);
     }, 30000);
@@ -737,15 +733,15 @@ app.post('/api/sms/send', authenticateToken, async (req, res) => {
     }
 });
 
-// ── EMAIL ROUTES (FIXED FOR RENDER / IPV4 ENETUNREACH) ──
+// ── EMAIL ROUTES (FIXED FOR RENDER / PORT 587 STARTTLS) ──
 let emailTransporter = null;
 function getEmailTransporter() {
     if (emailTransporter) return emailTransporter;
     emailTransporter = nodemailer.createTransport({
         host: 'smtp.gmail.com',
-        port: 465,
-        secure: true,
-        // Override internal DNS lookup to force Node's IPv4 stack only
+        port: 587,
+        secure: false, // false for port 587 (uses STARTTLS)
+        requireTLS: true,
         dnsLookup: (hostname, options, callback) => {
             dns.lookup(hostname, { family: 4 }, callback);
         },
@@ -753,6 +749,9 @@ function getEmailTransporter() {
             user: process.env.EMAIL_USER,
             pass: process.env.EMAIL_APP_PASSWORD,
         },
+        tls: {
+            rejectUnauthorized: false
+        }
     });
     return emailTransporter;
 }
