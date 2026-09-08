@@ -742,11 +742,13 @@ let emailTransporter = null;
 function getEmailTransporter() {
     if (emailTransporter) return emailTransporter;
     emailTransporter = nodemailer.createTransport({
-        service: 'gmail',
         host: 'smtp.gmail.com',
         port: 465,
         secure: true,
-        family: 4, // <-- Explicit IPv4 connection fix for Render networks
+        // Override internal DNS lookup to force Node's IPv4 stack only
+        dnsLookup: (hostname, options, callback) => {
+            dns.lookup(hostname, { family: 4 }, callback);
+        },
         auth: {
             user: process.env.EMAIL_USER,
             pass: process.env.EMAIL_APP_PASSWORD,
