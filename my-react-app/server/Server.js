@@ -37,7 +37,13 @@ const Issue           = require('./models/Issue');
 const sseBroadcaster  = require('./utils/sseBroadcaster');
 
 // ── JWT AUTHENTICATION MIDDLEWARE ───────────────────────────────────────
-const JWT_SECRET = process.env.JWT_SECRET || 'ytoexpressappandwebcapstoneproject';
+// No fallback: a missing JWT_SECRET must be a loud startup failure, never a
+// silent fall-through to a publicly-known string (token forgery risk).
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET || !JWT_SECRET.trim()) {
+  console.error('[Startup Error] JWT_SECRET is not set. Add it to server/.env or set it as a deployment env variable.');
+  process.exit(1);
+}
 
 function authenticateToken(req, res, next) {
     const authHeader = req.headers['authorization'];
@@ -608,7 +614,7 @@ app.post('/api/accounts/login', async (req, res) => {
 
         const token = jwt.sign(
             { id: account._id, email: account.email, role: account.role, isDemo },
-            process.env.JWT_SECRET || 'ytoexpressappandwebcapstoneproject',
+            JWT_SECRET,
             { expiresIn: '24h' }
         );
         res.json({ ...result, token, loginRole: 'admin', isDemo, accountCategory: isDemo ? 'DEMO' : 'REAL' });
@@ -740,7 +746,7 @@ app.post('/api/sms/send', authenticateToken, async (req, res) => {
     }
 });
 
-// ── EMAIL TRANSPORTER CONFIGURATION ──
+// ── EMAIL TRANSPORTER CONFIGURATION (IPV4 EXPLICIT FORCE) ──
 let emailTransporter = null;
 
 function getEmailTransporter() {
@@ -750,6 +756,7 @@ function getEmailTransporter() {
         host: 'smtp.gmail.com',
         port: 465,
         secure: true,
+        family: 4, // <-- FORCES NODEMAILER TO USE IPV4 ONLY (PREVENTS ESOCKET IPv6 DROPS)
         dnsLookup: (hostname, options, callback) => {
             dns.lookup(hostname, { family: 4 }, callback);
         },
