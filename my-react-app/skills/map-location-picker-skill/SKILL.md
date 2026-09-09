@@ -18,57 +18,57 @@ verified-on: [vite]
 
 | # | Dimension | Value |
 |---|-----------|-------|
-| 1 | Task | Dynamically inject Leaflet map; resolve addresses to lat/lng; apply deterministic pin offset for anti-overlap. |
+| 1 | Task | Dynamically inject the Leaflet map (`leafletLoader.js`); resolve city strings to coordinates via the `CITY_COORDS` dictionary (`luzonCityCoords.js`, case-insensitive keying handled by callers) with `LUZON_FALLBACK_COORDS` as the safe default; render typed markers with vehicle glyphs. |
 | 2 | Target Tool | Any React agent runtime: Cline, Copilot, Studio Bot, raw API. |
-| 3 | Output Format | Structured readback with `mapInitialized`, `coordinates`, `pinTag`, and `antiOverlapOffset`. |
-| 4 | Constraints | Anti-overlap offset: `isPickup ? -0.008 : +0.008` deterministic hash; case-insensitive `LOCATION_MAP` dictionary fallback; GPS coords bypass fuzzy geocoder. |
-| 5 | Input | Raw address string; `isPickup` boolean flag; explicit GPS coordinates intent extras. |
-| 6 | Context | Initialize map in `LiveRiderMap.jsx`, `MonitorRiderStatus.jsx`, `MonitorParcel.jsx`; render marker tags with correct icons/colors. |
+| 3 | Output Format | Structured readback with `mapInitialized`, `coordinates`, `markerType`, and `fallbackUsed`. |
+| 4 | Constraints | City resolution is dictionary-based (`resolveCityCoords(city)` → null when unknown → Manila fallback) — there is **no `/api/geocode` endpoint** on the Web backend and no external geocoder call; `isPickup` anti-overlap offsets (±0.008) are an Android-side contract, not a Web one. |
+| 5 | Input | City/address strings from parcel or rider records; rider GPS where available; layer visibility state. |
+| 6 | Context | Initialize map in `LiveRiderMap.jsx`, `MonitorRiderStatus.jsx`, `MonitorParcel.jsx`; render markers with `vehicleIcons` glyphs for Leaflet. |
 | 7 | Audience | Active user; map container components; delivery tracking; hub location assignment. |
-| 8 | Success Criteria | Map injected with `id='yto-map'`; coordinates resolved; pin rendered with correct tag color and anti-overlap offset; city resolved via `LOCATION_MAP` fallback. |
-| 9 | Examples | `"Pulilan, Bulacan"` → resolved to `(14.9085, 120.8545)` with `-0.008` offset (Pickup). `"Manila, PH"` → resolved to `(14.6031, 120.9769)` with `+0.008` offset (Destination). |
+| 8 | Success Criteria | Map injected once; coordinates resolved via `CITY_COORDS` (or fallback); markers rendered with correct glyph/type. |
+| 9 | Examples | `"Pulilan"` → `(14.9085, 120.8545)` from `CITY_COORDS`. Unknown city → `LUZON_FALLBACK_COORDS` `(14.5995, 120.9842)`. |
 
 ## 2. Trigger Matrix
 
 | Scenario | Decision | Action |
 |----------|----------|--------|
-| Component mounts with `rawAddress` prop | YES | Call `resolveAddressToLatLng(rawAddress, isPickup)`; inject Leaflet map if not present. |
-| GPS coordinates intent extras present (`PICKUP_LAT`/`DELIVERY_LAT`) | YES | Bypass fuzzy geocoder entirely; use explicit coordinates; inject map with those coords. |
-| Map already injected in ancestor component | YES | Skip re-injection; only resolve and update pin position if coords changed. |
-| User clears search field | YES | Remove marker; reset map view to default Luzon hub view; show placeholder text. |
-| Map tile load fails | YES | Retry with exponential backoff (2s, 4s, 8s max 3 attempts); fall back to static placeholder. |
+| Component mounts with a city/address string | YES | Look up `resolveCityCoords(city)` from `luzonCityCoords.js`; inject Leaflet map if not present. |
+| Rider GPS coordinates available from bridge sync | YES | Use explicit coordinates; skip dictionary resolution. |
+| City not found in `CITY_COORDS` | YES | Fall back to `LUZON_FALLBACK_COORDS` (Manila) — no external geocoder call. |
+| Map already injected | YES | Skip re-injection; only update marker positions when coords changed. |
+| Map tile load fails | YES | Retry with backoff; fall back to static placeholder per `leafletLoader.js` behavior. |
 
 ## 3. Execution Workflow
 
-### Step 1: Check for GPS Intent Extras
+### Step 1: Check for Explicit Coordinates
 
-- **Action:** If `PICKUP_LAT`/`DELIVERY_LAT` intent extras present, bypass fuzzy geocoder; use explicit coordinates.
-- **Input:** Intent extras from routing navigation; `isPickup` boolean.
+- **Action:** If rider/parcel GPS coordinates are available (bridge `sync-location`, parcel records), use them directly.
+- **Input:** GPS coordinates from live data.
 - **Stop Condition:** Explicit coordinates obtained; skip to Step 4.
 
-### Step 2: Fuzzy City Resolution (Dictionary Fallback)
+### Step 2: City Dictionary Resolution
 
-- **Action:** Perform case-insensitive lookup in `LOCATION_MAP` dictionary; if found, use stored coordinates.
-- **Input:** `rawAddress` string; `LOCATION_MAP` from `luzonCityCoords.js`.
+- **Action:** Perform lookup via `resolveCityCoords(city)` against `CITY_COORDS` in `luzonCityCoords.js`.
+- **Input:** City string from parcel/rider record.
 - **Stop Condition:** City found in dictionary; coordinates resolved.
 
-### Step 3: Dynamic Geocoding (Fallback if Not in Dictionary)
+### Step 3: Fallback Coordinates (No Geocoder Endpoint)
 
-- **Action:** If not in `LOCATION_MAP`, invoke dynamic geocoder API (`/api/geocode?address=${rawAddress}`); store result in cache.
-- **Input:** `rawAddress`; API response with `lat`, `lng`.
-- **Stop Condition:** Coordinates resolved from geocoder API.
+- **Action:** If the city is not in `CITY_COORDS`, use `LUZON_FALLBACK_COORDS` — there is no `/api/geocode` route on this backend; do not invent one.
+- **Input:** Unresolved city string.
+- **Stop Condition:** Fallback coordinates applied; flag the record for data cleanup if precision matters.
 
-### Step 4: Apply Anti-Overlap Pin Offset
+### Step 4: Apply Marker Type Styling
 
-- **Action:** Determine `pinOffset`: `isPickup ? -0.008 : +0.008`; apply deterministic hash offset to resolved coordinates.
-- **Input:** `isPickup` boolean; resolved `lat`, `lng`.
-- **Stop Condition:** Offset applied; final coordinates `finalLat`, `finalLng` calculated.
+- **Action:** Determine marker type (`HUB`, `RIDER`, or parcel watch-list entry); select the correct `vehicleIcons` glyph / `vehicleTypeLabel` for Leaflet markers.
+- **Input:** Marker record; `VehicleIcon` component; `vehicleGlyphSvg` data-URI.
+- **Stop Condition:** Icon set chosen for the marker.
 
-### Step 5: Inject Leaflet Map and Render Pin
+### Step 5: Inject Leaflet Map and Render Marker
 
-- **Action:** If map not already present, inject via `leafletLoader.js`; render marker with correct tag color/icon; apply `finalLat`, `finalLng` as pin position.
-- **Input:** `finalLat`, `finalLng`; `pinTag` determination (`HUB`, `PICKUP`, `RIDER`, `DESTINATION`); tag color from `AGENTS2.md` specs.
-- **Stop Condition:** Map initialized; pin rendered at correct position with anti-overlap offset.
+- **Action:** If map not already present, inject via `leafletLoader.js`; render marker at resolved coordinates with the chosen glyph.
+- **Input:** Resolved `lat`, `lng`; marker type.
+- **Stop Condition:** Map initialized; marker rendered at correct position.
 
 ### Step 6: Handle Map Interactions
 
@@ -91,14 +91,12 @@ verified-on: [vite]
 
 ## 5. Validation Gate
 
-- [ ] `rawAddress` provided and non-empty before geocoding
-- [ ] `isPickup` boolean flag present and validated
-- [ ] `LOCATION_MAP` dictionary lookup is case-insensitive
-- [ ] Anti-overlap offset exactly `isPickup ? -0.008 : +0.008` (no other values)
-- [ ] GPS intent extras bypass fuzzy geocoder entirely (no dictionary lookup)
-- [ ] Map injected with `id='yto-map'` and `leafletLoader.js`
-- [ ] Pin tag color matches `AGENTS2.md` specs: HUB/DESTINATION orange, PURPLE for PICKUP, BLUE for RIDER
-- [ ] Info window content matches tag: `HUB` → `"MAIN SORTING HUB"`, `PICKUP` → `"PICKUP ORIGIN"`, etc.
+- [ ] City string provided before resolution
+- [ ] Explicit GPS coordinates (when present) bypass the `CITY_COORDS` dictionary entirely
+- [ ] Dictionary miss falls back to `LUZON_FALLBACK_COORDS` — never an external geocoder call
+- [ ] Map injected once via `leafletLoader.js` (no duplicate containers)
+- [ ] Markers use `vehicleIcons` glyphs; hub markers carry their hub identity
+- [ ] Anti-overlap ±0.008 offsets are NOT applied on the Web (Android-side contract)
 
 ## 6. Anti-Triggers and Calibration
 
@@ -126,7 +124,7 @@ verified-on: [vite]
 
 | Runtime | Status | Notes |
 |---------|--------|-------|
-| Vite React | verified | Executed in current workspace; integrates with `leafletLoader.js`, `luzonCityCoords.js`, `LiveRiderMap.jsx`. |
+| Vite React | verified | Executed in current workspace; integrates with `leafletLoader.js`, `luzonCityCoords.js`, `LiveRiderMap.jsx`, `MonitorParcel.jsx`. |
 | Claude Code | untested | |
 | Cursor | untested | |
 | Copilot | untested | |
@@ -136,8 +134,8 @@ verified-on: [vite]
 
 ## 10. Examples
 
-**Input:** "User selects `'Pulilan, Bulacan'` as pickup address on parcel booking form."
+**Input:** "Render a rider marker for a parcel originating in `'Pulilan'`."
 
-**Output:** "Taking from this: map location resolution for pickup address. Constraints: case-insensitive LOCATION_MAP lookup; anti-overlap offset -0.008; pin tag HUB with violet color. Resolved to (14.9085, 120.8545) with offset applied. Proceeding with map injection."
+**Output:** "Taking from this: map marker placement. Constraints: `resolveCityCoords('Pulilan')` → `(14.9085, 120.8545)`; inject map via `leafletLoader.js`; rider glyph from `vehicleIcons`. Proceeding with map injection."
 
-**Failure case:** User selects unknown city not in `LOCATION_MAP` and no GPS extras → geocoder API called; if API fails, map shows placeholder with instruction to enter valid Luzon city or provide GPS coordinates.
+**Failure case:** Unknown city not in `CITY_COORDS` and no GPS → use `LUZON_FALLBACK_COORDS` (Manila). Do NOT call a geocoder endpoint — none exists on the Web backend.

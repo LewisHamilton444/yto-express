@@ -12,31 +12,31 @@ verified-on: [vite]
 - **Role:** SSE Broadcaster and Notification Router
 - **Authority: Tier-3 normative root skill for `skills/cross-device-skill/`.
 - **Must not define:** Missing SSE cleanup; unbound notification listeners causing memory leaks.
-- **Normative base:** `AGENTS2.md`; `src/services/useSSE.js`; `src/components/NotificationBell.jsx`.
+- **Normative base:** `AGENTS2.md`; `src/services/useSSE.js`; `src/GlobalHeader.jsx`; `src/components/NotificationBell.jsx`.
 
 ## 1. Intent (9 Dimensions)
 
 | # | Dimension | Value |
 |---|-----------|-------|
-| 1 | Task | Manage real-time logistics updates via SSE, broadcast `REFRESH_LOGISTICS` to all subscribed fragments. |
+| 1 | Task | Manage real-time admin-portal updates via SSE (`useSSE` hook): re-fetch events, badge updates, and live-feed status pill. |
 | 2 | Target Tool | Any React agent runtime: Cline, Copilot, Studio Bot, raw API. |
-| 3 | Output Format | Structured readback with `broadcastChannel`, `lastRefresh`, `unreadCount`, and `sessionId`. |
-| 4 | Constraints | SSE connection must auto-reconnect on failure (3s, max 5 attempts); falls back to 5s HTTP polling; no unhandled errors crashing Express process. |
-| 5 | Input | Bearer JWT token from `localStorage`; `currentUser.isDemo` flag; target fragment name. |
-| 6 | Context | Ensures all dashboard fragments (`CustomerDashboard`, `SellerStatus`, `RiderStatus`, `MyTasks`) receive real-time updates. |
-| 7 | Audience | Active session user; Dashboard fragments; HeaderViewUtils; Notification bell. |
-| 8 | Success Criteria | `REFRESH_LOGISTICS` broadcast received; unread badge updated; heads-up banner displayed for critical events. |
-| 9 | Examples | SSE receives `issue-synced` → toast notification opens `ManageIssues.jsx`. Rider status change → map marker updates on `LiveRiderMap.jsx`. |
+| 3 | Output Format | Structured readback with `connected`, `mode` (`sse`/`polling`), `lastEvent`, and listener registrations. |
+| 4 | Constraints | SSE connects to `/api/events/stream?token=<JWT>` (query param — EventSource cannot set headers); auto-reconnect 3s; after 5 failures falls back to 5s HTTP polling of `/api/activity-log?limit=10`; the `'offline'` mode value exists but is never set (polling retries indefinitely). |
+| 5 | Input | JWT token via `getAuthToken()` (key `yto_token`); event types `user-synced`, `parcel-synced`, `location-synced`, `parcel-updated`, `peak-alert`. |
+| 6 | Context | All subscribed views (dashboards, ManageParcels, map views) re-fetch on `lastEvent` changes; `GlobalHeader` renders the Live/Polling/Offline pill from `mode`. |
+| 7 | Audience | Active session user; GlobalHeader; NotificationBell; data views. |
+| 8 | Success Criteria | SSE events dispatched to listeners; unread badge updated; live-feed pill reflects the connection mode. |
+| 9 | Examples | SSE receives `parcel-synced` → views listening via `on('parcel-synced', cb)` re-fetch. Peak connections exceeded → `peak-alert` event. |
 
 ## 2. Trigger Matrix
 
 | Scenario | Decision | Action |
 |----------|----------|--------|
-| User navigates to any dashboard view | YES | Subscribe to SSE stream `/api/events/stream?token=<JWT>`; auto-reconnect every 3s; after 5 failed attempts fall back to 5s HTTP polling. |
-| SSE connection drops or times out | YES | Auto-reconnect after 3s exponential backoff; emit `'yto:sse_disconnected'` to UI. |
-| `currentUser.isDemo == true` | YES | Subscribe to mock SSE feed with pre-populated demo events; skip live polling. |
-| User logs out or token expires | YES | Clean SSE subscription; clear token under `yto_token` (local + session storage); redirect to `LoginPage.jsx`. |
-| Manual refresh button clicked | YES | Force immediate re-poll of `/api/activity-log?limit=10` regardless of the fallback cycle. |
+| User navigates to any view (GlobalHeader is mounted app-wide) | YES | `useSSE()` connects to `/api/events/stream?token=<JWT>`; auto-reconnect every 3s; after 5 failed attempts fall back to 5s HTTP polling. |
+| SSE connection drops or times out | YES | Reconnect after 3s (fixed delay, up to 5 attempts) then switch to polling; header pill switches to `Polling`. |
+| Polling also fails | YES | Polling continues retrying every 5s — the `'offline'` mode is defined in the state union but never set; the header renders Offline via its `modeConfig` fallback only. |
+| User logs out or token expires | YES | `apiFetch` clears `yto_token` (local + session storage) and dispatches `yto:auth_expired`; `App.jsx` returns to `LoginPage`. |
+| Manual retry (header pill button) | YES | `retry()` resets the attempt counter, stops polling, and reconnects SSE immediately. |
 
 ## 3. Execution Workflow
 
@@ -52,23 +52,23 @@ verified-on: [vite]
 - **Input:** Message data from SSE stream.
 - **Stop Condition:** `eventType` identified (`issue-synced`, `issue-status-updated`, `parcel-synced`, `refreshed-logistics`).
 
-### Step 3: Route Event to Correct Fragment
+### Step 3: Route Event to Subscribed Views
 
-- **Action:** Based on `eventType`, call `REFRESH_LOGISTICS` broadcast with payload; update specific fragment state.
-- **Input:** Event type and data.
-- **Stop Condition:** Correct fragment updated (`CustomerDashboardFragment`, `SellerStatusFragment`, `RiderStatusFragment`, `MyTasksFragment`).
+- **Action:** Based on event type, call the matching listener registered via `on(eventType, cb)`; views re-fetch their collections.
+- **Input:** Event type and data payload.
+- **Stop Condition:** Subscribed views updated (e.g., ManageParcels re-fetches on `parcel-synced`/`parcel-updated`).
 
 ### Step 4: Update Unread Badge
 
-- **Action:** Increment/decrement unread count based on event; update `NotificationBell` component badge; persist to `localStorage`.
-- **Input:** Event payload with `badgeDelta` (positive or negative integer).
-- **Stop Condition:** Badge reflects accurate unread count; z-order `elevation=6dp` + `translationZ=6dp` renders above bell card.
+- **Action:** Increment/decrement unread count based on event; update the `NotificationBell` badge.
+- **Input:** Event payload relevant to pending items.
+- **Stop Condition:** Badge reflects an accurate unread count.
 
-### Step 5: Heads-Up Banner for Critical Events
+### Step 5: Toast for Critical Events
 
-- **Action:** For `issue-status-updated` or `parcel-synced` events with `priority: high`, call `showHeadsUp()` with tag `YTO_HEADS_UP_BANNER`; cleanup existing banner by same tag first.
-- **Input:** Event data with `title`, `body`, `actionText`.
-- **Stop Condition:** Heads-up banner animates in; auto-dismisses after 5s; vibration pattern `new long[]{0, 500, 250, 500}`.
+- **Action:** For high-priority events, surface feedback through the global `ToastContext` provider (the Web replacement for the Android heads-up banner).
+- **Input:** Event data with relevant message content.
+- **Stop Condition:** Toast rendered via `useToasts()`/`ToastContext`; auto-dismisses per provider timing.
 
 ### Step 6: Cleanup on Unmount
 
@@ -82,23 +82,21 @@ verified-on: [vite]
 {
   "module": "cross-device-skill",
   "status": "subscribed",
-  "broadcastChannel": "REFRESH_LOGISTICS",
-  "lastRefresh": "ISO_timestamp",
-  "unreadCount": number,
-  "sessionId": "user_jwt_identifier"
+  "connected": true/false,
+  "mode": "sse|polling",
+  "lastEvent": { "type": "parcel-synced", "data": {}, "timestamp": 0 },
+  "listenerCount": number
 }
 ```
 
 ## 5. Validation Gate
 
 - [ ] JWT token present under key `yto_token` (session or local storage)
-- [] SSE endpoint `/api/events/stream` returns valid SSE stream
-- [] `currentUser.isDemo` flag checked before live SSE/polling setup
-- [] Fallback polling interval exactly 5s (`setInterval` with 5000ms) after 5 failed SSE attempts
-- [] Real-time events dispatched to subscribed views on each update
-- [] Unread badge updates atomically (no race conditions)
-- [] Heads-up banner cleanup by tag `YTO_HEADS_UP_BANNER` before new banner animates
-- [] SSE `close()` called on component unmount
+- [ ] SSE endpoint `/api/events/stream?token=<JWT>` returns a valid `text/event-stream`
+- [ ] Fallback polling interval exactly 5s (`setInterval` with 5000ms) after 5 failed SSE attempts; polling hits `/api/activity-log?limit=10`
+- [ ] Real-time events dispatched to subscribed listeners on each update
+- [ ] Header pill reflects mode: `Live` (sse) / `Polling` (polling) / `Offline` fallback
+- [ ] SSE `close()` called on component unmount; polling interval cleared
 
 ## 6. Anti-Triggers and Calibration
 
@@ -126,7 +124,7 @@ verified-on: [vite]
 
 | Runtime | Status | Notes |
 |---------|--------|-------|
-| Vite React | verified | Executed in current workspace; integrates with `useSSE.js`, `NotificationBell.jsx`, `HeaderViewUtils`. |
+| Vite React | verified | Executed in current workspace; integrates with `useSSE.js`, `GlobalHeader.jsx`, `NotificationBell.jsx`. |
 | Claude Code | untested | |
 | Cursor | untested | |
 | Copilot | untested | |
@@ -136,8 +134,8 @@ verified-on: [vite]
 
 ## 10. Examples
 
-**Input:** "User navigates to `SellerStatusFragment` and expects real-time logistics updates."
+**Input:** "Admin opens ManageParcels and expects real-time parcel updates."
 
-**Output:** "Taking from this: cross-device SSE subscription for seller dashboard. Constraints: SSE `/api/events/stream` with Bearer JWT token; 3s reconnect with 5s polling fallback; auto-reconnect on failure. Proceeding with SSE subscription."
+**Output:** "Taking from this: SSE subscription via `useSSE`. Constraints: `/api/events/stream?token=<JWT>`; 3s reconnect with 5s polling fallback; views re-fetch on `parcel-synced`/`parcel-updated`. Proceeding with SSE subscription."
 
 **Failure case:** The agent starts SSE connection before user logs in (no JWT token) → connection refused and 401 error. Refuse: trigger matrix requires `isLoggedIn == true` first.

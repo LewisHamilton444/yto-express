@@ -12,21 +12,21 @@ verified-on: [vite]
 - **Role:** Seller Dashboard Data Loader and Empty State Enforcer
 - **Authority:** Tier-2 normative root skill for `skills/seller-dashboard-skill/`.
 - **Must not define:** Hardcoded mock shipments in real account empty states; displaying zero-order cards for real admins; failing to enforce `isDemo` category filtering.
-- **Normative base:** `AGENTS2.md`; `src/components/SellerDashboard.jsx`; `src/components/ManageParcels.jsx`.
+- **Normative base:** `AGENTS2.md`; `src/AnalyticsDashboard.jsx`; `src/ManageParcels.jsx`. NOTE: there is no `SellerDashboard.jsx` in this codebase — the admin dashboard view is `AnalyticsDashboard.jsx`; seller-scoped screens are the seller ledger and parcel views.
 
 ## 1. Intent (9 Dimensions)
 
 | # | Dimension | Value |
 |---|-----------|-------|
-| 1 | Task | Load seller KPIs (parcel volume, status breakdown, recent activity); enforce clean empty state for real accounts (0 records = no mock orders); display `[DEMO MODE]` banner for demo accounts with pre-seeded sample records. |
+| 1 | Task | Load dashboard KPIs via `GET /api/dashboard/stats` (category-filtered); enforce clean empty state for real accounts (0 records = no mock orders); demo accounts may load fixtures (`FALLBACK_PARCELS`, `MOCK_ACCOUNTS`) under a `[DEMO MODE]` banner only when the live collection is empty/unreachable. |
 | 2 | Target Tool | Any React agent runtime: Cline, Copilot, Studio Bot, raw API. |
 | 3 | Output Format | Structured readback with `kpisLoaded`, `emptyState`, `demoBanner`, and `categoryFilter` values. |
-| 4 | Constraints | Real non-demo admins (`!currentUser?.isDemo`): When MongoDB collections have 0 records, display clean empty state graphics with zero synthetic or hardcoded mock injections. Demo admins (`currentUser?.isDemo == true`): If backend database is empty or offline, load test datasets (`FALLBACK_PARCELS`, `MOCK_ACCOUNTS`) with yellow `[DEMO MODE]` status banner. |
+| 4 | Constraints | Real non-demo admins (`!currentUser?.isDemo`): When MongoDB collections have 0 records, display clean empty state graphics with zero synthetic or hardcoded mock injections. Demo admins (`currentUser?.isDemo == true`): If the backend collection is empty or unreachable, load test datasets (`FALLBACK_PARCELS` in ManageParcels, `MOCK_ACCOUNTS` in ManageAccounts, `mockRiders`/`mockSellers` in `sellerRiderData.js`) with the `[DEMO MODE]` banner/flag. |
 | 5 | Input | `currentUser.isDemo`; `currentUser.role`; `PAGE_MAP` view switcher; category filter (`All`/`Real Records`/`Demo Records`). |
 | 6 | Context | `isDemoUser()` gate all repository reads and writes; demo sessions must never mutate live database collections; all values dynamically extract from respective models; category filter always available. |
 | 7 | Audience | SellerDashboard.jsx; ManageParcels.jsx; ViewSeller.jsx; AnalyticsDashboard.jsx; category toolbar. |
 | 8 | Success Criteria | KPIs loaded from `/api/dashboard/stats`; empty state displayed correctly based on `isDemo`; category filter functional; `[DEMO MODE]` banner visible only for demo accounts. |
-| 9 | Examples | Seller logs in → KPIs display: total parcels, pending, in-transit, delivered counts; if 0 parcels → clean empty state (real) or `[DEMO MODE]` banner with samples (demo). |
+| 9 | Examples | Admin logs in → KPIs display: total parcels, delivered %, riders, active riders, avg rating, total deliveries, sellers (per `/api/dashboard/stats`); if 0 records → clean empty state (real) or `[DEMO MODE]` fixtures (demo). |
 
 ## 2. Trigger Matrix
 
@@ -42,7 +42,7 @@ verified-on: [vite]
 
 ### Step 1: Fetch KPIs from Dashboard Stats
 
-- **Action:** `GET /api/dashboard/stats` with Bearer JWT token; parse response for `totalParcels`, `pending`, `inTransit`, `delivered`, `returns`, `cancelled`; check `currentUser.isDemo` flag.
+- **Action:** `GET /api/dashboard/stats?category=<realm>` with Bearer JWT token; parse the server's KPI response (parcels, delivered %, riders, active riders, avg rating, total deliveries, sellers); check `currentUser.isDemo` flag.
 - **Input:** JWT token from `localStorage`; `currentUser.isDemo`.
 - **Stop Condition:** KPIs extracted; ready for state rendering.
 - **Validation:** 
@@ -73,18 +73,18 @@ verified-on: [vite]
 
 ### Step 4: Apply Category Filter (All/Real Records/Demo Records)
 
-- **Action:** User selects category filter; update API query parameters: `category=all`/`category=real`/`category=demo`; re-fetch `/api/dashboard/stats`; re-render KPIs and parcel cards with correct badging (Green `REAL`, Gray `DEMO`).
+- **Action:** User selects category filter; the server accepts `category=ALL`/`category=REAL`/`category=DEMO` (uppercase; default = the admin's own realm); re-fetch and re-render with correct badging.
 - **Input:** Filter selection from toolbar; `currentUser.isDemo`; JWT token.
-- **Stop Condition:** Data re-fetched; UI updated with filtered results; badge colors correct.
+- **Stop Condition:** Data re-fetched; UI updated with filtered results; badge tones correct.
 - **Validation:** 
-  - `category=real` → only REAL badge parcels show; 
-  - `category=demo` → only DEMO badge parcels show; 
-  - `category=all` → all parcels show with badges; 
-  - Badge colors: REAL → `#43A047` (green), DEMO → `#9CA3AF` (neutral gray).
+  - `category=REAL` → only REAL records show; 
+  - `category=DEMO` → only DEMO records show; 
+  - `category=ALL` → all records show with badges; 
+  - Badge tones: REAL → emerald (green), DEMO → slate (gray) per `ACCOUNT_CATEGORY_TONE`.
 
 ### Step 5: Handle Demo Banner Visibility
 
-- **Action:** If `currentUser.isDemo === true`: display yellow `[DEMO MODE]` status banner at top of dashboard; if `totalParcels === 0` AND demo → load `FALLBACK_PARCELS`/`MOCK_ACCOUNTS`; banner always visible for demo accounts regardless of record count.
+- **Action:** If `currentUser.isDemo === true`: demo fixtures (`FALLBACK_PARCELS` / `MOCK_ACCOUNTS` / `mockRiders`) are permitted only when the live collection is empty or unreachable; the UI flags simulated data (e.g., `SimulatedFeedBadge` / using-fallback state) rather than a permanently pinned banner.
 - **Input:** `currentUser.isDemo`; `totalParcels`; `FALLBACK_PARCELS`/`MOCK_ACCOUNTS` test data.
 - **Stop Condition:** Banner rendered or hidden; test data loaded if applicable.
 - **Validation:** 
@@ -98,24 +98,23 @@ verified-on: [vite]
 {
   "module": "seller-dashboard-skill",
   "status": "dashboard_loaded",
-  "kpis": { "totalParcels": number, "pending": number, "inTransit": number, "delivered": number, "returns": number, "cancelled": number },
+  "kpis": { "totalParcels": number, "deliveredPercent": number, "riders": number, "activeRiders": number, "avgRating": number, "totalDeliveries": number, "sellers": number },
   "emptyState": true/false,
-  "demoBanner": true/false,
-  "categoryFilter": "All | Real Records | Demo Records",
-  "badgeColors": { "REAL": "#43A047", "DEMO": "#9CA3AF" }
+  "usingFallbackData": true/false,
+  "categoryFilter": "ALL | REAL | DEMO",
+  "badgeTones": { "REAL": "emerald", "DEMO": "slate" }
 }
 ```
 
 ## 5. Validation Gate
 
-- [ ] `GET /api/dashboard/stats` dispatched with Bearer JWT token
-- [ ] KPIs parsed: `totalParcels`, `pending`, `inTransit`, `delivered`, `returns`, `cancelled`
+- [ ] `GET /api/dashboard/stats?category=<realm>` dispatched with Bearer JWT token
+- [ ] KPIs parsed from the server's stats schema (parcels, delivered %, riders, active riders, avg rating, total deliveries, sellers)
 - [ ] `currentUser.isDemo` flag evaluated
-- [ ] Real account (isDemo=false): 0 parcels → clean empty state; >0 parcels → KPI cards
-- [ ] Demo account (isDemo=true): [DEMO MODE] banner yellow visible; test datasets loaded if 0 records
-- [ ] Category filter functional: All/Real Records/Demo Records with correct badging
-- [ ] Badge colors: REAL → `#43A047` (green), DEMO → `#9CA3AF` (neutral gray)
-- [ ] `[DEMO MODE]` banner: yellow only for demo accounts; hidden for real accounts
+- [ ] Real account (isDemo=false): 0 records → clean empty state; >0 → KPI cards
+- [ ] Demo account (isDemo=true): demo fixtures allowed only as empty/unreachable fallback, with simulated-data flagging
+- [ ] Category filter functional: ALL/REAL/DEMO with correct badging
+- [ ] Badge tones: REAL → emerald (green), DEMO → slate (gray) per `ACCOUNT_CATEGORY_TONE`
 - [ ] No mock shipments in real account empty state
 - [ ] API responses match expected schema
 
@@ -143,7 +142,7 @@ verified-on: [vite]
 
 | Runtime | Status | Notes |
 |---------|--------|-------|
-| Vite React | verified | Executed in current workspace; integrates with `SellerDashboard.jsx`, `ManageParcels.jsx`, `api.js`, `luzonMockData.js`. |
+| Vite React | verified | Executed in current workspace; integrates with `AnalyticsDashboard.jsx`, `ManageParcels.jsx`, `ManageAccounts.jsx`, `api.js`, `sellerRiderData.js`. |
 | Claude Code | untested | |
 | Cursor | untested | |
 | Copilot | untested | |
@@ -153,12 +152,12 @@ verified-on: [vite]
 
 ## 10. Examples
 
-**Input:** "Seller logs into dashboard; expects KPIs to display total parcels, status breakdown; if 0 parcels → clean empty state (real account)."
+**Input:** "Admin logs into dashboard; expects KPIs to display parcel volume and rider stats; if 0 records → clean empty state (real account)."
 
-**Output:** "Taking from this: seller dashboard. Constraints: isDemo gate; clean empty state for real admins; [DEMO MODE] banner for demo. Proceeding with KPI fetch and empty state rendering."
+**Output:** "Taking from this: admin dashboard. Constraints: isDemo gate; clean empty state for real admins; demo fixtures only as fallback for demo admins. Proceeding with KPI fetch and empty state rendering."
 
 **Failure case:** The user attempts to display mock shipments in real account empty state → agent refuses: real non-demo admins (`!currentUser?.isDemo`) display clean empty state with zero synthetic mock injections; no hardcoded fallback records.
 
 ## 11. Additional Constraint
 
-- **Dashboard canvas:** `bg_dashboard_gradient.xml` warm-violet (`#F3E6F7 → #FAF3F7 → #FFFDFB`). New screens MUST use these drawables instead of flat `@color/background_main`. (From AGENTS2.md Rule #94)
+- **Android-only styling tokens do not apply here:** `bg_dashboard_gradient.xml` and `@color/background_main` are Android resources; the Web styles via Tailwind + `statusColors.js` palettes. Do not port Android drawable rules into Web views.

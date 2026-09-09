@@ -12,45 +12,44 @@ verified-on: [vite]
 - **Role:** Notification center and heads-up banner manager
 - **Authority:** Tier-2 normative root skill for `skills/notifications-skill/`.
 - **Must not define:** Missing `YTO_HEADS_UP_BANNER` tag cleanup; polling service not running its SSE/long-poll cycle; badge z-order below bell card.
-- **Normative base:** `AGENTS2.md`; `src/components/NotificationBell.jsx`; `src/services/YTOCrossDeviceService.js`.
+- **Normative base:** `AGENTS2.md`; `src/components/NotificationBell.jsx`; `src/services/useSSE.js`; `src/GlobalHeader.jsx`. NOTE: there is no `YTOCrossDeviceService.js` on the Web — that is the Android foreground service; the Web equivalent is the `useSSE` hook.
 
 ## 1. Intent (9 Dimensions)
 
 | # | Dimension | Value |
 |---|-----------|-------|
-| 1 | Task | Manage notification bell interactions; show heads-up banners for critical events; polling service auto-refreshes dashboard fragments. |
+| 1 | Task | Manage the header `NotificationBell` (pending-approvals badge, navigable popover) and surface real-time events via SSE with 5s polling fallback; critical feedback uses the global `ToastContext`, not Android-style heads-up banners. |
 | 2 | Target Tool | Any React agent runtime: Cline, Copilot, Studio Bot, raw API. |
-| 3 | Output Format | Structured readback with `unreadCount`, `lastHeadsUp`, `badgeZOrder`, and `pollInterval`. |
-| 4 | Constraints | Channel ID: `yto_express_logistics_v2`; `IMPORTANCE_HIGH`, `VISIBILITY_PUBLIC`; vibration `new long[]{0, 500, 250, 500}`; heads-up cleanup by tag `YTO_HEADS_UP_BANNER` before new banner. |
-| 5 | Input | Click event on `NotificationBell`; `showHeadsUp()` payload; `currentUser.isDemo` flag. |
-| 6 | Context | One call wires click → `NotificationActivity` + binds unread badge; all dashboard fragments subscribed to `REFRESH_LOGISTICS` broadcast. |
-| 7 | Audience | Active session user; Header view; Dashboard fragments; Notification bell component. |
-| 8 | Success Criteria | Bell click redirects to `NotificationActivity`; unread badge displays count; heads-up banner animates for critical events; real-time updates refresh views (SSE; 5s polling fallback). |
-| 9 | Examples | Bell click → open `NotificationActivity` with unread tickets/parcels. Heads-up banner for `issue-status-updated` → auto-dismiss after 5s. |
+| 3 | Output Format | Structured readback with `pendingCount`, `lastEvent`, `mode`, and toast dispatch state. |
+| 4 | Constraints | The Android channel config (`yto_express_logistics_v2`, vibration, `YTO_HEADS_UP_BANNER` tag) does NOT apply to the Web — the Web has no system notification channel; browser notifications exist only inside `useSSE` (opt-in permission, per-event tags). |
+| 5 | Input | Click event on `NotificationBell`; SSE/polling events from `useSSE`; `currentUser.isDemo` flag. |
+| 6 | Context | `GlobalHeader` mounts the bell app-wide; SSE events (`parcel-synced`, `issue-synced`, ...) drive badge counts and toasts; views re-fetch on `lastEvent` changes. |
+| 7 | Audience | Active session user; GlobalHeader; data views. |
+| 8 | Success Criteria | Bell badge reflects pending count; bell click navigates per `onNavigate`; toasts surface critical events; live updates flow via SSE with polling fallback. |
+| 9 | Examples | SSE `issue-status-updated` → toast via `ToastContext`; bell badge shows pending rider/seller approvals. |
 
 ## 2. Trigger Matrix
 
 | Scenario | Decision | Action |
 |----------|----------|--------|
-| User clicks `NotificationBell` component | YES | Redirect to `NotificationActivity`; bind unread badge; emit `'yto:bell_click'` to top-level state. |
-| New real-time event received (SSE or polling fallback) | YES | Dispatch to subscribed views; update unread count; refresh affected tables. |
-| `currentUser.isDemo == true` | YES | Subscribe to mock notification feed with pre-populated demo events; skip live polling. |
-| Heads-up banner already showing (tag `YTO_HEADS_UP_BANNER`) | YES | Cleanup existing banner by same tag; animate new banner; prevent stackup. |
-| Token expires or `isLoggedIn == false` | YES | Stop polling; clear `localStorage`; redirect to `Loginpage.jsx`. |
+| User clicks `NotificationBell` component | YES | Open the bell popover / navigate per `onNavigate`; reset unread badge state. |
+| New real-time event received (SSE or polling fallback) | YES | Dispatch to subscribed views; update pending badge; refresh affected tables. |
+| Critical event arrives | YES | Surface a toast via the global `ToastContext` provider. |
+| Token expires or session invalid | YES | `apiFetch` clears `yto_token` and dispatches `yto:auth_expired`; `App.jsx` returns to `LoginPage`. |
 
 ## 3. Execution Workflow
 
-### Step 1: Bind Notification Bell
+### Step 1: Mount Notification Bell
 
-- **Action:** Call `HeaderViewUtils.bindNotificationBell(root, hostActivity)` — one call wires click → `NotificationActivity` + binds unread badge.
-- **Input:** `root` DOM element; `hostActivity` reference.
-- **Stop Condition:** Click listener attached; badge state bound to `localStorage` or context; `elevation=6dp` + `translationZ=6dp` ensures z-order above bell card.
+- **Action:** Render `NotificationBell` inside `GlobalHeader` with `riders`, `pendingCount`, and `onNavigate` props.
+- **Input:** Pending registration/rider counts; navigation handler from the routed view.
+- **Stop Condition:** Bell visible with an accurate badge; popover opens on click.
 
 ### Step 2: Handle Bell Click
 
-- **Action:** On bell click, redirect user to `NotificationActivity`; pass `unreadCount` via navigation params; reset badge to 0.
-- **Input:** `unreadCount` from state; navigation params.
-- **Stop Condition:** User navigated to `NotificationActivity`; badge reset to 0; `localStorage.removeItem('yto_unread_count')`.
+- **Action:** On bell click, open the popover (pending approvals) or navigate to the relevant view via `onNavigate`.
+- **Input:** `pendingCount`; `onNavigate` callback.
+- **Stop Condition:** User lands on the relevant view (e.g., ProcessSellerInformation / ProcessRiderInformation).
 
 ### Step 3: Subscribe to Polling Service
 
@@ -58,17 +57,17 @@ verified-on: [vite]
 - **Input:** JWT token via `getAuthToken()` (key `yto_token`); `currentUser.isDemo` flag.
 - **Stop Condition:** SSE connected (mode `'sse'`); on repeated failure switches to `'polling'` at 5000ms; both modes emit `lastEvent` for subscribers.
 
-### Step 4: Show Heads-Up Banner for Critical Events
+### Step 4: Toast for Critical Events
 
-- **Action:** For events with `priority: high` (`issue-status-updated`, `parcel-synced`): call `showHeadsUp()` with tag `YTO_HEADS_UP_BANNER`; cleanup existing views by same tag first; animate new banner with vibration.
-- **Input:** `title`, `body`, `actionText`, `priority` from event payload.
-- **Stop Condition:** Heads-up banner animates in; vibration `new long[]{0, 500, 250, 500}`; auto-dismisses after 5s; `elevation=6dp` + `translationZ=6dp` always renders above bell card.
+- **Action:** For critical events (`issue-status-updated`, `parcel-synced`): push a toast through `ToastContext`.
+- **Input:** Event payload from `lastEvent`.
+- **Stop Condition:** Toast rendered and auto-dismissed per provider timing; no stacking artifacts.
 
 ### Step 5: Cleanup on Unmount/Logout
 
-- **Action:** On component unmount or user logout: close polling service; remove message listeners; clear `localStorage` badge state; emit `'yto:sse_cleanup'`.
+- **Action:** On unmount or logout: close the `EventSource`, stop polling, remove listeners, clear badge state.
 - **Input:** Lifecycle event (unmount/logout).
-- **Stop Condition:** Service stopped; no pending listeners; badge cleared; user redirected if logout.
+- **Stop Condition:** No pending listeners or intervals; user redirected if logout.
 
 ## 4. Output Specification
 
@@ -76,24 +75,20 @@ verified-on: [vite]
 {
   "module": "notifications-skill",
   "status": "subscribed",
-  "unreadCount": number,
-  "lastHeadsUp": "ISO_timestamp_or_null",
-  "badgeZOrder": "elevation=6dp + translationZ=6dp",
-  "pollInterval": 5000
+  "pendingCount": number,
+  "lastEvent": { "type": "issue-status-updated", "data": {}, "timestamp": 0 },
+  "mode": "sse|polling",
+  "toastDispatched": true/false
 }
 ```
 
 ## 5. Validation Gate
 
-- [ ] Channel ID exactly `yto_express_logistics_v2`
-- [ ] Importance `IMPORTANCE_HIGH` and Visibility `VISIBILITY_PUBLIC` set correctly
-- [ ] Vibration pattern `new long[]{0, 500, 250, 500}` configured
-- [ ] `bindNotificationBell` called exactly once per host activity; cleanup on unmount
-- [ ] Fallback polling interval exactly 5s (`setInterval` with 5000ms)
-- [ ] `REFRESH_LOGISTICS` broadcast dispatched on each successful poll
-- [ ] Heads-up banner cleanup by tag `YTO_HEADS_UP_BANNER` before new banner animates
-- [ ] Badge z-order: `elevation=6dp` + `translationZ=6dp` always renders above bell card
-- [ ] Token expiry stops polling and clears `localStorage`
+- [ ] `NotificationBell` rendered once inside `GlobalHeader` with live pending counts
+- [ ] Critical events surfaced via `ToastContext` (no Android heads-up banners on the Web)
+- [ ] SSE subscription via `useSSE`; fallback polling interval exactly 5s
+- [ ] Views re-fetch on relevant `lastEvent` changes
+- [ ] Token expiry stops polling/SSE and clears `yto_token`
 
 ## 6. Anti-Triggers and Calibration
 
@@ -121,7 +116,7 @@ verified-on: [vite]
 
 | Runtime | Status | Notes |
 |---------|--------|-------|
-| Vite React | verified | Executed in current workspace; integrates with `NotificationBell.jsx`, `useSSE.js`, `HeaderViewUtils`, `YTOCrossDeviceService`. |
+| Vite React | verified | Executed in current workspace; integrates with `NotificationBell.jsx`, `useSSE.js`, `GlobalHeader.jsx`, `ToastContext`. |
 | Claude Code | untested | |
 | Cursor | untested | |
 | Copilot | untested | |
@@ -131,8 +126,8 @@ verified-on: [vite]
 
 ## 10. Examples
 
-**Input:** "User clicks the notification bell icon in the header to check unread alerts."
+**Input:** "User clicks the notification bell icon in the header to check pending approvals."
 
-**Output:** "Taking from this: notification bell click handler. Constraints: redirect to `NotificationActivity`; bind unread badge; reset badge to 0 after navigation. Proceeding with bell click handling."
+**Output:** "Taking from this: notification bell click handler. Constraints: open the bell popover / navigate via `onNavigate`; badge reflects pending counts from live data. Proceeding with bell click handling."
 
-**Failure case:** The agent starts the polling service before user logs in (no JWT token) → service fails to connect and 401 error. Refuse: trigger matrix requires `isLoggedIn == true` and valid token first.
+**Failure case:** The agent starts SSE before user logs in (no JWT token) → connection fails and `apiFetch` 401 handling clears storage. Refuse: SSE subscription requires a valid `yto_token` first.

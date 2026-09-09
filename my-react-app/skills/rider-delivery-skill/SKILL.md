@@ -12,21 +12,21 @@ verified-on: [vite]
 - **Role:** Delivery Workflow Manager and Status Slider Controller
 - **Authority:** Tier-2 normative root skill for `skills/rider-delivery-skill/`.
 - **Must not define:** Allowing status slider below 75% threshold; skipping geofence check before POD; numeric payment amounts displayed for rider role.
-- **Normative base:** `AGENTS2.md`; `src/components/MonitorRiderStatus.jsx`; `src/components/DeliveryDetailsActivity.jsx` (web analogue).
+- **Normative base:** `AGENTS2.md`; `src/MonitorRiderStatus.jsx`; `src/ManageParcels.jsx`; `server/Server.js` parcel status routes. NOTE: the status slider (75% threshold), POD camera gate, 2.2s success dialog, and payment masking are **Android-side mechanics** (`DeliveryDetailsActivity` in the mobile repo); the Web only observes and administers statuses.
 
 ## 1. Intent (9 Dimensions)
 
 | # | Dimension | Value |
 |---|-----------|-------|
-| 1 | Task | Manage delivery status slider (75% threshold); authorize POD capture after geofence check; mask payment amounts as `"PREPAID"` or `"COD"` only for rider role. |
+| 1 | Task | Administer rider delivery lifecycles on the Web: monitor rider statuses (`MonitorRiderStatus.jsx`), administer parcel statuses (`ManageParcels.jsx` → `PUT /api/parcels/:id` → `BridgeClient.sendStatus` → Android), and observe POD evidence. The 75% slider, POD camera gate, and payment masking live on Android. |
 | 2 | Target Tool | Any React agent runtime: Cline, Copilot, Studio Bot, raw API. |
-| 3 | Output Format | Structured readback with `status`, `sliderDeltaX`, `thresholdPassed`, `podAuthorized`, and `paymentMasked` values. |
-| 4 | Constraints | Status slider: 75% threshold detection; clamp `Math.max(0, Math.min(rawDeltaX, width - thumb - 8))`; 160ms snap-in + 240ms completion animation; payment masking: `"PREPAID"` or `"COD"` only. |
-| 5 | Input | Raw slider deltaX; shipment status; `isDemo` flag; rider GPS coordinates; delivery address. |
-| 6 | Context | When shipment is `"Pending"`: suppress rider marker and motion animators; only show Pickup Origin + Pulilan HUB marker; geofence 100m before POD unlock. |
-| 7 | Audience | MyTasksFragment; RiderStatusFragment; DeliveryDetailsActivity (web); ManageParcelLocation.jsx. |
-| 8 | Success Status Slider: 75% threshold passed → shipment status updates; POD authorized → camera captures photo; Payment masked → `"PREPAID"` or `"COD"` only. |
-| 9 | Examples | Rider slides status to "Out for Delivery" → 75% threshold passed → status updates to "Out for Delivery" → POD camera unlocks (if within geofence). |
+| 3 | Output Format | Structured readback with `status`, `riderCount`, `adminUpdateResult`, and SSE/bridge outcomes. |
+| 4 | Constraints | Web-side status vocabulary: `Pending / Picked Up / In Transit / Out for Delivery / Delivered / Returned / Failed`; admin edits fire SSE `parcel-updated` + outbound bridge `sendStatus`; `podPhoto` is read-only on the Web. |
+| 5 | Input | Rider/parcel records from `/api/riders` + `/api/parcels`; admin status edit payloads; SSE events. |
+| 6 | Context | `MonitorRiderStatus` normalizes riders via `normalizeRider` (`sellerRiderData.js`) with demo-fixture fallbacks gated on `currentUser.isDemo`; map markers consume bridge GPS. |
+| 7 | Audience | Admin dispatcher; MonitorRiderStatus; ManageParcels; hub staff. |
+| 8 | Success | Rider dashboard reflects live statuses; admin status updates propagate to the Android app via the bridge; POD evidence renders where present. |
+| 9 | Examples | Admin sets a parcel to "Delivered" → `PUT /api/parcels/:id` → Android receives `sendStatus` → rider app shows the receipt tab. |
 
 ## 2. Trigger Matrix
 
@@ -40,63 +40,32 @@ verified-on: [vite]
 
 ## 3. Execution Workflow
 
-### Step 1: Handle Status Slider Input
+### Step 1: Load Rider + Parcel Data (Web observation)
 
-- **Action:** Receive `rawDeltaX` from slider drag; compute clamped value `clampedX = Math.max(0, Math.min(rawDeltaX, width - thumb - 8))`; calculate percentage `percent = (clampedX / (width - thumb - 8)) * 100`.
-- **Input:** `rawDeltaX` from slider event; `width` of slider container; `thumb` diameter.
-- **Stop Condition:** `clampedX` calculated; `percent` computed; ready for threshold check.
-- **Validation:** `clampedX ≥ 0`; `clampedX ≤ width - thumb - 8`; `percent` in range 0-100.
+- **Action:** Fetch `/api/riders` and `/api/parcels`; normalize riders via `normalizeRider`; gate demo fixtures on `currentUser.isDemo`.
+- **Input:** JWT via `apiFetch`; `currentUser.isDemo`.
+- **Stop Condition:** Rider dashboard populated with live (or demo-fallback) data.
+- **Validation:** Non-array responses guarded; demo fallbacks only when `isDemo === true`.
 
-### Step 2: Apply 75% Threshold Detection
+### Step 2: Administer Parcel Status (Web-side lifecycle)
 
-- **Action:** If `percent ≥ 75`: update shipment status to next state (e.g., `Pending` → `Out for Delivery`; `Out for Delivery` → `Delivered`); dispatch `POST /api/bridge/receive-status` with new status; show success feedback.
-- **Input:** `percent` from Step 1; `currentShipmentStatus`; `trackingNumber`.
-- **Stop Condition:** Status updated in MongoDB; `POST /api/bridge/receive-status` dispatched; success feedback shown.
-- **Validation:** `percent ≥ 75`; backend responds `200 OK` with updated status; `REFRESH_LOGISTICS` broadcast dispatched; fragments re-render with new status.
+- **Action:** Admin status edits dispatch `PUT /api/parcels/:id`; the server fires `BridgeClient.sendStatus(trackingNumber, status)` to the Android backend and broadcasts SSE `parcel-updated`.
+- **Input:** `parcelId`; new status (Web vocabulary: `Pending / Picked Up / In Transit / Out for Delivery / Delivered / Returned / Failed`).
+- **Stop Condition:** Status persisted; bridge + SSE dispatched; views re-fetch.
+- **Validation:** `200 OK` with the updated document; Android app observes the transition via its bridge receiver.
 
-### Step 3: Clamp and Snap-in Animation
+### Step 3: Observe Rider Terminal Transitions (Android-side execution)
 
-- **Action:** If `percent < 75`: revert to previous state; apply 160ms snap-in animation; display "Swipe further to confirm" transient message.
-- **Input:** `percent < 75`; previous status from state.
-- **Stop Condition:** Animation runs; status reverts; message dismissed after 160ms.
-- **Validation:** 160ms snap-in animation plays; status reverts to previous value; no database write.
+- **Action:** The 75% slider, 100m geofence POD gate, and 2.2s success dialog execute in the Android `DeliveryDetailsActivity`; the Web receives their outcomes via bridge `receive-status` → parcel update → SSE.
+- **Input:** Bridge payloads; SSE events.
+- **Stop Condition:** Web reflects the terminal status and any `podPhoto` evidence.
+- **Validation:** POD `podPhoto` (Base64 JPEG) rendered read-only; never synthesized on the Web.
 
-### Step 4: Authorize POD Capture (Geofence Check)
+### Step 4: Payment Masking (Android-side display rule)
 
-- **Action:** If status updated to `"Out for Delivery"` or `"To receive"`: compute Haversine distance to delivery address; if ≤ 100m: authorize POD camera unlock; if > 100m: show alert "You are not within the delivery zone (distance: X m)".
-- **Input:** Rider GPS coordinates; delivery destination lat/lng; `isDemo` flag.
-- **Stop Condition:** Geofence result (`pass`/`fail`); POD camera authorized or denied.
-- **Validation:** 
-  - `pass` if distance ≤ 100m; 
-  - `fail` if distance > 100m; 
-  - Demo bypass: auto-authorize if `isDemo === true`; `[DEMO MODE]` banner visible.
-
-### Step 5: Capture Proof of Delivery (POD)
-
-- **Action:** If geofence passes: prompt rider to capture camera photo; encode as Base64 JPEG data URL; include in `podPhoto` field; dispatch `POST /api/bridge/sync-parcel` with updated payload.
-- **Input:** Camera output; `trackingNumber`; Base64 data URL from device.
-- **Stop Condition:** Photo encoded; bridge sync dispatched; `podPhoto` stored in MongoDB; rendered in web admin confirmation modal.
-- **Validation:** 
-  - Base64 JPEG data URL valid; 
-  - `podPhoto` stored in `Parcel.podPhoto`; 
-  - Web admin modal displays POD photo alongside digital signature.
-
-### Step 6: Mask Payment Amounts for Rider Role
-
-- **Action:** If `currentUser.role === "RIDER"`: display payment status as `"PREPAID"` or `"COD"` only; numeric amounts strictly hidden; never show raw currency value.
-- **Input:** Payment amount from shipment document; `currentUser.role`.
-- **Stop Condition:** Payment masked; UI displays `"PREPAID"` or `"COD"`; no numeric value visible.
-- **Validation:** 
-  - `currentUser.role === "RIDER"` → payment = `"PREPAID"` or `"COD"`; 
-  - `currentUser.role === "SELLER"` or `"CUSTOMER"` → payment = full unmasked value; 
-  - No numeric amounts visible in rider UI.
-
-### Step 7: Handle Delivery Completion and Auto-Dismiss
-
-- **Action:** After POD captured and bridge sync successful: 2.2s success dialog (`dialog_yto_delivery_success`) — 3-stage morphing checkmark & card expansion → auto-dismiss at 2.2s; return to RiderDashboardFragment.
-- **Input:** Completion data from bridge; `trackingNumber`.
-- **Stop Condition:** Dialog shown; auto-dismiss after 2200ms; user returns to dashboard.
-- **Validation:** Dialog morphs through 3 stages; auto-dismiss at exactly 2.2s; focus returns to `RiderDashboardFragment`.
+- **Action:** Payment masking (`"PREPAID"`/`"COD"` for riders, full amounts for customer/seller) is applied on the Android side (`RiderMaskUtils`); the Web admin sees administrative fields only and does not re-render masked rider UI.
+- **Input:** Rider-masked bridge payloads where applicable.
+- **Stop Condition:** Web views show parcel logistics fields without leaking rider-masked payment data into rider-facing contexts.
 
 ## 4. Output Specification
 
@@ -104,35 +73,27 @@ verified-on: [vite]
 {
   "module": "rider-delivery-skill",
   "status": "delivery_managed",
-  "shipmentStatus": "Pending|To Pay|To Ship|In Transit|Delivered|Returns|Cancelled",
-  "sliderPercent": "number (0-100)",
-  "thresholdPassed": true/false,
-  "geofencePassed": true/false,
-  "paymentMasked": true/false,
-  "paymentDisplay": "\"PREPAID\"|\"COD\"|numeric value",
-  "podAuthorized": true/false,
-  "successDialog": true/false
+  "parcelStatus": "Pending|Picked Up|In Transit|Out for Delivery|Delivered|Returned|Failed",
+  "adminUpdateResult": "200 OK / error",
+  "bridgeDispatched": true/false,
+  "sseBroadcast": "parcel-updated",
+  "podPhotoPresent": true/false
 }
 ```
 
 ## 5. Validation Gate
 
-- [ ] Slider clamped: `Math.max(0, Math.min(rawDeltaX, width - thumb - 8))`
-- [ ] 75% threshold: `percent ≥ 75` triggers status update; `< 75` reverts
-- [ ] 160ms snap-in animation on revert; 240ms completion animation on pass
-- [ ] Geofence: 100m Haversine distance check before POD unlock (real accounts)
-- [ ] Demo bypass: auto-authorize POD if `isDemo === true`; `[DEMO MODE]` banner
-- [ ] Payment masking: `currentUser.role === "RIDER"` → `"PREPAID"` or `"COD"` only; numeric hidden
-- [ ] Full payment visible: `currentUser.role !== "RIDER"` → numeric amounts unmasked
-- [ ] POD capture: Base64 JPEG data URL; bridge `sync-parcel` dispatched
-- [ ] 2.2s success dialog: 3-stage morphing checkmark & card expansion → auto-dismiss at 2.2s
-- [ ] Return to RiderDashboardFragment after completion
+- [ ] Web-side status edits use `PUT /api/parcels/:id` with the Web status vocabulary
+- [ ] Admin status changes trigger `BridgeClient.sendStatus` + SSE `parcel-updated`
+- [ ] Demo fixtures in MonitorRiderStatus gated on `currentUser.isDemo`
+- [ ] POD `podPhoto` rendered read-only (capture, slider, geofence, success dialog are Android-side)
+- [ ] No payment amounts invented or displayed in rider-facing Web contexts
 
 ## 6. Anti-Triggers and Calibration
 
-- **Over-execution:** Updating shipment status before 75% threshold passed (causes invalid state transitions; database errors).
-- **Under-execution:** Skipping geofence check → POD unlocked outside delivery zone; GPS integrity issues.
-- **Calibration default:** Trigger status update only when `percent ≥ 75` AND `currentShipmentStatus` ∈ `{"Pending", "To Pay", "To Ship"}` AND `isDemo` flag evaluated.
+- **Over-execution:** Implementing the slider/geofence/POD mechanics in the Web app — they belong to Android; the Web observes.
+- **Under-execution:** Skipping the bridge dispatch check after admin status edits → Android stays stale.
+- **Calibration default:** Admin edits trigger `PUT /api/parcels/:id`; rider-side transitions arrive only via bridge/SSE.
 
 ## 7. Anti-Pattern Compliance
 
@@ -153,7 +114,7 @@ verified-on: [vite]
 
 | Runtime | Status | Notes |
 |---------|--------|-------|
-| Vite React | verified | Executed in current workspace; integrates with `MonitorRiderStatus.jsx`, `DeliveryDetailsActivity` (web analogue), `DeliveryDetailsActivity` mobile bridge. |
+| Vite React | verified | Executed in current workspace; integrates with `MonitorRiderStatus.jsx`, `ManageParcels.jsx`, `sellerRiderData.js`, `Server.js` parcel routes. |
 | Claude Code | untested | |
 | Cursor | untested | |
 | Copilot | untested | |
@@ -163,8 +124,8 @@ verified-on: [vite]
 
 ## 10. Examples
 
-**Input:** "Rider slides status slider to 85% on 'Out for Delivery' shipment; is real account (isDemo: false); within 100m geofence."
+**Input:** "Admin marks an 'Out for Delivery' parcel as Delivered from ManageParcels."
 
-**Output:** "Taking from this: rider delivery workflow. Constraints: 75% threshold; geofence 100m; payment masked for rider role. Proceeding with slider clamping and geofence check."
+**Output:** "Taking from this: admin status update. Constraints: `PUT /api/parcels/:id`; server fires `BridgeClient.sendStatus` + SSE `parcel-updated`; rider app receives the transition via bridge. Proceeding with admin update."
 
-**Failure case:** The user attempts geofence check for Pending status shipment → agent refuses: suppress riderMarker and motion animators; only show Pickup Origin + Pulilan HUB marker. No geofence distance computed.
+**Failure case:** The agent tries to implement the 75% slider or POD camera in the Web app → out of scope; those mechanics live in Android `DeliveryDetailsActivity`. Refuse: observe via bridge/SSE only.

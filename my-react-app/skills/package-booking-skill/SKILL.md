@@ -18,25 +18,25 @@ verified-on: [vite]
 
 | # | Dimension | Value |
 |---|-----------|-------|
-| 1 | Task | Create new parcel shipment; generate `YTO2026` tracking number; flatten nested sender/recipient payloads; push to bridge `POST /api/bridge/sync-parcel`. |
+| 1 | Task | Create/edit parcels from the admin side (`ProcessParcelInformation.jsx` → `POST /api/parcels`; `ManageParcels.jsx` for lifecycle management); Web-generated tracking numbers use the legacy `PKG-YYYYMMDD-#####` format, while mobile bookings arrive via bridge `POST /api/bridge/sync-parcel` with their own `YTO2026...` numbers. There is no `qrManifest` in this codebase. |
 | 2 | Target Tool | Any React agent runtime: Cline, Copilot, Studio Bot, raw API. |
-| 3 | Output Format | Structured readback with `trackingNumber`, `parcelId`, `bridgeSyncStatus`, and `qrManifest` values. |
-| 4 | Constraints | Tracking number format: `YTO2026-` + 5-digit sequence; sender/recipient flattening (nested → flat); `podPhoto` Base64 JPEG data URL included; Enterprise IDs dynamic: `YTO-SELL-2026-XXXXX` etc. |
-| 5 | Input | Sender details (name, address, contact); Receiver details (name, address, contact); Parcel items, weight, value; optional `podPhoto` Base64 data URL. |
-| 6 | Context | Bridge route `POST /api/bridge/sync-parcel` accepts flattened payload; returns `trackingNumber` and `qrManifest`; web parcel document updated with events array. |
-| 7 | Audience | SellerDashboard; ManageParcels.jsx; ProcessParcelInformation.jsx; bridgeRoutes.js sync-parcel handler. |
-| 8 | Success Criteria | Parcel created in MongoDB; `trackingNumber` generated; `qrManifest` generated; bridge sync successful; POD photo rendered in web admin confirmation modal. |
-| 9 | Examples | Seller books shipment with sender/recipient details → `YTO2026-00123` tracking number → bridge sync → POD camera → web admin modal displays confirmation. |
+| 3 | Output Format | Structured readback with `trackingNumber`, `parcelId`, and creation path (`admin POST` vs `bridge sync`). |
+| 4 | Constraints | Admin-created parcels go through `POST /api/parcels` with `accountCategory` derived server-side; weight must be > 0 when sent through bridge sync; `podPhoto` (Base64 JPEG data URL) is read-only on the Web (produced by the Android rider app). |
+| 5 | Input | Sender details; receiver details; item, weight, value, origin, destination; status. |
+| 6 | Context | Bridge `sync-parcel` upserts by `trackingNumber` (partial-update merge, tolerant of flat payloads); admin CRUD routes (`/api/parcels`) are category-filtered. |
+| 7 | Audience | Admin staff; ManageParcels.jsx; ProcessParcelInformation.jsx; bridgeRoutes.js sync-parcel handler. |
+| 8 | Success Criteria | Parcel created in MongoDB with the right `accountCategory`; bridge-synced parcels upsert cleanly; admin edits push `sendStatus` to Android + SSE `parcel-updated`. |
+| 9 | Examples | Admin adds parcel → `PKG-20260909-48213` generated client-side → `POST /api/parcels`. Rider books on mobile → `YTO2026...` → bridge `sync-parcel` upsert → appears in ManageParcels. |
 
 ## 2. Trigger Matrix
 
 | Scenario | Decision | Action |
 |----------|----------|--------|
-| Seller clicks "Book Shipment" in SellerDashboard | YES | Collect sender/recipient details from form; flatten nested payload; dispatch `POST /api/bridge/sync-parcel`; generate tracking number; show confirmation. |
-| User submits Parcel Information form | YES | Validate all required fields (sender, receiver, weight, item); flatten payload; dispatch bridge sync; generate QR manifest. |
-| Rider captures POD photo delivery | YES | Encode camera photo as Base64 JPEG data URL; include in `podPhoto` field; dispatch `POST /api/bridge/sync-parcel` with updated payload. |
-| Web admin modifies parcel status | YES | Push live in-app notifications and Android OS heads-up banners to mobile users via `POST /api/bridge/receive-status`. |
-| Tracking number lookup by customer | YES | `POST /api/parcels/:id` GET → retrieve parcel; display timeline with events; show QR code from `qrManifest`. |
+| Admin clicks add in ProcessParcelInformation | YES | Collect sender/receiver/item fields; generate `PKG-YYYYMMDD-#####` client-side; dispatch `POST /api/parcels`. |
+| Admin edits parcel status in ManageParcels | YES | `PUT /api/parcels/:id` → server fires `BridgeClient.sendStatus` to Android + SSE `parcel-updated`. |
+| Mobile rider/seller books a shipment | YES | Android backend pushes bridge `POST /api/bridge/sync-parcel` with its `YTO2026...` tracking number; Web upserts and broadcasts SSE `parcel-synced`. |
+| Rider captures POD (Android-side) | YES | `podPhoto` Base64 JPEG arrives via bridge sync; Web renders it read-only. |
+| Tracking number lookup | YES | `GET /api/parcels` (category-filtered) → client-side filter by `trackingNumber`; timeline from the parcel `events[]` array. |
 
 ## 3. Execution Workflow
 
@@ -63,71 +63,57 @@ verified-on: [vite]
   - `origin` and `destination` are strings (not objects); 
   - Coordinates will be split later in Step 5.
 
-### Step 3: Dispatch Bridge sync-parcel Route
+### Step 3: Dispatch Admin Parcel Creation
 
-- **Action:** `POST /api/bridge/sync-parcel` with flattened payload; server generates `YTO2026` tracking number and `qrManifest`; returns new document with `events` array initialized.
-- **Input:** Flattened parcel payload from Step 2; `currentUser.isDemo` flag; JWT token in headers.
-- **Stop Condition:** Backend responds `200 OK` with `trackingNumber`, `qrManifest`, and updated parcel document.
-- **Validation:** 
-  - `200 OK` response; 
-  - `trackingNumber` format `YTO2026-XXXXX`; 
-  - `qrManifest` generated; 
-  - Parcel document saved to MongoDB with `events: [{status: "Booked", timestamp, userId}]`.
+- **Action:** `POST /api/parcels` with the form payload; server stamps `accountCategory` from the admin's realm.
+- **Input:** Parcel payload from Step 2; JWT token in headers.
+- **Stop Condition:** Backend responds `201 Created` with the saved parcel document.
+- **Validation:** `201` response; `trackingNumber` matches the `PKG-YYYYMMDD-#####` client format; document persisted.
 
-### Step 4: Generate QR Manifest and Tracking Display
+### Step 4: Tracking Display and Lookup
 
-- **Action:** Display `trackingNumber` (`YTO2026-XXXXX`) to user; generate QR code from `qrManifest`; show in booking confirmation modal.
-- **Input:** `trackingNumber` and `qrManifest` from bridge response.
-- **Stop Condition:** QR code rendered; user can scan tracking number; confirmation modal visible.
-- **Validation:** QR code scannable; tracking number matches `YTO2026-` format; modal displays all parcel details.
+- **Action:** Display the parcel `trackingNumber`; GenerateTrackingInformation renders the timeline from the parcel `events[]` array.
+- **Input:** `trackingNumber`; `events[]`.
+- **Stop Condition:** Timeline rendered; tracking number searchable in ManageParcels.
+- **Validation:** Events entries carry `time`, `event`, `location`, `status`.
 
-### Step 5: Handle POD Photo (if delivery in progress)
+### Step 5: Handle POD Photo (read-only on Web)
 
-- **Action:** If delivery already in progress; rider captures POD photo; encode as Base64 JPEG data URL; include in `podPhoto` field; dispatch `POST /api/bridge/sync-parcel` with updated payload containing `podPhoto`.
-- **Input:** Rider camera output; Base64 data URL from device camera; `trackingNumber` of in-progress parcel.
-- **Stop Condition:** Photo encoded; bridge sync dispatched; `podPhoto` rendered in web admin confirmation modal.
-- **Validation:** 
-  - Base64 JPEG data URL valid; 
-  - `podPhoto` stored in MongoDB `Parcel.podPhoto`; 
-  - Web admin modal displays POD photo alongside digital signature.
+- **Action:** POD capture happens on Android only; the Web receives `podPhoto` (Base64 JPEG data URL) through bridge `sync-parcel` and renders it in parcel detail/confirmation views.
+- **Input:** `podPhoto` from the synced Parcel document.
+- **Stop Condition:** POD evidence displayed in the admin UI.
+- **Validation:** Valid `data:image/jpeg;base64,` data URL; never synthesized client-side.
 
 ### Step 6: Update Web Parcel Document and Events
 
-- **Action:** Update local web parcel state with new tracking number; add event to `events` array; re-render `ManageParcels.jsx` with new shipment card.
-- **Input:** Bridge response from Step 3; `trackingNumber`, `qrManifest`, `events` array.
-- **Stop Condition:** Parcel card visible in `ManageParcels.jsx`; `events` array shows "Package Booking Confirmed"; QR code scannable.
-- **Validation:** 
-  - Parcel card rendered with correct `trackingNumber`; 
-  - `events[0].status` = "Package Booking Confirmed"; 
-  - Seller and Customer see status updates via `REFRESH_LOGISTICS` broadcast.
+- **Action:** On admin status edits, `PUT /api/parcels/:id` returns the updated document; server pushes `BridgeClient.sendStatus` + SSE `parcel-updated`; views re-fetch.
+- **Input:** Admin edit payload; tracking number.
+- **Stop Condition:** Parcel card updated in `ManageParcels.jsx`; Android app receives the status via bridge.
+- **Validation:** Status change visible in the parcel `events[]`; SSE `parcel-updated` broadcast observed.
 
 ## 4. Output Specification
 
 ```json
 {
   "module": "package-booking-skill",
-  "status": "parcel_booked",
-  "trackingNumber": "YTO2026-XXXXX",
+  "status": "parcel_created",
+  "trackingNumber": "PKG-YYYYMMDD-##### (admin) | YTO2026... (bridge)",
   "parcelId": "MongoDB _id",
-  "qrManifest": "base64 QR code data",
-  "bridgeSyncStatus": "200 OK / error",
-  "events": ["Package Booking Confirmed"],
-  "podPhoto": "Base64 JPEG data URL / null"
+  "creationPath": "admin POST /api/parcels | bridge sync-parcel",
+  "events": [{ "time": "ISO", "event": "Synced from mobile app", "location": "", "status": "Pending" }],
+  "podPhoto": "Base64 JPEG data URL / null (read-only on Web)"
 }
 ```
 
 ## 5. Validation Gate
 
-- [ ] Form data validated: sender/recipient non-empty, phone sanitized, weight 0-50, value ≥ 0
+- [ ] Form data validated: sender/recipient non-empty, phone sanitized, weight > 0, value ≥ 0
 - [ ] Phone sanitized: `.replaceAll("[^0-9]", "")` 
-- [ ] Payload flattened: nested → flat per Data Mapping Summary (sender/recipient objects → flat fields)
-- [ ] `POST /api/bridge/sync-parcel` dispatched with correct payload
-- [ ] Backend responds `200 OK` with `trackingNumber` format `YTO2026-XXXXX`
-- [ ] `qrManifest` generated and QR code scannable
-- [ ] Parcel document saved to MongoDB with `events: [{status: "Booked", timestamp, userId}]`
-- [ ] If `podPhoto` present: Base64 JPEG data URL valid (`data:image/jpeg;base64,`)
-- [ ] Local state updated: `trackingNumber`, `qrManifest`, `events` array
-- [ ] `REFRESH_LOGISTICS` broadcast dispatched; fragments re-render
+- [ ] Admin path uses `POST /api/parcels`; mobile path uses bridge `POST /api/bridge/sync-parcel` (upsert by `trackingNumber`)
+- [ ] Admin-generated tracking numbers match `PKG-YYYYMMDD-#####` (no `qrManifest` in this codebase)
+- [ ] Parcel document carries an `events[]` timeline
+- [ ] If `podPhoto` present: Base64 JPEG data URL valid (`data:image/jpeg;base64,`) and rendered read-only
+- [ ] Admin status edits trigger `BridgeClient.sendStatus` + SSE `parcel-updated`
 
 ## 6. Anti-Triggers and Calibration
 
@@ -155,6 +141,7 @@ verified-on: [vite]
 | Runtime | Status | Notes |
 |---------|--------|-------|
 | Vite React | verified | Executed in current workspace; integrates with `ProcessParcelInformation.jsx`, `ManageParcels.jsx`, `bridgeRoutes.js`. |
+| Node.js / Express backend | verified | `/api/parcels` CRUD + `/api/bridge/sync-parcel` upsert; `BridgeClient.sendStatus` outbound. |
 | Claude Code | untested | |
 | Cursor | untested | |
 | Copilot | untested | |
@@ -164,8 +151,8 @@ verified-on: [vite]
 
 ## 10. Examples
 
-**Input:** "Seller books shipment with sender: 'Juan Dela Cruz, 123 Main St, Manila', receiver: 'Maria Santos, 456 Rizal Ave, Quezon City', item: 'Documents', weight: 2.5, value: 1500."
+**Input:** "Admin adds a parcel: sender 'Juan Dela Cruz, 123 Main St, Manila', receiver 'Maria Santos, 456 Rizal Ave, Quezon City', item 'Documents', weight 2.5, value 1500."
 
-**Output:** "Taking from this: parcel booking. Constraints: tracking number format `YTO2026-XXXXX`; payload flattening per Data Mapping Summary; bridge `sync-parcel` route. Proceeding with form collection and bridge dispatch."
+**Output:** "Taking from this: admin parcel creation. Constraints: client-generated `PKG-YYYYMMDD-#####` tracking number; `POST /api/parcels`; server-side `accountCategory` stamping. Proceeding with form collection and dispatch."
 
-**Failure case:** The user attempts to book without phone number → agent refuses: sanitize phone via `.replaceAll("[^0-9]", "")`; phone mandatory for bridge `sync-parcel` payload.
+**Failure case:** The agent tries to generate a `YTO2026...` number on the Web → wrong plane; `YTO2026...` numbers are minted by the Android backend and arrive via bridge `sync-parcel`.
