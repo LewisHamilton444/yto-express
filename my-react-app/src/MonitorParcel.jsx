@@ -1,4 +1,3 @@
-'use client';
 import React, { useState, useEffect } from 'react';
 import LiveRiderMap from './LiveRiderMap';
 import { CITY_COORDS } from './luzonCityCoords';

@@ -1,5 +1,4 @@
-'use client';
-import { useToast } from '../components/ui/ToastContext';
+import { useToast } from '../components/ui/useToast';
 
 // Compatibility shim — the verification flow used a private toast stack.
 // All feedback now flows through the single global ToastProvider (mounted in

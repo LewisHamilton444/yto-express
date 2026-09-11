@@ -1,4 +1,3 @@
-'use client';
 import { isDemoEmail } from './demoUtils';
 
 // ── Shared Seller/Rider data shapes ──────────────────────────────────────────

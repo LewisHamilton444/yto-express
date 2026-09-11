@@ -1,4 +1,3 @@
-'use client';
 import React, { useEffect, useRef, useState } from 'react';
 import { parcelsApi, ridersApi, sellersApi } from './services/api';
 import { Package, Bike, Store } from 'lucide-react';

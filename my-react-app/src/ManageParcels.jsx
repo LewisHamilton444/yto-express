@@ -1,5 +1,4 @@
-'use client';
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { apiFetch } from './services/api';
 import StatusBadge from './components/ui/StatusBadge';
 import { PARCEL_STATUS_COLORS } from './components/ui/statusColors';
@@ -899,9 +898,9 @@ export default function ManageParcels({ currentUser }) {
   const [categoryFilter, setCategoryFilter] = useState(currentUser?.isDemo ? 'DEMO' : 'REAL');
   const [viewParcel, setViewParcel]     = useState(null);
 
-  const flashActionError = (msg) => { setActionError(msg); setTimeout(() => setActionError(''), 4000); };
+  const flashActionError = useCallback((msg) => { setActionError(msg); setTimeout(() => setActionError(''), 4000); }, []);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const [parcelsRes, ridersRes] = await Promise.all([apiFetch('/parcels'), apiFetch('/riders')]);
@@ -944,9 +943,9 @@ export default function ManageParcels({ currentUser }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentUser?.isDemo, flashActionError]);
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => { loadData(); }, [loadData]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();

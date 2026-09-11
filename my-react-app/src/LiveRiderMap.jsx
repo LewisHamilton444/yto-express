@@ -1,4 +1,3 @@
-'use client';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { loadLeaflet } from './leafletLoader';
 import { LOGISTICS_HUBS, haversineKm, HUB_STATUS_COLORS } from './hubGeofenceData';
@@ -6,7 +5,7 @@ import { CITY_COORDS, LUZON_FALLBACK_COORDS } from './luzonCityCoords';
 import { MOCK_LUZON_RIDERS, MOCK_LUZON_PARCELS } from './luzonMockData';
 import { useRouteAnimation } from './useRouteAnimation';
 import { buildLiveAlerts } from './alertsFeed';
-import { vehicleGlyphSvg, vehicleTypeLabel } from './components/ui/vehicleIcons';
+import { vehicleGlyphSvg, vehicleTypeLabel } from './components/ui/vehicleIconUtils';
 import { VehicleIcon } from './components/ui/vehicleIcons';
 import { AlertTriangle, CircleDot, Flame, Map, Package, RefreshCw, Satellite, TrafficCone, X } from 'lucide-react';
 import { ridersApi, parcelsApi } from './services/api';

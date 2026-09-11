@@ -1,4 +1,3 @@
-'use client';
 
 // Shared CSV/Excel export for ledger tables. No extra dependency: CSV is a
 // plain Blob download, and "Excel" is a real, valid trick Excel supports

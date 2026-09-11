@@ -1,4 +1,3 @@
-'use client';
 import React, { useState, useEffect } from 'react';
 import { apiFetch } from './services/localApi';
 import Badge from './components/ui/Badge';

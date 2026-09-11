@@ -1,4 +1,3 @@
-'use client';
 
 // ── Luzon-only city coordinate lookup ───────────────────────────────────────
 // YTO Express operates strictly within Luzon (no Visayas/Mindanao). This is

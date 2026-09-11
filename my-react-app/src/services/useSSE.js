@@ -59,7 +59,7 @@ export default function useSSE() {
                 tag: `yto-${type}`,
                 renotify: true,
             });
-        } catch {}
+        } catch { /* Notification API unavailable or blocked */ }
     }, []);
 
     // Request notification permission on first connect
@@ -77,7 +77,7 @@ export default function useSSE() {
         if (typeListeners) {
             typeListeners.forEach(fn => fn(data));
         }
-    }, []);
+    }, [showNotification]);
 
     // ── Polling fallback ─────────────────────────────────────────────────
     const startPolling = useCallback(() => {
@@ -181,7 +181,7 @@ export default function useSSE() {
                 }, SSE_RECONNECT_DELAY);
             }
         };
-    }, [dispatchEvent, startPolling, stopPolling]);
+    }, [dispatchEvent, startPolling, stopPolling, requestNotificationPermission]);
 
     // ── Lifecycle ────────────────────────────────────────────────────────
     useEffect(() => {

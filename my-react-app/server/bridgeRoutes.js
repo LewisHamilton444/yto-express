@@ -322,7 +322,7 @@ router.post('/sync-parcel', async (req, res) => {
       receiverName,
       item: body.item,
       accountCategory: parcelCategory,
-      ...pickDefined(body, ['weight', 'value', 'origin', 'destination', 'status', 'riderId', 'sellerId', 'recipientEmail', 'podPhoto']),
+      ...pickDefined(body, ['weight', 'value', 'origin', 'destination', 'status', 'riderId', 'sellerId', 'recipientEmail', 'podPhoto', 'paymentMode', 'codAmount', 'packageCount', 'packageCategory', 'notes']),
     };
 
     const existing = await Parcel.findOne({ trackingNumber });
@@ -509,10 +509,10 @@ router.post('/receive-status', async (req, res) => {
     parcel.status = status;
     if (podPhoto) parcel.podPhoto = podPhoto;
     parcel.events.push({
-      timestamp: timestamp || new Date().toISOString(),
+      time: timestamp || new Date().toISOString(),
+      event: `Status updated to ${status} via Android bridge`,
       location: parcel.destination || '',
       status: status,
-      description: `Status updated to ${status} via Android bridge`,
     });
     await parcel.save();
 

@@ -1,4 +1,3 @@
-'use client';
 
 // Shared "live alert" derivation — used by both the header's notification
 // bell and the Live Rider Map's alert banner, so they always agree on what

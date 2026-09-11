@@ -1,4 +1,3 @@
-'use client';
 import { useState } from 'react';
 import { apiFetch, notificationsApi } from '../services/api';
 import { generateCredentials, buildSmsMessage } from './mockPendingRegistrations';
@@ -23,7 +22,7 @@ export function useRegistrationApproval({ items, setItems, type, buildPayload })
   const [smsPayload, setSmsPayload]   = useState(null); // { item, credentials, message }
   const [sendingSms, setSendingSms]   = useState(false);
   const [smsSendError, setSmsSendError] = useState('');
-  const { toasts, pushToast }         = useToasts();
+  const { pushToast }                 = useToasts();
 
   const endpoint = type === 'seller' ? 'sellers' : 'riders';
 
@@ -96,6 +95,5 @@ export function useRegistrationApproval({ items, setItems, type, buildPayload })
     pendingItems,
     reviewItem, openReview, closeReview, handleApprove, handleReject,
     smsPayload, handleCancelSms, handleConfirmSms, sendingSms, smsSendError,
-    toasts,
   };
 }

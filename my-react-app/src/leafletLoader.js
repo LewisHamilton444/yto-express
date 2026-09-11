@@ -1,4 +1,3 @@
-'use client';
 
 // Shared singleton loader for the Leaflet CDN assets, so multiple map
 // components mounting around the same time don't race two <script> injections.

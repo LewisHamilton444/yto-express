@@ -60,7 +60,7 @@ function App() {
           const isDemo = payload.isDemo !== undefined ? !!payload.isDemo : isDemoEmail(payload.email);
           return { token, email: payload.email, role: payload.role, loginRole: payload.role, isDemo };
         }
-      } catch {}
+      } catch { /* malformed token payload: fall through to a clean logout */ }
       setAuthToken(null);
     }
     return null;

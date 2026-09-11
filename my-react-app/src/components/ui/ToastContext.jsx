@@ -1,6 +1,6 @@
-'use client';
-import React, { createContext, useCallback, useContext, useRef, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { CheckCircle2, XCircle, Info, X } from 'lucide-react';
+import { ToastContext } from './toastContextDef';
 
 /**
  * One toast system for the whole admin portal. Previously every screen had
@@ -15,10 +15,6 @@ import { CheckCircle2, XCircle, Info, X } from 'lucide-react';
  *   toast('Parcel updated', 'success');   // default 3.5s
  *   toast('Server unreachable', 'error', { ttl: 6000 });
  */
-const ToastContext = createContext(() => {});
-
-export const useToast = () => useContext(ToastContext);
-
 const VARIANT = {
   success: { Icon: CheckCircle2, bg: '#390955', fg: '#ffffff' },
   error:   { Icon: XCircle,      bg: '#991b1b', fg: '#ffffff' },

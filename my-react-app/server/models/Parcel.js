@@ -19,6 +19,14 @@ const parcelSchema = new mongoose.Schema({
     // undeclared fields on save, which previously made this value vanish.
     accountCategory: { type: String, enum: ['REAL', 'DEMO'], default: 'REAL' },
     podPhoto: { type: String, default: '' },
+    // Cross-platform bridge fields (synced from the mobile Shipment.js schema by
+    // POST /api/bridge/sync-parcel). Mongoose strict mode strips undeclared fields
+    // on save, which is why each of these must be declared on the schema.
+    paymentMode: { type: String, default: '' },
+    codAmount: { type: Number, default: 0 },
+    packageCount: { type: Number, default: 1 },
+    packageCategory: { type: String, default: '' },
+    notes: { type: String, default: '' },
     events: [{ 
         time: String, 
         event: String, 

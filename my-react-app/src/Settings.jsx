@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import SettingsArchiveView from './SettingsArchiveView';
 import { FileText } from 'lucide-react';
-import { useToast } from './components/ui/ToastContext';
+import { useToast } from './components/ui/useToast';
 import Tooltip from './components/ui/Tooltip';
 
 export default function Settings({

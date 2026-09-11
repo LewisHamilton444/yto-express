@@ -1,4 +1,3 @@
-'use client';
 import React, { useState, useEffect } from 'react';
 import { normalizeRider, mockRiders, formatStatusLabel, RIDER_STATUS } from './sellerRiderData';
 import PaginationControls from './PaginationControls';

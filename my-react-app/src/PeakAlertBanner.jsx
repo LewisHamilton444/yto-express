@@ -1,4 +1,3 @@
-'use client';
 import React, { useState, useEffect, useCallback } from 'react';
 import useSSE from './services/useSSE';
 import { apiFetch } from './services/api';
@@ -28,7 +27,7 @@ const PeakAlertBanner = () => {
                     const stats = await statsRes.json();
                     setThreshold(stats?.threshold || 5);
                 }
-            } catch {}
+            } catch { /* alerts endpoint unreachable: banner stays hidden */ }
         };
         fetchAlerts();
     }, []);

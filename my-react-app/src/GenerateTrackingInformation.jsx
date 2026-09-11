@@ -1,7 +1,6 @@
-'use client';
 import React, { useState, useEffect } from 'react';
 import { parcelsApi } from './services/api';
-import { useToast } from './components/ui/ToastContext';
+import { useToast } from './components/ui/useToast';
 import Tooltip from './components/ui/Tooltip';
 import { CheckCircle2, Download, FileText, Loader2 } from 'lucide-react';
 
@@ -157,7 +156,7 @@ export default function GenerateTrackingInformation({ reports: externalReports, 
       ${(report.events||[]).length>0
         ? `<table><thead><tr><th>Date &amp; Time</th><th>Event</th><th>Location</th><th>Status</th></tr></thead><tbody>${evRows}</tbody></table>`
         : `<p style="color:#aaa;font-size:13px;">No tracking events recorded.</p>`}
-      <script>window.onload=function(){window.print();}<\/script>
+      <script>window.onload=function(){window.print();}\x3C/script>
       </body></html>`);
     win.document.close();
   };

@@ -1,4 +1,3 @@
-'use client';
 import React, { useState, useEffect, useMemo } from 'react';
 import { apiFetch } from './services/localApi';
 import useSSE from './services/useSSE';
@@ -8,7 +7,7 @@ import PageHeader from './components/ui/PageHeader';
 import CardSectionHeader from './components/ui/CardSectionHeader';
 import CardFooter from './components/ui/CardFooter';
 import TableSkeleton from './components/ui/TableSkeleton';
-import { useToast } from './components/ui/ToastContext';
+import { useToast } from './components/ui/useToast';
 import { ACCOUNT_CATEGORY_TONE, ACCOUNT_CATEGORY_LABEL } from './components/ui/statusColors';
 import PaginationControls from './PaginationControls';
 import { isDemoEmail } from './demoUtils';

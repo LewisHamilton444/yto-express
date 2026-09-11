@@ -1,10 +1,10 @@
-'use client';
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { normalizeRider, mockRiders, RIDER_STATUS } from './sellerRiderData';
 import { ridersApi } from './services/api';
 import SimulatedFeedBadge from './components/ui/SimulatedFeedBadge';
 import Tooltip from './components/ui/Tooltip';
-import { VehicleIcon, vehicleGlyphSvg } from './components/ui/vehicleIcons';
+import { VehicleIcon } from './components/ui/vehicleIcons';
+import { vehicleGlyphSvg } from './components/ui/vehicleIconUtils';
 import { Archive, BatteryMedium, Check, Database, MapPin, RefreshCw, RotateCw, X } from 'lucide-react';
 
 const CITY_COORDS = {
@@ -132,7 +132,6 @@ export default function MonitorRiderStatus({ currentUser }) {
   const [riderTab, setRiderTab] = useState('details');
   const [riderTimeline, setRiderTimeline] = useState([]);
   const [timelineLoading, setTimelineLoading] = useState(false);
-  const [categoryFilter, setCategoryFilter] = useState('All');
   const [geofences, setGeofences] = useState([
     { id: 'G001', name: 'Makati District',  center: '14.5547, 121.0244', radius: '2 km',   status: 'Active'   },
     { id: 'G002', name: 'Quezon City Hub',  center: '14.6760, 121.0437', radius: '1.5 km', status: 'Active'   },
@@ -141,7 +140,7 @@ export default function MonitorRiderStatus({ currentUser }) {
     { id: 'G005', name: 'Hagonoy Bulacan',  center: '14.8340, 120.7310', radius: '1.2 km', status: 'Active'   },
   ]);
 
-  const attachLiveGps = (normalizedRiders) => normalizedRiders.map((r, index) => {
+  const attachLiveGps = useCallback((normalizedRiders) => normalizedRiders.map((r, index) => {
     const coords = CITY_COORDS[r.location.city];
     return {
       ...r,
@@ -158,9 +157,9 @@ export default function MonitorRiderStatus({ currentUser }) {
       // instead of flickering randomly.
       deviceHealth: getDeviceHealth(r.riderId),
     };
-  });
+  }), []);
 
-  const fetchRiders = async () => {
+  const fetchRiders = useCallback(async () => {
     try {
       const data = await ridersApi.list();
 
@@ -191,7 +190,7 @@ export default function MonitorRiderStatus({ currentUser }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentUser?.isDemo, attachLiveGps]);
 
   const formatTimelineDate = (dateStr) => {
     if (!dateStr) return '-';
@@ -232,7 +231,7 @@ export default function MonitorRiderStatus({ currentUser }) {
     // Re-fetch every 15 seconds to stay in sync with archive/restore actions
     const interval = setInterval(fetchRiders, 15000);
     return () => clearInterval(interval);
-  }, []);
+  }, [fetchRiders]);
 
   const handleToggleGeofence = (id) => {
     setGeofences(p => p.map(g => g.id === id ? { ...g, status: g.status === 'Active' ? 'Inactive' : 'Active' } : g));

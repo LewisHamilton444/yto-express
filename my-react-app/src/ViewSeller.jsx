@@ -1,4 +1,3 @@
-'use client';
 import React, { useState, useEffect, useRef } from 'react';
 import './ViewSeller.css';
 import { normalizeSeller, mockSellers, formatStatusLabel, SELLER_STATUS } from './sellerRiderData';
@@ -8,7 +7,7 @@ import { apiFetch } from './services/api';
 import StatusBadge from './components/ui/StatusBadge';
 import { SELLER_STATUS_COLORS } from './components/ui/statusColors';
 import Modal from './components/ui/Modal';
-import { useToast } from './components/ui/ToastContext';
+import { useToast } from './components/ui/useToast';
 import { isDemoEmail } from './demoUtils';
 
 const SELLER_EXPORT_COLUMNS = [
@@ -56,7 +55,7 @@ const GenerateSellerReport = ({ sellers: externalSellers, onUpdateSellers, curre
       }
     };
     fetchSellers();
-  }, []);
+  }, [currentUser?.isDemo]);
 
   const applyUpdate = (next) => {
     sellersRef.current = next;

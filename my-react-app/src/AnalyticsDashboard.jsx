@@ -257,7 +257,7 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     try { return localStorage.getItem('yto_sidebar_collapsed') === '1'; } catch { return false; }
   });
-  const [sidebarHover, setSidebarHover] = useState(false);
+  const [sidebarHover] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   // Which parent group's children are shown as a flyout next to the icon rail
   // (collapsed mode only). Closed on mouse-leave or navigation.
@@ -266,7 +266,7 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
   const toggleSidebar = () => {
     setSidebarCollapsed(prev => {
       const next = !prev;
-      try { localStorage.setItem('yto_sidebar_collapsed', next ? '1' : '0'); } catch {}
+      try { localStorage.setItem('yto_sidebar_collapsed', next ? '1' : '0'); } catch { /* localStorage unavailable (private mode): collapse state is best-effort */ }
       return next;
     });
   };
@@ -292,7 +292,7 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
   const [pendingRiders,  setPendingRiders]  = useState(initialPendingRiders);
 
   const [trackingReports, setTrackingReports] = useState([]);
-  const [archivedReports, setArchivedReports] = useState([]);
+  const [archivedReports] = useState([]);
 
   const isSuperAdmin = currentUser?.role === 'super_admin';
 
@@ -310,7 +310,7 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
           const data = await res.json();
           setSseClientCount(data.connectedClients || 0);
         }
-      } catch {}
+      } catch { /* events/stats is best-effort: keep the last known client count */ }
     };
     fetchSSEStats();
     const interval = setInterval(fetchSSEStats, 10000); // refresh every 10s

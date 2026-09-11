@@ -1,4 +1,3 @@
-'use client';
 
 // ── Luzon-only mock dataset ─────────────────────────────────────────────────
 // Used as a local fallback whenever the backend is unreachable, so the map

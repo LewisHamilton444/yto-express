@@ -1,4 +1,3 @@
-'use client';
 import React from 'react';
 import GlobalSearch from './GlobalSearch';
 import NotificationBell from './NotificationBell';
@@ -12,7 +11,7 @@ const s = {
 };
 
 export default function GlobalHeader({ currentUser, riders, pendingCount, onNavigate, onNavigateSettings, onLogoutClick }) {
-  const { connected: sseConnected, mode, retry } = useSSE();
+  const { mode, retry } = useSSE();
 
   const modeConfig = {
     sse:     { bg: 'rgba(34,197,94,0.1)', color: '#16a34a', dot: '#22c55e', label: 'Live' },

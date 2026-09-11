@@ -1,4 +1,3 @@
-'use client';
 
 // ── Logistics hub / sorting center mock data ────────────────────────────────
 // activeParcelsCount and assignedRidersCount are NOT stored here — they're

@@ -1,4 +1,3 @@
-'use client';
 import React, { useEffect, useRef, useState } from 'react';
 
 const ROLE_LABELS = { super_admin: 'Super Admin', staff: 'Staff', hub_receiver: 'Hub Receiver' };

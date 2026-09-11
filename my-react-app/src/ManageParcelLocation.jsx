@@ -1,8 +1,7 @@
-'use client';
 import React, { useState, useEffect } from 'react';
 import { apiFetch, parcelLocationsApi, parcelsApi, ridersApi } from './services/api';
 import Modal from './components/ui/Modal';
-import { useToast } from './components/ui/ToastContext';
+import { useToast } from './components/ui/useToast';
 import './ManageParcelLocation.css';
 import { AlertTriangle, MapPin } from 'lucide-react';
 

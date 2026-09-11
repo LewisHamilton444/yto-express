@@ -1,4 +1,3 @@
-'use client';
 import React, { useState } from 'react';
 import './ProcessSellerInformation.css';
 
@@ -8,7 +7,6 @@ import { useRegistrationApproval } from './verification/useRegistrationApproval'
 import PendingVerificationsTable from './verification/PendingVerificationsTable';
 import ReviewModal from './verification/ReviewModal';
 import SendSMSModal from './verification/SendSMSModal';
-import Toast from './verification/Toast';
 
 const ProcessSellerInformation = ({ pendingSellers: sellersProp, setPendingSellers: setSellersProp }) => {
   // Falls back to local state if rendered without the lifted props (defensive
@@ -23,7 +21,6 @@ const ProcessSellerInformation = ({ pendingSellers: sellersProp, setPendingSelle
     pendingItems: pendingSellers,
     reviewItem, openReview, closeReview, handleApprove, handleReject,
     smsPayload, handleCancelSms, handleConfirmSms, sendingSms, smsSendError,
-    toasts,
   } = useRegistrationApproval({
     items: sellers,
     setItems: setSellers,
@@ -75,7 +72,6 @@ const ProcessSellerInformation = ({ pendingSellers: sellersProp, setPendingSelle
         />
       )}
 
-      <Toast toasts={toasts} />
     </div>
   );
 };

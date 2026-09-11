@@ -178,7 +178,8 @@ app.put('/api/sellers/:id', authenticateToken, async (req, res) => {
             { new: true, runValidators: false }
         );
 
-        if (req.body.status && updated.email) {
+        // REAL realm only: DEMO-realm sellers have no Android account to approve.
+        if (req.body.status && updated.email && updated.accountCategory !== 'DEMO') {
             BridgeClient.sendApproval(updated.email, 'seller', req.body.status)
                 .catch(e => console.warn('[Bridge→Android] sendApproval failed:', e.message));
         }
@@ -229,7 +230,8 @@ app.put('/api/riders/:id', authenticateToken, async (req, res) => {
             { new: true, runValidators: false }
         );
 
-        if (req.body.status && updated.email) {
+        // REAL realm only: DEMO-realm riders have no Android account to approve.
+        if (req.body.status && updated.email && updated.accountCategory !== 'DEMO') {
             BridgeClient.sendApproval(updated.email, 'rider', req.body.status)
                 .catch(e => console.warn('[Bridge→Android] sendApproval failed:', e.message));
         }
@@ -415,7 +417,10 @@ app.put('/api/parcels/:id', authenticateToken, async (req, res) => {
             { new: true, runValidators: false }
         );
 
-        if (req.body.status && updated.trackingNumber) {
+        // REAL realm only: DEMO-realm parcels (web-only, e.g. @yto.com senders)
+        // have no Android counterpart, so bridging their status would only
+        // produce guaranteed 404 round-trips on the Android side.
+        if (req.body.status && updated.trackingNumber && updated.accountCategory !== 'DEMO') {
             BridgeClient.sendStatus(updated.trackingNumber, req.body.status)
                 .catch(e => console.warn('[Bridge→Android] sendStatus failed:', e.message));
         }

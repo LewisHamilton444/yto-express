@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { apiFetch } from './services/api';
 import Modal from './components/ui/Modal';
 import TableSkeleton from './components/ui/TableSkeleton';
 import EmptyState from './components/ui/EmptyState';
-import { useToast } from './components/ui/ToastContext';
+import { useToast } from './components/ui/useToast';
 import { Users, AlertTriangle, ClipboardList, Package } from 'lucide-react';
 import { isDemoEmail } from './demoUtils';
 
@@ -48,11 +48,9 @@ export default function ManageAccounts({ currentUser }) {
   const [formData, setFormData] = useState(blankForm);
 
   // ── Fetch all accounts on mount ──────────────────────────────────────────
-  useEffect(() => {
-    fetchAccounts();
-  }, []);
+  const flash = useCallback((msg, type = 'success') => toast(msg, type === 'error' ? 'error' : 'success'), [toast]);
 
-  const fetchAccounts = async () => {
+  const fetchAccounts = useCallback(async () => {
     setLoading(true);
     try {
       const res = await apiFetch('/accounts');
@@ -82,9 +80,11 @@ export default function ManageAccounts({ currentUser }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentUser?.isDemo, flash]);
 
-  const flash = (msg, type = 'success') => toast(msg, type === 'error' ? 'error' : 'success');
+  useEffect(() => {
+    fetchAccounts();
+  }, [fetchAccounts]);
 
   const openAddModal = () => {
     setEditingAccount(null);

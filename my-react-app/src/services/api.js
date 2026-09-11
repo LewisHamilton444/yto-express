@@ -33,7 +33,7 @@ export async function apiFetch(path, options = {}) {
         setAuthToken(null);
         window.dispatchEvent(new Event('yto:auth_expired'));
       }
-    } catch {}
+    } catch { /* non-JSON 401 body: nothing to inspect */ }
   }
   return res;
 }

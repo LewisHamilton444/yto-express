@@ -1,6 +1,6 @@
-'use client';
 import React, { useEffect, useRef, useState } from 'react';
 import { buildLiveAlerts } from './alertsFeed';
+import SimulatedFeedBadge from './components/ui/SimulatedFeedBadge';
 import Tooltip from './components/ui/Tooltip';
 
 const s = {
@@ -62,7 +62,10 @@ export default function NotificationBell({ riders = [], pendingCount = 0, onNavi
 
           {alerts.length > 0 && (
             <>
-              <div style={s.groupLabel}>Geofence & Overspeed Alerts</div>
+              <div style={{ ...s.groupLabel, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                <span>Geofence & Overspeed Alerts</span>
+                <SimulatedFeedBadge />
+              </div>
               {alerts.map(a => (
                 <div key={a.id} style={{ ...s.row, cursor: 'pointer' }} onClick={() => { setOpen(false); onNavigate?.('geofence'); }}>
                   <span style={s.dot(SEV_COLOR[a.severity])} />

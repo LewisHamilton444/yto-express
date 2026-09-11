@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { apiFetch, parcelsApi } from './services/api';
 import StatusBadge from './components/ui/StatusBadge';
-import { useToast } from './components/ui/ToastContext';
+import { useToast } from './components/ui/useToast';
 import Modal from './components/ui/Modal';
 import { PARCEL_STATUS_COLORS } from './components/ui/statusColors';
 
@@ -20,11 +20,10 @@ export default function HubParcelReceiving() {
   const [updatingId, setUpdatingId] = useState(null);
   const [confirmReturn, setConfirmReturn] = useState(null);
 
-  useEffect(() => {
-    fetchParcels();
-  }, []);
+  const toast = useToast();
+  const flash = useCallback((msg, type = 'success') => toast(msg, type === 'error' ? 'error' : 'success'), [toast]);
 
-  const fetchParcels = async () => {
+  const fetchParcels = useCallback(async () => {
     setLoading(true);
     try {
       const data = await parcelsApi.list();
@@ -34,10 +33,11 @@ export default function HubParcelReceiving() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [flash]);
 
-  const toast = useToast();
-  const flash = (msg, type = 'success') => toast(msg, type === 'error' ? 'error' : 'success');
+  useEffect(() => {
+    fetchParcels();
+  }, [fetchParcels]);
 
   const markStatus = async (parcel, status) => {
     setUpdatingId(parcel._id);

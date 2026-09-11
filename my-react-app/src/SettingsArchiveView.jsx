@@ -1,9 +1,8 @@
-'use client';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { normalizeSeller, normalizeRider, SELLER_STATUS, RIDER_STATUS } from './sellerRiderData';
 import { apiFetch, sellersApi, ridersApi } from './services/api';
 import Modal from './components/ui/Modal';
-import { useToast } from './components/ui/ToastContext';
+import { useToast } from './components/ui/useToast';
 import Tooltip from './components/ui/Tooltip';
 import { Package, Bike } from 'lucide-react';
 
@@ -24,7 +23,7 @@ export default function SettingsArchiveView({ onCountsChange = () => {} }) {
 
   const showNotice = (message, type = 'success') => toast(message, type === 'error' ? 'error' : 'success');
 
-  const fetchAll = async () => {
+  const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
       const [sData, rData] = await Promise.all([sellersApi.list(), ridersApi.list()]);
@@ -42,9 +41,9 @@ export default function SettingsArchiveView({ onCountsChange = () => {} }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [onCountsChange]);
 
-  useEffect(() => { fetchAll(); }, []);
+  useEffect(() => { fetchAll(); }, [fetchAll]);
 
   const activeSellers   = allSellers.filter(s => s.status !== SELLER_STATUS.ARCHIVED);
   const archivedSellers = allSellers.filter(s => s.status === SELLER_STATUS.ARCHIVED);
