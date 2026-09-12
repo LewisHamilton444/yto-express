@@ -41,6 +41,11 @@
 
 **Icon rule** — no emoji/text glyphs as icons in UI strings; all use lucide-react SVGs (`aria-hidden`, icon-only buttons carry `aria-label`).
 
+### UI design guardrails (anti-AI-slop)
+- Read `skills/no-slop-ui/SKILL.md` before making any visual, layout, or styling change.
+- On conflict, `skills/no-slop-ui/YTO_ADAPTATIONS.md` outranks the skill defaults.
+- After UI changes, run `skills/no-slop-ui/examples/review-checklist.md`.
+
 ### Services
 - `src/services/api.js` — centralized client: `API_ROOT = import.meta.env.VITE_API_URL || 'https://yto-express-backend.onrender.com'`; `apiFetch(path, opts)` attaches `Authorization: Bearer`; on 401 with token-expiry errors clears the token and dispatches `yto:auth_expired`. **Token key: `yto_token`** — `remember=true` → `localStorage`, `remember=false` → `sessionStorage` (session storage wins on read). `adminLogin(email, password, remember)`; `notificationsApi.sendEmail`; collection helpers (`sellersApi`, `ridersApi`, `parcelsApi`, `parcelLocationsApi`, `accountsApi`, `dashboardApi`).
 - `src/services/localApi.js` — same API shape but defaults to `http://localhost:3001`; used by the newer views (`ManageIssues`, `CustomerList`, `ActivityLog`) whose routes are not yet deployed to production.
