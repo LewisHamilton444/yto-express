@@ -408,7 +408,7 @@ function MiniMap({ parcel, gps, geofence, allParcels }) {
           {gps.lat.toFixed(4)}° N, {gps.lng.toFixed(4)}° E
         </text>
       </svg>
-      <div style={{ position: 'absolute', top: 8, left: 8, background: geofence?.inside ? '#390955' : 'white', color: geofence?.inside ? 'white' : '#390955', border: '1.5px solid #390955', fontSize: 10, fontWeight: 700, padding: '3px 9px', borderRadius: 20 }}>
+      <div style={{ position: 'absolute', top: 8, left: 8, background: geofence?.inside ? '#390955' : 'white', color: geofence?.inside ? 'white' : '#390955', border: '1.5px solid #390955', fontSize: 10, fontWeight: 700, padding: '3px 9px', borderRadius: 8 }}>
         {geofence ? (geofence.inside ? <><Check size={11} aria-hidden="true" /> Inside Zone</> : <><X size={11} aria-hidden="true" /> Outside Zone</>) : <><CircleDot size={10} aria-hidden="true" /> Live GPS</>}
       </div>
       <div style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(255,255,255,0.9)', fontSize: 10, color: '#666', padding: '3px 8px', borderRadius: 4, fontFamily: 'monospace' }}>
@@ -535,11 +535,11 @@ function ParcelModal({ parcel, onClose, allParcels }) {
       maxWidth={720}
       padding={0}
       overlayStyle={{ padding: 24 }}
-      cardStyle={{ borderRadius: 18, width: '100%', animation: 'mp-modal-in 0.22s cubic-bezier(0.34,1.56,0.64,1) both', boxShadow: '0 32px 80px rgba(57,9,85,0.25)' }}
+      cardStyle={{ borderRadius: 12, width: '100%', animation: 'mp-modal-in 0.22s cubic-bezier(0.34,1.56,0.64,1) both', boxShadow: '0 32px 80px rgba(57,9,85,0.25)' }}
     >
 
         {/* Header */}
-        <div style={{ padding: '22px 24px 16px', borderBottom: '1.5px solid #f5f0ff', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', position: 'sticky', top: 0, background: 'white', zIndex: 1, borderRadius: '18px 18px 0 0' }}>
+        <div style={{ padding: '22px 24px 16px', borderBottom: '1.5px solid #f5f0ff', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', position: 'sticky', top: 0, background: 'white', zIndex: 1, borderRadius: '12px 12px 0 0' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 13 }}>
             <div style={{ width: 44, height: 44, background: '#390955', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
               <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" width="20" height="20"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" /></svg>
@@ -702,7 +702,7 @@ function ParcelModal({ parcel, onClose, allParcels }) {
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                   <div style={{ fontSize: 10, fontWeight: 800, color: '#390955', textTransform: 'uppercase', letterSpacing: 0.7 }}>Delivery Confirmation &amp; Signature</div>
-                  {signature && <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20, background: '#f37021', color: 'white', display: 'inline-flex', alignItems: 'center', gap: 4 }}><Check size={12} aria-hidden="true" /> Confirmed</span>}
+                  {signature && <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 8, background: '#f37021', color: 'white', display: 'inline-flex', alignItems: 'center', gap: 4 }}><Check size={12} aria-hidden="true" /> Confirmed</span>}
                 </div>
                 <div style={{ fontSize: 11, color: '#aaa', marginBottom: 12 }}>{confirmCode}</div>
                 <button onClick={handleGenerateSignature} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, padding: 10, background: 'white', color: '#390955', border: '2px solid #390955', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', width: '100%', fontFamily: 'inherit', marginBottom: 16 }}>

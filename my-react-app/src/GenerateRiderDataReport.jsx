@@ -223,7 +223,7 @@ export default function GenerateRiderDataReport() {
         {!selectedRider ? (
           <>
             {/* Filters */}
-            <div style={{ background: 'white', border: '1px solid #e0d5f0', borderRadius: 14, padding: '22px 24px', boxShadow: '0 1px 6px rgba(57,9,85,0.05)' }}>
+            <div style={{ background: 'white', border: '1px solid #e0d5f0', borderRadius: 12, padding: '22px 24px', boxShadow: '0 1px 6px rgba(57,9,85,0.05)' }}>
               <div style={{ fontSize: 14, fontWeight: 700, color: '#1a1a1a', marginBottom: 18, display: 'flex', alignItems: 'center', gap: 8 }}>
                 <div style={{ width: 26, height: 26, borderRadius: 7, background: '#f37021', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" width="13" height="13"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
@@ -285,11 +285,11 @@ export default function GenerateRiderDataReport() {
             </div>
 
             {/* Table */}
-            <div style={{ background: 'white', border: '1px solid #e0d5f0', borderRadius: 14, overflow: 'hidden', boxShadow: '0 2px 10px rgba(57,9,85,0.05)' }}>
+            <div style={{ background: 'white', border: '1px solid #e0d5f0', borderRadius: 12, overflow: 'hidden', boxShadow: '0 2px 10px rgba(57,9,85,0.05)' }}>
               <div style={{ padding: '16px 22px', borderBottom: '1px solid #f0eaf8', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <span style={{ fontSize: 14, fontWeight: 700, color: '#1a1a1a' }}>Rider Records</span>
-                  <span style={{ fontSize: 12, fontWeight: 700, padding: '3px 10px', borderRadius: 20, background: '#f0eaf8', color: '#390955' }}>{filteredData.length} results</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, padding: '3px 10px', borderRadius: 8, background: '#f0eaf8', color: '#390955' }}>{filteredData.length} results</span>
                   <span style={{ fontSize: 11, color: '#22c55e', fontWeight: 600 }}>● {riders.filter(r=>r.status===RIDER_STATUS.ACTIVE).length} active on map</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -334,14 +334,14 @@ export default function GenerateRiderDataReport() {
                           <td style={{ ...td, fontWeight: 700 }}>{r.performance.deliveriesCount}</td>
                           <td style={td}><Stars rating={r.performance.rating}/></td>
                           <td style={td}>
-                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700,
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 8, fontSize: 11, fontWeight: 700,
                               background: dutyBadge.bg, color: dutyBadge.color }}>
                               <span style={{ width: 5, height: 5, borderRadius: '50%', background: dutyBadge.dot }}/>
                               {DUTY_LABELS[duty]}
                             </span>
                           </td>
                           <td style={td}>
-                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700,
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 8, fontSize: 11, fontWeight: 700,
                               background: badge.bg, color: badge.color, border: badge.border }}>
                               <span style={{ width: 5, height: 5, borderRadius: '50%', background: badge.dot }}/>
                               {formatStatusLabel(r.status)}
@@ -384,7 +384,7 @@ export default function GenerateRiderDataReport() {
 
             {rider && (
               <>
-                <div style={{ background: 'linear-gradient(135deg,#390955,#5c1285)', borderRadius: 16, padding: '24px 28px', color: 'white', position: 'relative', overflow: 'hidden' }}>
+                <div style={{ background: 'linear-gradient(135deg,#390955,#5c1285)', borderRadius: 12, padding: '24px 28px', color: 'white', position: 'relative', overflow: 'hidden' }}>
                   <div style={{ position: 'absolute', top: -20, right: -20, width: 120, height: 120, borderRadius: '50%', background: 'rgba(255,255,255,0.06)' }}/>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 18, position: 'relative' }}>
                     <div style={{ width: 64, height: 64, borderRadius: '50%', background: '#f37021', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', flexShrink: 0, boxShadow: '0 4px 18px rgba(243,112,33,0.4)', border: '3px solid rgba(255,255,255,0.3)' }}><VehicleIcon type={rider.vehicleType} size={32} /></div>
@@ -394,7 +394,7 @@ export default function GenerateRiderDataReport() {
                       <div style={{ marginTop: 10 }}><Stars rating={rider.performance.rating}/></div>
                     </div>
                     <div style={{ textAlign: 'right' }}>
-                      <span style={{ display: 'inline-block', padding: '5px 14px', borderRadius: 20, fontSize: 12, fontWeight: 700,
+                      <span style={{ display: 'inline-block', padding: '5px 14px', borderRadius: 8, fontSize: 12, fontWeight: 700,
                         background: '#f37021', color: 'white' }}>
                         {formatStatusLabel(rider.status)}
                       </span>
@@ -477,7 +477,7 @@ export default function GenerateRiderDataReport() {
                 <div style={{ background: 'white', border: '1.5px solid #e0d5f0', borderRadius: 12, overflow: 'hidden' }}>
                   <div style={{ padding: '13px 18px', borderBottom: '1px solid #f0eaf8', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <span style={{ fontSize: 12, fontWeight: 700, color: '#390955', textTransform: 'uppercase', letterSpacing: 0.5 }}>Currently Held Shipments</span>
-                    <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20, background: riderHeldParcels.length ? '#e6f9ed' : '#f5f5f5', color: riderHeldParcels.length ? '#1e7e34' : '#888' }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 8, background: riderHeldParcels.length ? '#e6f9ed' : '#f5f5f5', color: riderHeldParcels.length ? '#1e7e34' : '#888' }}>
                       {riderHeldParcels.length} held
                     </span>
                   </div>
@@ -509,7 +509,7 @@ export default function GenerateRiderDataReport() {
                     <span style={{ fontSize: 12, fontWeight: 700, color: '#390955', textTransform: 'uppercase', letterSpacing: 0.5 }}>Delivery History</span>
                     {riderArchivedCount > 0 && (
                       <button onClick={() => setShowArchivedDeliveries(v => !v)}
-                        style={{ padding: '4px 10px', border: '1.5px solid #e0d5f0', borderRadius: 20, fontSize: 11, fontWeight: 700, cursor: 'pointer', background: 'white', color: '#390955', fontFamily: 'inherit' }}>
+                        style={{ padding: '4px 10px', border: '1.5px solid #e0d5f0', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer', background: 'white', color: '#390955', fontFamily: 'inherit' }}>
                         {showArchivedDeliveries ? 'Hide' : 'Show'} archived ({riderArchivedCount}, 7+ days)
                       </button>
                     )}
@@ -562,7 +562,7 @@ export default function GenerateRiderDataReport() {
           zIndex={9999} blur={false} tint="rgba(26,10,36,0.5)" overlayStyle={{ backdropFilter: 'blur(4px)' }}
           padding={0} cardStyle={{ background: 'transparent', boxShadow: 'none', width: 'auto', maxWidth: 'none', maxHeight: 'none', overflowY: 'visible' }}
         >
-          <form onSubmit={handleSaveEdit} style={{ width: 460, background: 'white', borderRadius: 14, overflow: 'hidden', boxShadow: '0 12px 36px rgba(57,9,85,0.25)' }}>
+          <form onSubmit={handleSaveEdit} style={{ width: 460, background: 'white', borderRadius: 12, overflow: 'hidden', boxShadow: '0 12px 36px rgba(57,9,85,0.25)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '18px 24px', borderBottom: '1px solid #f0eaf8', background: '#390955' }}>
               <h3 style={{ fontSize: 16, fontWeight: 800, color: 'white', margin: 0 }}>Edit Rider Profile</h3>
               <button type="button" onClick={() => setEditingRider(null)} style={{ background: 'none', border: 'none', color: 'white', fontSize: 24, cursor: 'pointer' }}>×</button>
@@ -654,7 +654,7 @@ export default function GenerateRiderDataReport() {
         <Modal
           zIndex={9999} blur={false} tint="rgba(26,10,36,0.5)" overlayStyle={{ backdropFilter: 'blur(4px)' }}
           onBackdropClick={() => setViewParcel(null)}
-          padding={0} cardStyle={{ width: 460, borderRadius: 14, overflow: 'hidden', boxShadow: '0 12px 36px rgba(57,9,85,0.25)', maxHeight: '85vh', maxWidth: 'none', display: 'flex', flexDirection: 'column' }}
+          padding={0} cardStyle={{ width: 460, borderRadius: 12, overflow: 'hidden', boxShadow: '0 12px 36px rgba(57,9,85,0.25)', maxHeight: '85vh', maxWidth: 'none', display: 'flex', flexDirection: 'column' }}
         >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '18px 24px', borderBottom: '1px solid #f0eaf8', background: '#390955' }}>
               <div>

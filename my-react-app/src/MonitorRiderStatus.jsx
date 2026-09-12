@@ -391,7 +391,7 @@ export default function MonitorRiderStatus({ currentUser }) {
             <div style={{ fontSize: 12, color: '#b45309', background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 8, padding: '8px 12px', lineHeight: 1.5 }}>
               Sample geofence zones listed below are a local demo list — toggling a zone is a preview only and is not persisted or enforced.
             </div>
-          <div style={{ background: 'white', borderRadius: 14, border: '1px solid #e0d5f0', overflow: 'hidden' }}>
+          <div style={{ background: 'white', borderRadius: 12, border: '1px solid #e0d5f0', overflow: 'hidden' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
                 <tr>{['Geofence Region', 'Center Coordinate Pins', 'Radius Boundary', 'Operational Status', 'Toggle Control'].map(h => <th key={h} style={th}>{h}</th>)}</tr>
@@ -423,7 +423,7 @@ export default function MonitorRiderStatus({ currentUser }) {
       {/* Rider Detail Modal */}
       {selectedRider && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(26,6,40,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }} onClick={() => setSelectedRider(null)}>
-          <div style={{ background: 'white', borderRadius: 16, width: '90%', maxWidth: 480, maxHeight: '85vh', overflow: 'hidden', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)' }} onClick={e => e.stopPropagation()}>
+          <div style={{ background: 'white', borderRadius: 12, width: '90%', maxWidth: 480, maxHeight: '85vh', overflow: 'hidden', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)' }} onClick={e => e.stopPropagation()}>
             {/* Header */}
             <div style={{ background: 'linear-gradient(135deg, #390955, #5a1f80)', padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
