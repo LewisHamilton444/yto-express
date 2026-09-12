@@ -20,7 +20,7 @@
 
 .process-seller-information-card-header {
   background: #ffffff;
-  border-radius: 16px;
+  border-radius: 12px;
   padding: 24px 32px;
   box-shadow: 0 4px 20px rgba(57, 9, 85, 0.04);
   border: 1px solid #e8e2f0;
@@ -95,7 +95,7 @@
 
 .process-seller-information-section {
   background: white;
-  border-radius: 16px;
+  border-radius: 12px;
   padding: 32px;
   box-shadow: 0 4px 20px rgba(57, 9, 85, 0.04);
   border: 1px solid #e8e2f0;

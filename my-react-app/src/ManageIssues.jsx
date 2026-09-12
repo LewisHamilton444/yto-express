@@ -158,7 +158,7 @@ export default function ManageIssues({ currentUser }) {
 
 
       {/* Main table card */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+      <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
         <CardSectionHeader
           icon={ShieldAlert}
           title="Support Tickets"
@@ -313,7 +313,7 @@ export default function ManageIssues({ currentUser }) {
           maxWidth={560}
           padding={0}
           onBackdropClick={() => !updating && setSelectedIssue(null)}
-          cardStyle={{ borderRadius: 16, overflow: 'hidden', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)' }}
+          cardStyle={{ borderRadius: 12, overflow: 'hidden', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)' }}
         >
           <div className="flex items-start justify-between bg-gradient-to-br from-brand-purple to-[#5a1f80] px-6 py-5">
             <div>

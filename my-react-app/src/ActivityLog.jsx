@@ -110,7 +110,7 @@ const ActivityLog = ({ currentUser }) => {
       />
 
       {/* Main content card */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+      <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
         <CardSectionHeader
           icon={History}
           title="Event Timeline"

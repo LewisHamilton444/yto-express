@@ -45,7 +45,7 @@ const ReviewModal = ({ item, type, onClose, onApprove, onReject }) => {
 
   return (
     <>
-    <Modal onBackdropClick={handleClose} blur={false} tint="rgba(26,6,40,0.5)" maxWidth={560} padding={0} cardStyle={{ borderRadius: 16, boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)', fontFamily: "'DM Sans', sans-serif" }}>
+    <Modal onBackdropClick={handleClose} blur={false} tint="rgba(26,6,40,0.5)" maxWidth={560} padding={0} cardStyle={{ borderRadius: 12, boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)', fontFamily: "'DM Sans', sans-serif" }}>
         <div style={s.header}>
           <div>
             <h3 style={s.title}>Review {type === 'rider' ? 'Rider' : 'Seller'} Application</h3>

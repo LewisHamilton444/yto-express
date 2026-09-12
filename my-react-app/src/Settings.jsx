@@ -25,7 +25,7 @@ export default function Settings({
     sectionH2:    { fontSize: 16, fontWeight: 700, color: '#1a1a1a', margin: '0 0 4px' },
     sectionP:     { fontSize: 12, color: '#999', margin: '0 0 20px' },
     btnRestore:   { padding: '7px 16px', background: '#390955', color: 'white', border: 'none', borderRadius: 7, fontWeight: 700, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' },
-    archivedBadge: { display: 'inline-block', padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: '#ede4f5', color: '#6d1a9c', border: '1px solid rgba(109,26,156,0.2)' },
+    archivedBadge: { display: 'inline-block', padding: '3px 10px', borderRadius: 8, fontSize: 11, fontWeight: 700, background: '#ede4f5', color: '#6d1a9c', border: '1px solid rgba(109,26,156,0.2)' },
     table:        { width: '100%', borderCollapse: 'collapse', fontSize: 13 },
     th:           { padding: '11px 14px', background: 'linear-gradient(135deg,#390955,#5a1a80)', color: 'rgba(255,255,255,0.85)', textAlign: 'left', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' },
     td:           { padding: '12px 14px', borderBottom: '1px solid #f3ecfa', color: '#333', verticalAlign: 'middle' },

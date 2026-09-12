@@ -228,7 +228,7 @@ const CustomerList = ({ currentUser }) => {
       />
 
       {/* Main table card */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+      <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
         <CardSectionHeader
           icon={Users}
           title="Customer List"
@@ -347,7 +347,7 @@ const CustomerList = ({ currentUser }) => {
           inset-0 overlay, and space-y's sibling margin-top would otherwise
           push it down away from the viewport edge. */}
       {detailCustomer && (
-        <Modal tint="rgba(26,6,40,0.5)" blur={false} maxWidth={520} padding={0} onBackdropClick={() => setDetailCustomer(null)} cardStyle={{ borderRadius: 16, overflow: 'hidden', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)' }}>
+        <Modal tint="rgba(26,6,40,0.5)" blur={false} maxWidth={520} padding={0} onBackdropClick={() => setDetailCustomer(null)} cardStyle={{ borderRadius: 12, overflow: 'hidden', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)' }}>
           {/* Header */}
           <div className="flex items-start justify-between bg-gradient-to-br from-brand-purple to-[#5a1f80] px-6 py-5">
             <div>

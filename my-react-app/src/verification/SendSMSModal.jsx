@@ -43,7 +43,7 @@ const SendSMSModal = ({ item, credentials, message, onCancel, onConfirm, sending
   };
 
   return (
-    <Modal onBackdropClick={onCancel} blur={false} tint="rgba(26,6,40,0.5)" zIndex={2100} maxWidth={460} padding={0} cardStyle={{ borderRadius: 16, overflow: 'hidden', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)', fontFamily: "'DM Sans', sans-serif" }}>
+    <Modal onBackdropClick={onCancel} blur={false} tint="rgba(26,6,40,0.5)" zIndex={2100} maxWidth={460} padding={0} cardStyle={{ borderRadius: 12, overflow: 'hidden', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)', fontFamily: "'DM Sans', sans-serif" }}>
         <div style={s.header}>
           <h3 style={s.title}>Approve &amp; Email Credentials</h3>
           <p style={s.subtitle}>Confirm before emailing login details to {item.fullName}</p>

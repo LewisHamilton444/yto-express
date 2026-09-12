@@ -80,7 +80,7 @@ export default function MonitorGeofenceBoundary() {
   }));
   const filteredAlerts = alertFilter==='All' ? alerts : alerts.filter(a=>a.type===alertFilter);
   const sevColor = {info:'#390955',warning:'#f37021',danger:'#ef4444'};
-  const card = {background:'white',borderRadius:14,border:'1px solid rgba(57,9,85,0.09)',boxShadow:'0 2px 16px rgba(57,9,85,0.06)',overflow:'hidden'};
+  const card = {background:'white',borderRadius:12,border:'1px solid rgba(57,9,85,0.09)',boxShadow:'0 2px 16px rgba(57,9,85,0.06)',overflow:'hidden'};
 
   return (
     <div style={{flex:1,background:'#f4f1fb',overflowY:'auto',overflowX:'hidden',fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif"}}>
@@ -130,12 +130,12 @@ export default function MonitorGeofenceBoundary() {
               </div>
               <span style={{fontSize:14,fontWeight:800,color:'#1a0a2e'}}>Geofence Alerts</span>
             </div>
-            <span style={{fontSize:12,fontWeight:700,padding:'3px 10px',borderRadius:20,background:'rgba(239,68,68,0.1)',color:'#dc2626'}}>{alerts.length} Active</span>
+            <span style={{fontSize:12,fontWeight:700,padding:'3px 10px',borderRadius:8,background:'rgba(239,68,68,0.1)',color:'#dc2626'}}>{alerts.length} Active</span>
           </div>
           <div style={{padding:'12px 16px',borderBottom:'1px solid rgba(57,9,85,0.07)',display:'flex',gap:6,flexWrap:'wrap'}}>
             {alertTypes.map(t=>(
               <button key={t} onClick={()=>setAlertFilter(t)}
-                style={{padding:'4px 11px',borderRadius:20,border:`1.5px solid ${alertFilter===t?'#390955':'rgba(57,9,85,0.15)'}`,background:alertFilter===t?'#390955':'white',color:alertFilter===t?'white':'#555',fontSize:11,fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>
+                style={{padding:'4px 11px',borderRadius:8,border:`1.5px solid ${alertFilter===t?'#390955':'rgba(57,9,85,0.15)'}`,background:alertFilter===t?'#390955':'white',color:alertFilter===t?'white':'#555',fontSize:11,fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>
                 {t}
               </button>
             ))}

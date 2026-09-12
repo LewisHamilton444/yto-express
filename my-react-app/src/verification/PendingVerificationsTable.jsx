@@ -1,7 +1,7 @@
 import React from 'react';
 
 const s = {
-  panel:        { background: 'white', border: '1px solid rgba(57,9,85,0.08)', borderRadius: '16px', boxShadow: '0 4px 12px rgba(57,9,85,0.04)', overflow: 'hidden' },
+  panel:        { background: 'white', border: '1px solid rgba(57,9,85,0.08)', borderRadius: '12px', boxShadow: '0 4px 12px rgba(57,9,85,0.04)', overflow: 'hidden' },
   panelHeader:  { padding: '16px 24px', background: '#390955', display: 'flex', alignItems: 'center', justifyContent: 'space-between' },
   panelHeading: { fontSize: '15px', fontWeight: 700, color: 'white', margin: 0 },
   panelBody:    { padding: '8px 24px 24px' },

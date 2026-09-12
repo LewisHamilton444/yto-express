@@ -18,7 +18,7 @@
   margin-bottom: 24px;
   background: white;
   padding: 20px;
-  border-radius: 16px;
+  border-radius: 12px;
   box-shadow: 0 4px 6px -1px rgba(57,9,85,0.07);
 }
 
@@ -65,7 +65,7 @@
 .gsr-panel {
   background: white;
   border: 1px solid rgba(57,9,85,0.08);
-  border-radius: 16px;
+  border-radius: 12px;
   margin-bottom: 20px;
   box-shadow: 0 4px 12px rgba(57,9,85,0.04);
   overflow: hidden;

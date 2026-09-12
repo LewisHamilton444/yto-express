@@ -162,7 +162,7 @@ export default function HubParcelReceiving() {
 
       {/* Return-to-Hub confirmation — reversal of an in-flow parcel */}
       {confirmReturn && (
-        <Modal onBackdropClick={() => setConfirmReturn(null)} tint="rgba(26,6,40,0.55)" blur={false} maxWidth={400} padding={24} cardStyle={{ borderRadius: 16 }}>
+        <Modal onBackdropClick={() => setConfirmReturn(null)} tint="rgba(26,6,40,0.55)" blur={false} maxWidth={400} padding={24} cardStyle={{ borderRadius: 12 }}>
           <h3 style={{ margin: '0 0 10px', fontSize: 17, fontWeight: 800, color: '#991b1b' }}>Return parcel to hub?</h3>
           <p style={{ margin: 0, fontSize: 13, color: '#555', lineHeight: 1.6 }}>
             <strong>{confirmReturn.trackingNumber}</strong> ({confirmReturn.senderName} to {confirmReturn.receiverName}) will be

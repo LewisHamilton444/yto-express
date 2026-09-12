@@ -181,10 +181,10 @@ const GenerateSellerReport = ({ sellers: externalSellers, onUpdateSellers, curre
 
   const s = {
     main:        { flex: 1, padding: '24px 30px 48px', minHeight: '100vh', background: '#f0ecf7', fontFamily: "'DM Sans', sans-serif", color: '#390955' },
-    header:      { marginBottom: '24px', background: 'white', padding: '20px', borderRadius: '16px', boxShadow: '0 4px 6px -1px rgba(57,9,85,0.07)' },
+    header:      { marginBottom: '24px', background: 'white', padding: '20px', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgba(57,9,85,0.07)' },
     h1:          { fontSize: '22px', fontWeight: 800, color: '#390955', margin: 0, letterSpacing: '-0.5px' },
     subtitle:    { color: '#a890c0', fontSize: '13px', margin: '3px 0 0', fontWeight: 500 },
-    panel:       { background: 'white', border: '1px solid rgba(57,9,85,0.08)', borderRadius: '16px', marginBottom: '20px', boxShadow: '0 4px 12px rgba(57,9,85,0.04)', overflow: 'hidden' },
+    panel:       { background: 'white', border: '1px solid rgba(57,9,85,0.08)', borderRadius: '12px', marginBottom: '20px', boxShadow: '0 4px 12px rgba(57,9,85,0.04)', overflow: 'hidden' },
     panelHeader: { padding: '16px 24px', background: '#390955', display: 'flex', alignItems: 'center', justifyContent: 'space-between' },
     panelHeading:{ fontSize: '15px', fontWeight: 700, color: 'white', margin: 0 },
     panelBody:   { padding: '24px' },
@@ -334,7 +334,7 @@ const GenerateSellerReport = ({ sellers: externalSellers, onUpdateSellers, curre
 
       {/* DETAIL VIEW MODAL — full bank + address info */}
       {detailSeller && (
-        <Modal tint="rgba(26,6,40,0.5)" blur={false} maxWidth={480} padding={0} onBackdropClick={() => setDetailSeller(null)} cardStyle={{ borderRadius: 16, overflow: 'hidden', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)' }}>
+        <Modal tint="rgba(26,6,40,0.5)" blur={false} maxWidth={480} padding={0} onBackdropClick={() => setDetailSeller(null)} cardStyle={{ borderRadius: 12, overflow: 'hidden', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)' }}>
             <div style={{ background: '#390955', padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <h3 style={{ color: 'white', margin: 0, fontSize: '15px', fontWeight: 700 }}>{detailSeller.fullName || 'Seller'}</h3>
@@ -425,7 +425,7 @@ const GenerateSellerReport = ({ sellers: externalSellers, onUpdateSellers, curre
       )}
 
       {showEditModal && editingSeller && (
-        <Modal tint="rgba(26,6,40,0.5)" blur={false} maxWidth={500} padding={0} cardStyle={{ borderRadius: 16, overflow: 'hidden', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
+        <Modal tint="rgba(26,6,40,0.5)" blur={false} maxWidth={500} padding={0} cardStyle={{ borderRadius: 12, overflow: 'hidden', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
             <div style={{ background: '#390955', padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ color: 'white', margin: 0, fontSize: '15px', fontWeight: 700 }}>Update Profile Details</h3>
               <button onClick={() => { setShowEditModal(false); setEditingSeller(null); }} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', fontSize: '20px', lineHeight: 1 }}>&times;</button>

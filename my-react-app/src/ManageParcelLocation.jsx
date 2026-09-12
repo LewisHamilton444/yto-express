@@ -19,7 +19,7 @@ const StatusBadge = ({ val }) => {
   };
   const c = cfg[v] || { bg:'#f5f5f5', color:'#888', border:'#e0e0e0' };
   return (
-    <span style={{ display:'inline-flex', alignItems:'center', gap:5, padding:'4px 11px', borderRadius:20, fontSize:11, fontWeight:700, background:c.bg, color:c.color, border:`1.5px solid ${c.border}` }}>
+    <span style={{ display:'inline-flex', alignItems:'center', gap:5, padding:'4px 11px', borderRadius:8, fontSize:11, fontWeight:700, background:c.bg, color:c.color, border:`1.5px solid ${c.border}` }}>
       <span style={{ width:5, height:5, borderRadius:'50%', background:c.color, flexShrink:0 }}/>
       {val}
     </span>
@@ -46,7 +46,7 @@ function EditModal({ row, onSave, onClose }) {
   const valid = lat && lng && loc && !isNaN(parseFloat(lat)) && !isNaN(parseFloat(lng));
 
   return (
-    <Modal onBackdropClick={onClose} zIndex={99999} maxWidth={520} tint="rgba(0,0,0,0.4)" cardStyle={{ borderRadius: 16, boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
+    <Modal onBackdropClick={onClose} zIndex={99999} maxWidth={520} tint="rgba(0,0,0,0.4)" cardStyle={{ borderRadius: 12, boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
         <h3 style={{ color:'#390955', margin:'0 0 4px 0', fontSize:'18px', fontWeight:700 }}>Edit Location Parameters</h3>
         <p style={{ fontFamily:'monospace', margin:'0 0 20px 0', fontSize:'13px', color:'#f37021', fontWeight:600 }}>{row.parcelId}</p>
         <div style={{ display:'flex', flexDirection:'column', gap:'14px' }}>
@@ -245,7 +245,7 @@ export default function ProcessParcelLocation() {
                       style={{ padding:'10px 14px 10px 36px', border:'1px solid #dcd3e8', borderRadius:8, fontSize:13, width:260, background:'white' }}/>
                     <span style={{ position:'absolute', left:12, top:'50%', transform:'translateY(-50%)', opacity:0.6 }}><Ico.Search/></span>
                   </div>
-                  <span style={{ padding:'4px 12px', borderRadius:20, fontSize:12, fontWeight:700, background:'#390955', color:'white' }}>{filtered.length} Indexed</span>
+                  <span style={{ padding:'4px 12px', borderRadius:8, fontSize:12, fontWeight:700, background:'#390955', color:'white' }}>{filtered.length} Indexed</span>
                 </div>
               </div>
 
@@ -324,7 +324,7 @@ export default function ProcessParcelLocation() {
 
               {gpsResult && (
                 <div style={{ display:'flex', flexDirection:'column', gap:'16px' }}>
-                  <div style={{ background:'#390955', borderRadius:16, overflow:'hidden' }}>
+                  <div style={{ background:'#390955', borderRadius:12, overflow:'hidden' }}>
                     <div style={{ padding:'14px 20px', borderBottom:'1px solid rgba(255,255,255,0.1)', display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:8 }}>
                       <span style={{ fontSize:12, fontWeight:800, color:'white' }}>GPS POSITION — <span style={{ fontFamily:'monospace' }}>{gpsResult.parcelId}</span></span>
                       <span style={{ fontSize:11, fontWeight:700, color:'rgba(255,255,255,0.7)', fontFamily:'monospace' }}>Last refresh: {gpsLastRefresh}</span>

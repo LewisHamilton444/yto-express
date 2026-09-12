@@ -22,7 +22,7 @@
 /* ── MATCHING ANALYTICS DASHBOARD CARD HEADER FRAME ── */
 .process-rider-information-card-header {
   background: #ffffff;
-  border-radius: 16px;       /* Beautiful card roundness matching dashboard style */
+  border-radius: 12px;       /* Beautiful card roundness matching dashboard style */
   padding: 24px 32px;
   box-shadow: 0 4px 20px rgba(57, 9, 85, 0.04);
   border: 1px solid #e8e2f0;
@@ -97,7 +97,7 @@
 /* Primary Card Modules Container Panels */
 .process-rider-information-section {
   background: white;
-  border-radius: 16px;
+  border-radius: 12px;
   padding: 32px;
   box-shadow: 0 4px 20px rgba(57, 9, 85, 0.04);
   border: 1px solid #e8e2f0;

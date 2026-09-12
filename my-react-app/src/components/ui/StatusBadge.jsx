@@ -15,7 +15,7 @@ import Tooltip from './Tooltip';
 export default function StatusBadge({ status, label, colorMap = PARCEL_STATUS_COLORS, fallback = 'Pending', hint }) {
   const c = colorMap[status] || colorMap[fallback] || { bg: '#f3f4f6', color: '#374151' };
   const pill = (
-    <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20, background: c.bg, color: c.color, whiteSpace: 'nowrap', display: 'inline-block' }}>
+    <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 8, background: c.bg, color: c.color, whiteSpace: 'nowrap', display: 'inline-block' }}>
       {label ?? status}
     </span>
   );
