@@ -1,0 +1,23 @@
+/* ============================================================
+   YTO responsive density — laptop (≤1440px) + ultra-wide (≥2000px)
+   Shared shell + inline-style pages. Only additive @media overrides:
+   no base restyle, no hierarchy changes.
+   NOTE: React `style={{}}` inline rules outrank plain CSS at any
+   specificity, so inline paddings/type below are NOT touched here —
+   this layer tightens the shared shell (sidebar/content width) and
+   only those CSS-styled surfaces that actually scale.
+   ============================================================ */
+
+/* Laptop density: narrow the fixed rail so the 1366-class content
+   column keeps FHD information density. */
+@media (max-width: 1440px) {
+  .ad-sidebar { width: 232px; }
+  .ad-main { margin-left: 232px; }
+  .ad-wrapper.ad-sidebar--collapsed .ad-main { margin-left: 72px; }
+}
+
+/* Ultra-wide: cap the line length like the dashboard root does, so
+   full-bleed inline pages don't stretch edge-to-edge on QHD+. */
+@media (min-width: 2000px) {
+  .ad-main > div[style] { max-width: 1760px; }
+}

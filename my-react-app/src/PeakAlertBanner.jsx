@@ -61,9 +61,8 @@ const PeakAlertBanner = () => {
             {showBanner && latestAlert && (
                 <div style={{
                     position: 'fixed', top: 16, right: 16, zIndex: 10000,
-                    background: 'linear-gradient(135deg, #dc2626, #b91c1c)',
+                    background: '#dc2626',
                     color: 'white', padding: '14px 20px', borderRadius: 12,
-                    boxShadow: '0 8px 24px rgba(220,38,38,0.3)',
                     maxWidth: 380, animation: 'slideIn 0.3s ease',
                 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>

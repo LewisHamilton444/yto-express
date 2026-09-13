@@ -23,7 +23,6 @@
   background: #ffffff;
   border-radius: 12px;
   padding: 24px 32px;
-  box-shadow: 0 4px 20px rgba(57, 9, 85, 0.04);
   border: 1px solid #e8e2f0;
 }
 
@@ -86,10 +85,9 @@
   display: flex;
   gap: 10px;
   padding: 12px 20px;
-  background: white;
+  background: #faf7fd;
   border-radius: 12px;
   border: 1px solid #e8e2f0;
-  box-shadow: 0 4px 12px rgba(57, 9, 85, 0.02);
 }
 
 .process-parcel-location-tab-btn {
@@ -124,7 +122,6 @@
   background: white;
   border-radius: 12px;
   padding: 32px;
-  box-shadow: 0 4px 20px rgba(57, 9, 85, 0.04);
   border: 1px solid #e8e2f0;
   animation: fadein 0.25s ease;
 }
@@ -153,6 +150,14 @@
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 18px 24px;
+}
+
+@media (max-width: 1440px) {
+  .process-parcel-location-main-content { padding: 16px; }
+  .process-parcel-location-container-inner { gap: 16px; }
+  .process-parcel-location-card-header { padding: 18px 24px; }
+  .process-parcel-location-h1 { font-size: 21px; }
+  .process-parcel-location-section { padding: 24px; }
 }
 
 @media (max-width: 768px) {
@@ -222,11 +227,9 @@
 .process-parcel-location-btn--primary {
   background: #390955;
   color: white;
-  box-shadow: 0 4px 12px rgba(57, 9, 85, 0.15);
 }
 .process-parcel-location-btn--primary:hover {
   background: #27043b;
-  transform: translateY(-1px);
 }
 
 .process-parcel-location-btn--secondary {
@@ -361,22 +364,18 @@
 .ppl-action-card-btn--purple {
   background: #390955;
   color: white;
-  box-shadow: 0 3px 10px rgba(57, 9, 85, 0.12);
 }
 .ppl-action-card-btn--purple:hover {
   background: #25053b;
-  transform: translateY(-1px);
 }
 
 .ppl-action-card-btn--outline {
   background: white;
   border: 1px solid #dcd3e8;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.02);
 }
 .ppl-action-card-btn--outline:hover {
   background: #fcfbfe;
   border-color: #390955;
-  transform: translateY(-1px);
 }
 
 .ppl-action-icon-box {

@@ -173,38 +173,6 @@
   color: #390955;
 }
 
-/* ── KPI GRID BAR ── */
-.gsr-stats-row {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 14px;
-  margin-bottom: 20px;
-}
-
-.gsr-stat-card {
-  padding: 16px 20px;
-  background: linear-gradient(135deg, #faf7fd 0%, #f5f0fc 100%);
-  border: 1px solid rgba(57,9,85,0.09);
-  border-radius: 12px;
-  text-align: center;
-}
-
-.gsr-stat-num {
-  font-size: 24px;
-  font-weight: 800;
-  line-height: 1;
-  font-family: 'DM Mono', monospace;
-}
-
-.gsr-stat-label {
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.6px;
-  color: #a890c0;
-  margin-top: 6px;
-}
-
 /* ── DATA LEDGER TABLES ── */
 .gsr-table-wrapper {
   padding: 8px 24px 24px;
@@ -268,7 +236,6 @@
   background: #f37021;
   color: white;
   border: none;
-  box-shadow: 0 2px 8px rgba(243,112,33,0.25);
   transition: background 0.2s;
 }
 
@@ -293,8 +260,15 @@
   background: #faf7fd;
 }
 
+@media (max-width: 1440px) {
+  .gsr-layout { padding: 16px 20px 32px; }
+  .gsr-header { margin-bottom: 16px; padding: 16px 20px; }
+  .gsr-title { font-size: 20px; }
+  .gsr-panel-body { padding: 18px; }
+}
+
 @media (max-width: 992px) {
-  .gsr-filter-grid, .gsr-stats-row, .gsr-info-grid {
+  .gsr-filter-grid, .gsr-info-grid {
     grid-template-columns: 1fr;
   }
 }

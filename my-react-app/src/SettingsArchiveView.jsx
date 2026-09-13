@@ -141,13 +141,13 @@ export default function SettingsArchiveView({ onCountsChange = () => {} }) {
 
   const s = {
     tabs:       { display: 'flex', gap: 8, marginBottom: 16 },
-    tabBtn:     (active) => ({ padding: '8px 16px', borderRadius: 8, border: `1.5px solid ${active ? '#390955' : '#e0d0f0'}`, background: active ? '#390955' : 'white', color: active ? 'white' : '#666', fontWeight: 600, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 6 }),
+    tabBtn:     (active) => ({ padding: '8px 16px', borderRadius: 8, border: `1.5px solid ${active ? '#390955' : '#e0d0f0'}`, background: active ? '#390955' : 'transparent', color: active ? 'white' : '#666', fontWeight: 600, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 6 }),
     countBadge: (active) => ({ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 18, height: 18, padding: '0 5px', borderRadius: '50%', background: active ? 'rgba(255,255,255,0.25)' : 'rgba(57,9,85,0.1)', fontSize: 10, fontWeight: 800 }),
     subTabs:    { display: 'flex', gap: 6, marginBottom: 14 },
-    subTabBtn:  (active) => ({ padding: '6px 13px', borderRadius: 20, border: `1.5px solid ${active ? '#390955' : '#e0d0f0'}`, background: active ? '#390955' : 'white', color: active ? 'white' : '#666', fontWeight: 700, fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }),
+    subTabBtn:  (active) => ({ padding: '6px 13px', borderRadius: 8, border: `1.5px solid ${active ? '#390955' : '#e0d0f0'}`, background: active ? '#390955' : 'transparent', color: active ? 'white' : '#666', fontWeight: 700, fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit' }),
     search:     { padding: '8px 12px', border: '1.5px solid #e0d0f0', borderRadius: 8, fontSize: 12.5, fontFamily: 'inherit', width: 240, marginBottom: 14 },
     table:      { width: '100%', borderCollapse: 'collapse', fontSize: 13 },
-    th:         { padding: '11px 14px', background: 'linear-gradient(135deg,#390955,#5a1a80)', color: 'rgba(255,255,255,0.85)', textAlign: 'left', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' },
+    th:         { padding: '11px 14px', background: '#390955', color: 'rgba(255,255,255,0.85)', textAlign: 'left', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' },
     td:         { padding: '12px 14px', borderBottom: '1px solid #f3ecfa', color: '#333', verticalAlign: 'middle' },
     btnRestore: { padding: '6px 14px', background: '#390955', color: 'white', border: 'none', borderRadius: 7, fontWeight: 700, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' },
     btnArchive: { padding: '6px 14px', background: '#fee2e2', color: '#991b1b', border: '1px solid #fca5a5', borderRadius: 7, fontWeight: 700, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' },

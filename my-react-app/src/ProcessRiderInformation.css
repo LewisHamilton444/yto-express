@@ -118,6 +118,14 @@
   gap: 18px 24px;
 }
 
+@media (max-width: 1440px) {
+  .process-rider-information-main-content { padding: 16px; }
+  .process-rider-information-container-inner { gap: 16px; }
+  .process-rider-information-card-header { padding: 18px 24px; }
+  .process-rider-information-h1 { font-size: 21px; }
+  .process-rider-information-section { padding: 24px; }
+}
+
 @media (max-width: 768px) {
   .process-rider-information-form { grid-template-columns: 1fr; }
 }
@@ -215,9 +223,7 @@
   background: #390955;
   color: white;
   border: none;
-  box-shadow: 0 4px 12px rgba(57, 9, 85, 0.15);
 }
 .process-rider-information-btn--primary:hover {
   background: #27043b;
-  transform: translateY(-1px);
 }

@@ -162,7 +162,7 @@ const ConnectionHistoryChart = () => {
                                     <div style={{
                                         width: '100%', maxWidth: 24,
                                         height: `${Math.max(4, height)}%`,
-                                        background: isPeak ? 'linear-gradient(180deg, #F37021, #f59e0b)' : 'linear-gradient(180deg, #390955, #5a1f80)',
+                                        background: isPeak ? '#F37021' : '#390955',
                                         borderRadius: '3px 3px 0 0',
                                         transition: 'height 0.3s ease',
                                         position: 'relative',
@@ -195,11 +195,11 @@ const ConnectionHistoryChart = () => {
             {/* Legend */}
             <div style={{ display: 'flex', gap: 16, marginTop: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <div style={{ width: 10, height: 10, borderRadius: 2, background: 'linear-gradient(180deg, #390955, #5a1f80)' }} />
+                    <div style={{ width: 10, height: 10, borderRadius: 2, background: '#390955' }} />
                     <span style={{ fontSize: 10, color: '#7b6d8d' }}>Normal</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <div style={{ width: 10, height: 10, borderRadius: 2, background: 'linear-gradient(180deg, #F37021, #f59e0b)' }} />
+                    <div style={{ width: 10, height: 10, borderRadius: 2, background: '#F37021' }} />
                     <span style={{ fontSize: 10, color: '#7b6d8d' }}>Peak</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>

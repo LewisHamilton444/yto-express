@@ -18,11 +18,12 @@
    ============================================================ */
 
 .login-root {
+  --login-gutter: clamp(32px, 6vw, 96px);
   position: relative;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  padding: 34px 0 44px;
+  padding: clamp(20px, 3vh, 28px) 0 44px;
   overflow: hidden;
   font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   /* Photo fills the whole viewport. Scrim stack (bottom to top):
@@ -32,17 +33,13 @@
      Order in a single background layer: later layers sit on top. */
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.10) 0%, rgba(255, 255, 255, 0.03) 34%, rgba(255, 255, 255, 0) 100%),
-    linear-gradient(115deg, rgba(18, 2, 28, 0.88) 0%, rgba(57, 9, 85, 0.66) 27%, rgba(57, 9, 85, 0.30) 56%, rgba(57, 9, 85, 0.10) 82%, rgba(57, 9, 85, 0.04) 100%),
+    linear-gradient(90deg, rgba(18, 2, 28, 0.88) 0, rgba(57, 9, 85, 0.66) 320px, rgba(57, 9, 85, 0.30) 560px, rgba(57, 9, 85, 0.10) 760px, rgba(57, 9, 85, 0.04) 950px, rgba(57, 9, 85, 0) 1100px),
     url('/assets/WebLoginBg_hi.jpg') center / cover no-repeat;
 }
 
-/* Pin the photo on desktop so a short viewport scrolls over a static
-   backdrop (mobile keeps default scroll for broader support). */
-@media (min-width: 861px) {
-  .login-root {
-    background-attachment: fixed, fixed, fixed;
-  }
-}
+/* `background-attachment: fixed` is intentionally NOT used: it misbehaves
+   inside iframes/embedded previews (e.g. Responsively App) and causes
+   photo-crop drift per aspect ratio. The photo scrolls with the page. */
 
 /* ============================================================
    AMBIENT GLOWS — soft blurred orbs over the photo
@@ -85,9 +82,9 @@
   position: relative;
   z-index: 1;
   width: 100%;
-  max-width: 1160px;
-  margin: 0 auto;
-  padding: 0 clamp(26px, 5vw, 60px);
+  max-width: 1600px;
+  margin: 0 auto 0 0;
+  padding: 0 var(--login-gutter);
 }
 
 .login-header-brand {
@@ -161,7 +158,7 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 8px 12px;
-  margin-top: 20px;
+  margin-top: 12px;
 }
 
 .login-health-pill {
@@ -172,7 +169,7 @@
   border-radius: 100px;
   background: rgba(255, 255, 255, 0.10);
   border: 1px solid rgba(255, 255, 255, 0.16);
-  font-size: 9.5px;
+  font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.8px;
   text-transform: uppercase;
@@ -235,12 +232,12 @@
   z-index: 1;
   flex: 1 0 auto;
   width: 100%;
-  max-width: 1160px;
-  margin: 0 auto;
+  max-width: 1600px;
+  margin: 0 auto 0 0;
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  padding: 42px clamp(26px, 5vw, 60px) 0;
+  padding: clamp(16px, 3vh, 28px) var(--login-gutter) 0;
 }
 
 /* ============================================================
@@ -248,8 +245,8 @@
    ============================================================ */
 
 .login-card {
-  width: min(432px, 100%);
-  padding: 46px 42px 40px;
+  width: min(432px, calc(100vw - var(--login-gutter) * 2));
+  padding: clamp(26px, 4vh, 40px) clamp(24px, 3vw, 42px) clamp(24px, 4vh, 40px);
   border-radius: 22px;
   border: 1px solid rgba(255, 255, 255, 0.28);
   background: rgba(255, 255, 255, 0.13);
@@ -339,7 +336,7 @@
 }
 
 .login-card-header {
-  margin-bottom: 30px;
+  margin-bottom: 20px;
 }
 
 .login-card-title {
@@ -676,20 +673,36 @@
 
 /* ============================================================
    RESPONSIVE
+/* Ultra-wide (QHD+): upscale the brand block + card so they keep
+   presence at distance on large panels. */
+@media (min-width: 2000px) {
+  .login-card {
+    width: min(480px, calc(100vw - var(--login-gutter) * 2));
+    max-width: 480px;
+  }
+  .login-card-title {
+    font-size: 33px;
+  }
+  .login-logo-badge {
+    width: 62px;
+    height: 62px;
+  }
+  .login-brand-name {
+    font-size: 24px;
+  }
+}
+
+
    ============================================================ */
 
 /* Mid-size: tighten spacing, panel stays centered on the photo. */
 @media (max-width: 860px) {
   .login-root {
+    --login-gutter: clamp(20px, 5vw, 28px);
     padding: 24px 0 36px;
   }
-  .login-page-header,
   .login-stage {
-    padding-left: clamp(20px, 5vw, 28px);
-    padding-right: clamp(20px, 5vw, 28px);
-  }
-  .login-stage {
-    padding-top: 34px;
+    align-items: flex-start;
   }
 }
 
@@ -723,7 +736,7 @@
 /* Short viewports (small laptops, landscape phones): let the page scroll
    instead of forcing the centered panel below the fold — the header stays
    in flow above the panel, and every field remains reachable. */
-@media (max-height: 760px) {
+@media (max-height: 800px) {
   .login-root {
     padding-top: 22px;
     padding-bottom: 30px;

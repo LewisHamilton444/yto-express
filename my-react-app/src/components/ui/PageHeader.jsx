@@ -11,7 +11,7 @@ import React, { Fragment } from 'react';
  */
 export default function PageHeader({ title, subtitle, breadcrumb = [] }) {
   return (
-    <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-100 mb-6">
+    <div className="bg-white rounded-xl p-6 border border-slate-100 mb-6">
       <h1 className="text-2xl font-bold text-slate-900">{title}</h1>
       {subtitle && <p className="text-sm text-slate-500 mt-1">{subtitle}</p>}
       {breadcrumb.length > 0 && (

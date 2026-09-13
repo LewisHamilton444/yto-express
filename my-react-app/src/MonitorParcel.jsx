@@ -79,15 +79,14 @@ export default function MonitorGeofenceBoundary() {
     severity:['info','warning','info','danger','warning'][i%5],
   }));
   const filteredAlerts = alertFilter==='All' ? alerts : alerts.filter(a=>a.type===alertFilter);
-  const sevColor = {info:'#390955',warning:'#f37021',danger:'#ef4444'};
-  const card = {background:'white',borderRadius:12,border:'1px solid rgba(57,9,85,0.09)',boxShadow:'0 2px 16px rgba(57,9,85,0.06)',overflow:'hidden'};
+  const card = {background:'white',borderRadius:12,border:'1px solid rgba(57,9,85,0.09)',overflow:'hidden'};
 
   return (
     <div style={{flex:1,background:'#f4f1fb',overflowY:'auto',overflowX:'hidden',fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif"}}>
       <style>{`@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(1.4)}} @keyframes fadein{from{opacity:0;transform:translateY(8px)}to{opacity:1}} .leaflet-popup-content-wrapper{border-radius:10px!important;box-shadow:0 8px 24px rgba(0,0,0,.14)!important;}`}</style>
 
       {/* Header */}
-      <header style={{background:'white',borderBottom:'1px solid rgba(57,9,85,0.09)',padding:'16px 24px',display:'flex',justifyContent:'space-between',alignItems:'center',boxShadow:'0 2px 12px rgba(57,9,85,0.06)'}}>
+      <header style={{background:'white',borderBottom:'1px solid rgba(57,9,85,0.09)',padding:'16px 24px',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
         <div>
           <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:5}}>
             <div style={{width:32,height:32,borderRadius:9,background:'#390955',display:'flex',alignItems:'center',justifyContent:'center'}}>
@@ -147,7 +146,7 @@ export default function MonitorGeofenceBoundary() {
             {filteredAlerts.length===0 ? (
               <div style={{textAlign:'center',padding:24,color:'#bbb',fontSize:13}}>No alerts.</div>
             ) : filteredAlerts.map(a=>(
-              <div key={a.id} style={{padding:'11px 13px',background:'#faf8ff',border:'1.5px solid rgba(57,9,85,0.08)',borderLeft:`4px solid ${sevColor[a.severity]}`,borderRadius:10}}>
+              <div key={a.id} style={{padding:'11px 13px',background:'#faf8ff',border:'1.5px solid rgba(57,9,85,0.08)',borderRadius:10}}>
                 <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:4}}>
                   <span style={{fontSize:10,fontWeight:800,padding:'2px 8px',borderRadius:4,textTransform:'uppercase',
                     background:a.severity==='danger'?'rgba(239,68,68,0.1)':a.severity==='warning'?'rgba(245,158,11,0.1)':'rgba(57,9,85,0.08)',

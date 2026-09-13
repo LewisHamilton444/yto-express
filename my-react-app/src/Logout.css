@@ -40,14 +40,6 @@
   filter: blur(6px);
 }
 
-.logout-accent {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 4px;
-  background: linear-gradient(90deg, #390955, #7b3fa0);
-}
 
 .logout-user {
   display: flex;
@@ -62,7 +54,7 @@
   width: 44px;
   height: 44px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #390955, #7b3fa0);
+  background: #390955;
   color: white;
   font-size: 15px;
   font-weight: 800;
@@ -173,17 +165,21 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  font-family: inherit;
 }
 
 .logout-btn:hover {
-  transform: translateY(-1px);
+  background: rgba(57, 9, 85, 0.08);
 }
 
 .logout-btn--ghost {
   background: white;
   color: #390955;
   border: 2px solid #390955;
+}
+
+.logout-btn--ghost:hover {
+  background: #f5f0fa;
 }
 
 .logout-btn--primary {
@@ -193,7 +189,7 @@
 }
 
 .logout-btn--primary:hover {
-  box-shadow: 0 6px 18px rgba(57, 9, 85, 0.25);
+  background: #2a0640;
 }
 
 .logout-footer {
