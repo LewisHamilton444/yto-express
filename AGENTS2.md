@@ -87,7 +87,7 @@ The sidebar in `AnalyticsDashboard.jsx` is **section-grouped** (`getMenuSections
 | `/api/customers/stats`, `/api/customers/:id/orders` | GET | Customer aggregates + order history by `customerId` |
 | `/api/activity-log` | GET | Audit trail from registration/statusHistory across roles; `limit` ≤ 200, `role` filter |
 | `/api/app-notifications` (GET) + `/api/app-notifications/:id/read` (PATCH) | GET/PATCH | App-originated notifications (`AdminNotification` collection); `limit` ≤ 200, `type`/`read` filters; PATCH marks one read (auth) |
-| `/api/parcels`, `/api/parcel-locations` | GET/POST/PUT/DELETE | Parcel status PUT pushes `BridgeClient.sendStatus` + SSE `parcel-updated` |
+| `/api/parcels`, `/api/parcel-locations` | GET/POST/PUT/DELETE | Parcel **POST bridges the admin-created parcel to the mobile backend** (2026-09-13: `BridgeClient.syncParcel` → `receive-parcel`, fire-and-forget) — the Web Seller `sellerId` is resolved to its email Web-side and only the email is sent (the mobile side resolves its own User; a Web `_id` is never sent as `sellerId`); no resolvable seller → skipped with a logged reason (mobile Shipment requires one, and the old mis-attribution fallback is gone); status/`packageType` are Title-cased for the mobile enum; parcel status PUT pushes `BridgeClient.sendStatus` + SSE `parcel-updated` |
 | `/api/dashboard/stats` | GET | KPIs: parcels, delivered %, riders, active riders, avg rating, total deliveries, sellers |
 | `/api/accounts` | GET/POST | Admin accounts |
 | `/api/accounts/:id` | PUT | bcrypt-hashes new passwords on change |

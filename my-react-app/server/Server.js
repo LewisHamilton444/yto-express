@@ -357,10 +357,64 @@ app.get('/api/activity-log', authenticateToken, async (req, res) => {
 });
 
 // ── PARCEL ROUTES ──
+// Bridge parity (2026-09-13): admin-created parcels now push to the mobile
+// backend via BridgeClient.syncParcel → POST /api/bridge/receive-parcel, so
+// they appear in the app like app-booked shipments do. The mobile side
+// resolves its own seller User by sellerEmail (a Web Seller _id is NOT a
+// mobile User id, so it is deliberately never sent); parcels with no
+// resolvable seller are skipped — the mobile Shipment schema requires one
+// and the old "any existing seller" mis-attribution fallback is gone.
+// Fire-and-forget: bridge failure never fails the admin save.
+function titleCaseStatus(s) {
+    return typeof s === 'string' && s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : s;
+}
+
 app.post('/api/parcels', authenticateToken, async (req, res) => {
     try {
         const newParcel = new Parcel({ ...req.body });
         await newParcel.save();
+
+        // Bridge: push the admin-created parcel to the mobile backend.
+        try {
+            if (BridgeClient.isBridgeEnabled()) {
+                const sellerDoc = newParcel.sellerId
+                    ? await Seller.findById(newParcel.sellerId).select('email').lean()
+                    : null;
+                if (sellerDoc && sellerDoc.email) {
+                    BridgeClient.syncParcel({
+                        trackingNumber: newParcel.trackingNumber,
+                        sellerEmail: sellerDoc.email,
+                        senderName: newParcel.senderName,
+                        senderPhone: newParcel.senderPhone || '',
+                        receiverName: newParcel.receiverName,
+                        recipientPhone: newParcel.receiverPhone || '',
+                        recipientEmail: newParcel.recipientEmail || '',
+                        item: newParcel.item || newParcel.content || 'Parcel',
+                        weight: newParcel.weight || '',
+                        origin: newParcel.origin || '',
+                        destination: newParcel.destination || '',
+                        // Mobile Shipment.status is Title-case enum
+                        // ('Pending'…); the admin form posts 'pending'.
+                        status: titleCaseStatus(newParcel.status) || 'Pending',
+                        notes: newParcel.notes || '',
+                        paymentMode: newParcel.paymentMode || 'Prepaid',
+                        codAmount: newParcel.codAmount || 0,
+                        packageCount: newParcel.packageCount || 1,
+                        packageCategory: newParcel.packageCategory || '',
+                        deliveryFee: typeof newParcel.deliveryFee === 'number'
+                            ? newParcel.deliveryFee
+                            : (parseFloat(newParcel.shippingCost) || 0),
+                        packageType: titleCaseStatus(newParcel.packageType || newParcel.serviceType || ''),
+                        riderId: newParcel.riderId ? String(newParcel.riderId) : '',
+                    }).catch(e => console.warn('[Bridge→Android] sync-parcel failed:', e.message));
+                } else {
+                    console.warn(`[Bridge→Android] Parcel ${newParcel.trackingNumber} has no resolvable seller — not bridged (mobile Shipment requires one).`);
+                }
+            }
+        } catch (bridgeErr) {
+            console.warn('[Bridge→Android] sync-parcel error:', bridgeErr.message);
+        }
+
         res.status(201).json({ message: "Parcel saved!", parcel: newParcel });
     } catch (error) {
         res.status(500).json({ error: error.message });
