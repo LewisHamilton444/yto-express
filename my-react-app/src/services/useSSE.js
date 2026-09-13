@@ -20,7 +20,7 @@ import { getAuthToken, apiFetch } from './api';
 const SSE_RECONNECT_DELAY = 3000;       // 3s between SSE reconnect attempts
 const SSE_MAX_RETRIES = 5;              // After 5 failed attempts, switch to polling
 const POLLING_INTERVAL = 5000;          // 5s polling fallback interval
-const EVENT_TYPES = ['user-synced', 'parcel-synced', 'location-synced', 'parcel-updated', 'peak-alert'];
+const EVENT_TYPES = ['user-synced', 'parcel-synced', 'location-synced', 'parcel-updated', 'peak-alert', 'notification-synced', 'duty-status-synced'];
 
 // Browser notification labels for SSE events
 const EVENT_NOTIFICATIONS = {
@@ -29,6 +29,8 @@ const EVENT_NOTIFICATIONS = {
     'location-synced':{ title: 'Location Updated', body: (d) => `Parcel ${d.parcelId} location synced` },
     'parcel-updated': { title: 'Parcel Updated', body: (d) => `${d.trackingNumber} status: ${d.status}` },
     'peak-alert':     { title: 'Peak Connection Alert', body: (d) => `${d.count} clients (threshold: ${d.threshold})` },
+    'notification-synced': { title: 'App Notification', body: (d) => d.title || 'New event from the mobile app' },
+    'duty-status-synced':  { title: 'Rider Duty Update', body: (d) => `${d.riderName || d.email} is now ${d.isOnDuty ? 'On Duty' : 'Off Duty'}` },
 };
 
 export default function useSSE() {

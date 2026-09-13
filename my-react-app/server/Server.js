@@ -34,6 +34,7 @@ const ParcelLocation  = require('./models/ParcelLocation');
 const BridgeClient    = require('./utils/BridgeClient');
 const Account         = require('./models/Account');
 const Issue           = require('./models/Issue');
+const AdminNotification = require('./models/AdminNotification');
 const sseBroadcaster  = require('./utils/sseBroadcaster');
 
 // ── JWT AUTHENTICATION MIDDLEWARE ───────────────────────────────────────
@@ -180,7 +181,7 @@ app.put('/api/sellers/:id', authenticateToken, async (req, res) => {
 
         // REAL realm only: DEMO-realm sellers have no Android account to approve.
         if (req.body.status && updated.email && updated.accountCategory !== 'DEMO') {
-            BridgeClient.sendApproval(updated.email, 'seller', req.body.status)
+            BridgeClient.sendApproval(updated.email, 'seller', req.body.status, updated.registrationId)
                 .catch(e => console.warn('[Bridge→Android] sendApproval failed:', e.message));
         }
 
@@ -232,7 +233,7 @@ app.put('/api/riders/:id', authenticateToken, async (req, res) => {
 
         // REAL realm only: DEMO-realm riders have no Android account to approve.
         if (req.body.status && updated.email && updated.accountCategory !== 'DEMO') {
-            BridgeClient.sendApproval(updated.email, 'rider', req.body.status)
+            BridgeClient.sendApproval(updated.email, 'rider', req.body.status, updated.registrationId)
                 .catch(e => console.warn('[Bridge→Android] sendApproval failed:', e.message));
         }
 
@@ -623,6 +624,38 @@ app.post('/api/accounts/login', async (req, res) => {
             { expiresIn: '24h' }
         );
         res.json({ ...result, token, loginRole: 'admin', isDemo, accountCategory: isDemo ? 'DEMO' : 'REAL' });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ── APP NOTIFICATION FEED (bridged from the Android backend) ──
+// Durable, queryable feed of app-originated events for the admin panel.
+app.get('/api/notifications', authenticateToken, async (req, res) => {
+    try {
+        const limit = Math.min(parseInt(req.query.limit) || 50, 200);
+        const filter = {};
+        if (req.query.role && ['customer', 'seller', 'rider', 'admin'].includes(req.query.role)) {
+            filter.role = req.query.role;
+        }
+        if (req.query.type) filter.type = req.query.type;
+        const notifications = await AdminNotification.find(filter).sort({ createdAt: -1 }).limit(limit);
+        res.json(notifications);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.patch('/api/notifications/:id/read', authenticateToken, async (req, res) => {
+    try {
+        // Read-state lives client-side in localStorage per admin session —
+        // this endpoint exists for parity/future multi-admin read tracking
+        // and simply confirms the notification exists.
+        const notification = await AdminNotification.findById(req.params.id).lean();
+        if (!notification) {
+            return res.status(404).json({ error: 'Notification not found' });
+        }
+        res.json({ success: true, id: notification._id });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }

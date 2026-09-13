@@ -25,6 +25,7 @@ import Settings from "./Settings";
 import Logout   from "./Logout";
 import CustomerList from "./CustomerList";
 import ActivityLog from "./ActivityLog";
+import AppNotifications from "./AppNotifications";
 import ManageAccounts from "./ManageAccounts";
 import HubParcelReceiving from "./HubParcelReceiving";
 import ManageIssues from "./ManageIssues";
@@ -40,6 +41,7 @@ const PAGE_MAP = {
   'rider-report':        GenerateRiderDataReport,
   'customer-list':       CustomerList,
   'activity-log':        ActivityLog,
+  'app-notifications':   AppNotifications,
   'manage-accounts':     ManageAccounts,
   'hub-parcels':         HubParcelReceiving,
   'manage-issues':       ManageIssues,

@@ -253,6 +253,16 @@ function normalizeParcel(raw, riderNameById) {
   const createdAt = raw.createdAt ? raw.createdAt.slice(0, 10) : new Date().toISOString().slice(0, 10);
   const riderId = raw.riderId || '';
 
+  // Real dimensions now sync from the mobile package.dimensions object
+  // ({length,width,height} cm) via the bridge — format honestly, '—' when absent.
+  const dims = raw.dimensions && Number(raw.dimensions.length) > 0
+    ? `${Number(raw.dimensions.length)}×${Number(raw.dimensions.width)}×${Number(raw.dimensions.height)} cm`
+    : '—';
+  // Delivery dates: the app computes the ETA at booking and stamps the actual
+  // delivery time on completion; both sync through the bridge now.
+  const estDelivery = raw.estimatedDeliveryDate ? fmtDate(raw.estimatedDeliveryDate.slice(0, 10)) : '—';
+  const actDelivery = raw.actualDeliveryDate ? fmtDate(String(raw.actualDeliveryDate).slice(0, 10)) : '—';
+
   const parcel = {
     id: raw.trackingNumber || raw._id,
     _id: raw._id,
@@ -261,29 +271,38 @@ function normalizeParcel(raw, riderNameById) {
     address: raw.destination || raw.origin || 'Unknown',
     city,
     weight: raw.weight || '—',
-    dimensions: '—',
+    dimensions: dims,
     contents: raw.item || '—',
     value: raw.value || '—',
-    // Real parcels persist serviceType (express/standard/overnight/...);
-    // anything else renders '—' rather than an invented tier.
-    service: mapServiceLabel(raw.serviceType),
+    // Service tier: packageType is the bridge-synced mobile package.type
+    // (Standard/Express); serviceType remains the legacy web-created field.
+    service: mapServiceLabel(raw.packageType || raw.serviceType),
     status: mapRealStatus(raw.status),
     registeredDate: createdAt,
     riderId,
     assignedRider: riderId ? (riderNameById[riderId] || riderId) : '',
     instructions: raw.instructions || '—',
     trackingNumber: raw.trackingNumber || '—',
-    // No real ETA field exists yet — '—' instead of a fabricated date.
-    estimatedDelivery: '—',
+    // Real ETA/actual delivery from the synced dates — '—' only when the
+    // mobile side never supplied them.
+    estimatedDelivery: estDelivery,
+    actualDelivery: actDelivery,
+    // Fee breakdown synced from mobile package.deliveryFee (the same value
+    // shown on the app's booking summary). paymentMode/codAmount ride along
+    // from the existing sync payload.
+    deliveryFee: typeof raw.deliveryFee === 'number' && raw.deliveryFee > 0 ? `₱${raw.deliveryFee.toFixed(2)}` : '—',
+    paymentMode: raw.paymentMode || '—',
+    codAmount: typeof raw.codAmount === 'number' && raw.codAmount > 0 ? `₱${raw.codAmount.toFixed(2)}` : '—',
     lat: base.lat,
     lng: base.lng,
     podPhoto: raw.podPhoto || '',
     accountCategory: raw.accountCategory || (isDemoEmail(raw.senderEmail || raw.sender?.email) || String(raw.trackingNumber || raw._id || '').startsWith('DEMO-') ? 'DEMO' : 'REAL'),
   };
 
-  // Real per-scan history if the backend recorded any events; otherwise fall
-  // back to the same synthetic cumulative-steps generator the fallback
-  // dataset uses, so the Timeline tab is never empty.
+  // Real per-scan history when the backend recorded any events. When it
+  // didn't, show ONE honest row (current status, no fabricated timestamps)
+  // instead of the synthetic cumulative-steps generator — real parcels must
+  // never display invented intermediate scans (demo fixtures keep theirs).
   parcel.timeline = Array.isArray(raw.events) && raw.events.length > 0
     ? raw.events.map((ev) => ({
         status: mapRealStatus(ev.status),
@@ -291,7 +310,12 @@ function normalizeParcel(raw, riderNameById) {
         location: ev.location || '—',
         timestamp: ev.time || '—',
       }))
-    : buildTimeline(parcel);
+    : [{
+        status: parcel.status,
+        label: 'No scan history recorded yet',
+        location: 'Status events appear here as the mobile app scans this parcel',
+        timestamp: fmtDate(createdAt),
+      }];
 
   return parcel;
 }
@@ -449,8 +473,8 @@ const TABS = [
 ];
 
 const tabPillStyle = (active) => ({
-  padding: '6px 14px', borderRadius: 20, border: `1.5px solid ${active ? '#390955' : '#e0d5f0'}`,
-  background: active ? '#390955' : 'white', color: active ? 'white' : '#555',
+  padding: '6px 14px', borderRadius: 8, border: `1.5px solid ${active ? '#390955' : '#e0d5f0'}`,
+  background: active ? '#390955' : 'transparent', color: active ? 'white' : '#555',
   fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
 });
 
@@ -591,7 +615,7 @@ function ParcelModal({ parcel, onClose, allParcels }) {
               <div>
                 <div style={{ fontSize: 11, fontWeight: 700, color: '#390955', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10 }}>Package Details</div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
-                  {[['Weight', parcel.weight], ['Dimensions', parcel.dimensions], ['Value', parcel.value], ['Contents', parcel.contents], ['Email', parcel.sender.email], ['Assigned Rider', parcel.assignedRider || 'Unassigned'], ['Date Created', fmtDate(parcel.registeredDate)], ['Est. Delivery', parcel.estimatedDelivery]].map(([l, v]) => (
+                  {[['Weight', parcel.weight], ['Dimensions', parcel.dimensions], ['Value', parcel.value], ['Contents', parcel.contents], ['Email', parcel.sender.email], ['Assigned Rider', parcel.assignedRider || 'Unassigned'], ['Date Created', fmtDate(parcel.registeredDate)], ['Est. Delivery', parcel.estimatedDelivery], ['Delivered On', parcel.actualDelivery || '—'], ['Service', parcel.service], ['Delivery Fee', parcel.deliveryFee || '—'], ['Payment', parcel.paymentMode !== '—' ? `${parcel.paymentMode}${parcel.codAmount !== '—' ? ` · COD ${parcel.codAmount}` : ''}` : '—']].map(([l, v]) => (
                     <div key={l} style={{ background: 'white', border: '1px solid #ebe4f5', borderRadius: 8, padding: '10px 12px' }}>
                       <div style={{ fontSize: 10, color: '#aaa', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 3 }}>{l}</div>
                       <div style={{ fontSize: 12, fontWeight: 700, color: '#1a1a1a', wordBreak: 'break-all' }}>{v}</div>

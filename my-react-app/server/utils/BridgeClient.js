@@ -175,9 +175,11 @@ async function sendStatus(trackingNumber, status) {
 
 /**
  * Send an approval/rejection to the Android backend.
+ * `enterpriseId` (optional) carries the Web-minted enterprise ID so the
+ * Android backend can backfill it onto the synced User record.
  */
-async function sendApproval(email, role, status) {
-    return postWithRetry('/receive-approval', { email, role, status, updatedAt: new Date().toISOString() });
+async function sendApproval(email, role, status, enterpriseId) {
+    return postWithRetry('/receive-approval', { email, role, status, enterpriseId, updatedAt: new Date().toISOString() });
 }
 
 /**

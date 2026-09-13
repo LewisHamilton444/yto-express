@@ -25,6 +25,7 @@ const sseBroadcaster = require('./utils/sseBroadcaster');
 const Parcel         = require('./models/Parcel');
 const ParcelLocation = require('./models/ParcelLocation');
 const Issue          = require('./models/Issue');
+const AdminNotification = require('./models/AdminNotification');
 
 // ── Optional shared-secret gate ─────────────────────────────────────────
 // These routes accept writes from another backend, not from the admin UI,
@@ -64,16 +65,29 @@ function categorizeEmail(email) {
 }
 
 // ── Enterprise ID generation ─────────────────────────────────────────────
-// YTO-<PREFIX>-<YEAR>-<5-digit seq>, sequence counted per collection per
-// year (so it resets each year) by counting existing IDs already matching
-// that prefix+year. YTO-ADM-XXX (3-digit, no year) is included for
-// completeness/reuse — the mobile app never registers admin accounts, so
-// this bridge never calls it with "super_admin".
-const ID_PREFIXES = { customer: 'CUST', seller: 'SELL', rider: 'RIDE', super_admin: 'ADM' };
+// NEW FORMAT (2026-09-11, approved): compact Web-minted enterprise IDs —
+//   Seller   YTOS<YYYY><4-digit seq>   e.g. YTOS20260001
+//   Customer YTOC<YYYY><4-digit seq>   e.g. YTOC20260001
+//   Rider    YTOR<YYYY><4-digit seq>   e.g. YTOR20260001
+// Sequence continues per collection per year across the migration: rows in
+// BOTH the legacy (YTO-SELL-YYYY-#####) and compact (YTOSYYYY####) shapes
+// are counted so new IDs never collide with grandfathered ones. Legacy rows
+// (incl. the pinned DEMO1 seed fixtures) remain valid and still resolve via
+// the find-by-email merge in the sync* helpers. YTO-ADM-XXX (3-digit, no
+// year) is kept for completeness — the mobile app never registers admins.
+// Collision-safe: each candidate is probed against the collection before
+// being returned; a racing duplicate insert still answers 409 via
+// statusForError(E11000).
+const ENTERPRISE_ID_SPECS = {
+  customer:     { compactPrefix: 'YTOC', legacyPrefix: 'CUST' },
+  seller:       { compactPrefix: 'YTOS', legacyPrefix: 'SELL' },
+  rider:        { compactPrefix: 'YTOR', legacyPrefix: 'RIDE' },
+  super_admin:  { compactPrefix: 'YTOADM', legacyPrefix: 'ADM' },
+};
 
 async function generateEnterpriseId(kind, Model, idField) {
-  const prefix = ID_PREFIXES[kind];
-  if (!prefix) throw new Error(`No enterprise ID prefix configured for "${kind}".`);
+  const spec = ENTERPRISE_ID_SPECS[kind];
+  if (!spec) throw new Error(`No enterprise ID prefix configured for "${kind}".`);
 
   if (kind === 'super_admin') {
     const count = await Model.countDocuments({ [idField]: { $regex: '^YTO-ADM-' } });
@@ -81,8 +95,17 @@ async function generateEnterpriseId(kind, Model, idField) {
   }
 
   const year = new Date().getFullYear();
-  const count = await Model.countDocuments({ [idField]: { $regex: `^YTO-${prefix}-${year}-` } });
-  return `YTO-${prefix}-${year}-${String(count + 1).padStart(5, '0')}`;
+  const compactPrefix = `${spec.compactPrefix}${year}`;
+  const legacyCount = await Model.countDocuments({ [idField]: { $regex: `^YTO-${spec.legacyPrefix}-${year}-` } });
+  const compactCount = await Model.countDocuments({ [idField]: { $regex: `^${compactPrefix}\\d{4}$` } });
+  const seq = Math.max(legacyCount, compactCount);
+
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const candidate = `${compactPrefix}${String(seq + attempt + 1).padStart(4, '0')}`;
+    const clash = await Model.findOne({ [idField]: candidate }).lean();
+    if (!clash) return candidate;
+  }
+  throw new Error(`Unable to mint a unique enterprise ID for "${kind}" after 20 attempts.`);
 }
 
 // ── Shared validation / transform helpers ────────────────────────────────
@@ -106,6 +129,58 @@ function extractName(nested, flatFallback) {
   if (isNonEmptyString(nested)) return nested;
   if (isNonEmptyString(flatFallback)) return flatFallback;
   return undefined;
+}
+
+// ── Web-generated parcel artifacts (returned to the mobile backend) ──────
+// Canonical QR payload + POD geofence spec are minted HERE on sync-parcel
+// and handed back in the response so the Android side persists them on the
+// Shipment. The Web is the authority for identity artifacts; the app only
+// renders/consumes them.
+
+// Enterprise-party resolution for the QR payload: seller by sender email,
+// customer by recipient email. Unresolvable party -> null (its segment is
+// simply omitted from the payload).
+async function resolveSellerEnterpriseId(email) {
+  if (!isValidEmail(email)) return null;
+  const doc = await Seller.findOne({ email: String(email).trim().toLowerCase() }).select('registrationId').lean();
+  return doc?.registrationId || null;
+}
+
+async function resolveCustomerEnterpriseId(email) {
+  if (!isValidEmail(email)) return null;
+  const doc = await Customer.findOne({ email: String(email).trim().toLowerCase() }).select('customerId').lean();
+  return doc?.customerId || null;
+}
+
+// YTOQR1|<trackingNumber>|<sellerEntId>|<customerEntId>
+// Rider ID is deliberately excluded: rider assignment is dynamic post-booking
+// and would force payload regeneration. With no resolvable enterprise party
+// the payload degrades to the plain tracking number (legacy-compatible — the
+// app's scanners treat any non-YTOQR1 payload as a raw tracking ID).
+function buildParcelQrPayload(trackingNumber, sellerEntId, customerEntId) {
+  const segments = [trackingNumber, sellerEntId, customerEntId].filter(isNonEmptyString);
+  return segments.length > 1 ? `YTOQR1|${segments.join('|')}` : trackingNumber;
+}
+
+// POD delivery-zone ring derived from the parcel's delivery coordinates
+// (GeoJSON [lng, lat] as sent by the mobile BridgeClient). The 100m radius
+// mirrors the Android geofence-gated POD rule. Mobile sends [0,0] when it
+// has no coordinates — treated as absent so web-created parcels keep no
+// geofence instead of a ring at null island.
+const POD_GEOFENCE_RADIUS_METERS = 100;
+
+function buildTrackingGeofence(body) {
+  const delivery = body.deliveryCoordinates || body.recipient?.location?.coordinates;
+  const isUsablePair = Array.isArray(delivery)
+    && delivery.length === 2
+    && delivery.every((n) => typeof n === 'number' && Number.isFinite(n))
+    && !(delivery[0] === 0 && delivery[1] === 0);
+  if (!isUsablePair) return undefined;
+  return {
+    kind: 'POD_RING',
+    center: { lat: delivery[1], lng: delivery[0] },
+    radiusMeters: POD_GEOFENCE_RADIUS_METERS,
+  };
 }
 
 // ══════════════════════════════════════════════════════════════════════
@@ -206,6 +281,10 @@ async function syncSeller(body, email, accountCategory) {
 async function syncRider(body, email, accountCategory) {
   const updates = { riderName: body.name, email, accountCategory };
   if (body.phone !== undefined) updates.phone = body.phone;
+  // Real-time duty flag from the Android rider profile toggle. Guarded with
+  // !== undefined so a re-sync that omits the field never clobbers a
+  // previously-synced true value back to false (pickDefined-style contract).
+  if (body.isOnDuty !== undefined) updates.isOnDuty = body.isOnDuty;
   if (body.plateNumber !== undefined) updates.vehiclePlate = body.plateNumber;   // mobile plateNumber -> web vehiclePlate
   if (body.vehicleModel !== undefined) updates.vehicleType = body.vehicleModel;  // mobile vehicleModel -> web vehicleType
   if (body.accountNumber !== undefined) updates.accountNumber = body.accountNumber;
@@ -316,13 +395,25 @@ router.post('/sync-parcel', async (req, res) => {
     const recipientEmail = body.recipient?.email || body.recipientEmail || '';
     const parcelCategory = body.accountCategory || categorizeEmail(senderEmail || recipientEmail);
 
+    // Web-generated identity artifacts (see helpers above): canonical QR
+    // payload + POD geofence spec. Persisted on the Parcel doc AND echoed in
+    // the response so the mobile backend can persist them on the Shipment.
+    const sellerEnterpriseId = await resolveSellerEnterpriseId(senderEmail);
+    const customerEnterpriseId = await resolveCustomerEnterpriseId(recipientEmail);
+    const qrPayload = buildParcelQrPayload(trackingNumber, sellerEnterpriseId, customerEnterpriseId);
+    const trackingGeofence = buildTrackingGeofence(body);
+
     const update = {
       trackingNumber,
       senderName,
       receiverName,
       item: body.item,
       accountCategory: parcelCategory,
-      ...pickDefined(body, ['weight', 'value', 'origin', 'destination', 'status', 'riderId', 'sellerId', 'recipientEmail', 'podPhoto', 'paymentMode', 'codAmount', 'packageCount', 'packageCategory', 'notes']),
+      qrPayload,
+      sellerEnterpriseId: sellerEnterpriseId || '',
+      customerEnterpriseId: customerEnterpriseId || '',
+      ...(trackingGeofence ? { trackingGeofence } : {}),
+      ...pickDefined(body, ['weight', 'value', 'origin', 'destination', 'status', 'riderId', 'sellerId', 'recipientEmail', 'podPhoto', 'paymentMode', 'codAmount', 'packageCount', 'packageCategory', 'notes', 'deliveryFee', 'packageType', 'dimensions', 'estimatedDeliveryDate', 'actualDeliveryDate']),
     };
 
     const existing = await Parcel.findOne({ trackingNumber });
@@ -359,11 +450,147 @@ router.post('/sync-parcel', async (req, res) => {
     return res.status(created ? 201 : 200).json({
       success: true,
       message: `Parcel ${created ? 'created' : 'updated'} successfully.`,
-      data: { trackingNumber: doc.trackingNumber, _id: doc._id, status: doc.status, created },
+      data: {
+        trackingNumber: doc.trackingNumber,
+        _id: doc._id,
+        status: doc.status,
+        created,
+        qrPayload: doc.qrPayload || qrPayload,
+        sellerEnterpriseId: doc.sellerEnterpriseId || '',
+        customerEnterpriseId: doc.customerEnterpriseId || '',
+        trackingGeofence: doc.trackingGeofence || trackingGeofence || null,
+      },
     });
   } catch (err) {
     logBridgeError('sync-parcel', err, body);
     return res.status(statusForError(err)).json({ success: false, error: 'Failed to sync parcel record.', details: err.message });
+  }
+});
+
+// ══════════════════════════════════════════════════════════════════════
+// POST /api/bridge/sync-duty-status
+// Lightweight duty-toggle sync fired by the Android backend's
+// PUT auth/duty-status. Upserts ONLY the isOnDuty flag on the matching
+// rider (merge-by-email), creating a minimal rider record when the toggle
+// arrives before any full sync-user — the next full sync-user re-sync
+// fills in the rest.
+// ══════════════════════════════════════════════════════════════════════
+router.post('/sync-duty-status', async (req, res) => {
+  const body = req.body || {};
+  try {
+    if (!isValidEmail(body.email)) {
+      return res.status(400).json({ success: false, error: '"email" is required and must be a valid address.' });
+    }
+    if (typeof body.isOnDuty !== 'boolean') {
+      return res.status(400).json({ success: false, error: '"isOnDuty" must be a boolean.' });
+    }
+
+    const normalizedEmail = String(body.email).trim().toLowerCase();
+    let rider = await Rider.findOne({ email: normalizedEmail });
+    let created = false;
+    if (rider) {
+      if (rider.isOnDuty !== body.isOnDuty) {
+        rider.isOnDuty = body.isOnDuty;
+        await rider.save();
+      }
+    } else {
+      // Minimal record so the toggle state is never lost when duty flips      // happen before registration sync. Demo riders (@yto.com etc.) are      // still categorized the same way as full sync-user.
+      const registrationId = await generateEnterpriseId('rider', Rider, 'registrationId');
+      rider = await Rider.create({
+        registrationId,
+        riderName: isNonEmptyString(body.name) ? body.name : normalizedEmail.split('@')[0],
+        email: normalizedEmail,
+        accountCategory: categorizeEmail(normalizedEmail),
+        isOnDuty: body.isOnDuty,
+        statusHistory: [{
+          status: 'Active',
+          changedAt: new Date(),
+          reason: 'Created by duty-status sync (pre-registration toggle)',
+        }],
+      });
+      created = true;
+    }
+
+    sseBroadcaster.broadcast('duty-status-synced', {
+      email: normalizedEmail,
+      riderName: rider.riderName,
+      isOnDuty: rider.isOnDuty,
+      created,
+      timestamp: new Date().toISOString(),
+    });
+
+    return res.status(created ? 201 : 200).json({
+      success: true,
+      message: `Duty status synced (isOnDuty: ${rider.isOnDuty}).`,
+      data: { email: normalizedEmail, isOnDuty: rider.isOnDuty, created },
+    });
+  } catch (err) {
+    logBridgeError('sync-duty-status', err, body);
+    return res.status(statusForError(err)).json({ success: false, error: 'Failed to sync duty status.', details: err.message });
+  }
+});// ══════════════════════════════════════════════════════════════════════
+// POST /api/bridge/sync-notification
+// Android Notification.js -> Web AdminNotification.js. Persisted (not just
+// SSE) so the admin Notifications panel has a durable, queryable feed of
+// app-originated events: bookings, pickups, deliveries, POD uploads, issue
+// tickets. Deduped on (notificationId, title, createdAt) so a bridge retry
+// never doubles an entry.
+// ══════════════════════════════════════════════════════════════════════
+router.post('/sync-notification', async (req, res) => {
+  const body = req.body || {};
+  try {
+    if (!isNonEmptyString(body.title)) {
+      return res.status(400).json({ success: false, error: '"title" is required.' });
+    }
+
+    const role = ['customer', 'seller', 'rider', 'admin'].includes(String(body.role).toLowerCase())
+      ? String(body.role).toLowerCase()
+      : 'customer';
+    const createdAt = body.createdAt && !isNaN(new Date(body.createdAt).getTime())
+      ? new Date(body.createdAt)
+      : new Date();
+
+    // Retry-safe dedupe: same Android notification id, same title, same
+    // original timestamp => the same logical event.
+    const dedupeFilter = {
+      title: body.title,
+      relatedId: body.relatedId || '',
+      createdAt: createdAt,
+    };
+    const existing = await AdminNotification.findOne(dedupeFilter).lean();
+    if (existing) {
+      return res.status(200).json({ success: true, message: 'Notification already synced (dedupe).', data: { _id: existing._id, deduped: true } });
+    }
+
+    const doc = await AdminNotification.create({
+      notificationId: body.notificationId || '',
+      role,
+      title: body.title,
+      message: body.message || '',
+      type: body.type || 'system',
+      relatedId: body.relatedId || '',
+      source: body.source || 'mobile-app',
+      createdAt,
+    });
+
+    sseBroadcaster.broadcast('notification-synced', {
+      _id: doc._id,
+      role: doc.role,
+      title: doc.title,
+      message: doc.message,
+      type: doc.type,
+      relatedId: doc.relatedId,
+      createdAt: doc.createdAt,
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: 'Notification synced successfully.',
+      data: { _id: doc._id },
+    });
+  } catch (err) {
+    logBridgeError('sync-notification', err, body);
+    return res.status(statusForError(err)).json({ success: false, error: 'Failed to sync notification.', details: err.message });
   }
 });
 
@@ -398,6 +625,14 @@ router.post('/sync-issue', async (req, res) => {
       adminNotes: body.adminNotes || '',
       updatedAt: new Date(),
     };
+
+    // Preserve the mobile-side submission time as the source of truth for
+    // createdAt; web arrival time stays only as the fallback for legacy
+    // payloads that omit it.
+    const mobileCreatedAt = body.createdAt ? new Date(body.createdAt) : null;
+    if (mobileCreatedAt && !Number.isNaN(mobileCreatedAt.getTime())) {
+      update.createdAt = mobileCreatedAt;
+    }
 
     let doc = await Issue.findOne({ ticketId });
     let created = false;
@@ -579,6 +814,6 @@ router.get('/health', (req, res) => {
     success: true,
     message: 'Bridge operational',
     timestamp: new Date().toISOString(),
-    routes: ['sync-user', 'sync-parcel', 'sync-issue', 'sync-location', 'receive-status', 'receive-issue-status'],
+    routes: ['sync-user', 'sync-duty-status', 'sync-parcel', 'sync-issue', 'sync-location', 'sync-notification', 'receive-status', 'receive-issue-status'],
   });
 });

@@ -1,5 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { buildLiveAlerts } from './alertsFeed';
+import { apiFetch } from './services/api';
+import useSSE from './services/useSSE';
 import SimulatedFeedBadge from './components/ui/SimulatedFeedBadge';
 import Tooltip from './components/ui/Tooltip';
 
@@ -23,6 +25,27 @@ export default function NotificationBell({ riders = [], pendingCount = 0, onNavi
   const [open, setOpen] = useState(false);
   const wrapRef = useRef(null);
 
+  // ── Real app notification feed (2026-09-11 parity) ──
+  // Durable events bridged from the mobile app (bookings, pickups,
+  // deliveries, POD uploads, issue tickets), replacing the transient-SSE-only
+  // gap. The geofence/overspeed section below keeps its SimulatedFeedBadge
+  // because that derivation is still synthetic.
+  const [appNotifications, setAppNotifications] = useState([]);
+  const fetchAppNotifications = async () => {
+    try {
+      const res = await apiFetch('/notifications?limit=10');
+      if (!res.ok) return;
+      const data = await res.json();
+      setAppNotifications(Array.isArray(data) ? data : []);
+    } catch { /* bell feed is best-effort: keep the last known list */ }
+  };
+  useEffect(() => { fetchAppNotifications(); }, []);
+  const { on } = useSSE();
+  useEffect(() => {
+    const unsub = on('notification-synced', () => fetchAppNotifications());
+    return unsub;
+  }, [on]);
+
   useEffect(() => {
     const onClickOutside = (e) => { if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false); };
     document.addEventListener('mousedown', onClickOutside);
@@ -30,7 +53,7 @@ export default function NotificationBell({ riders = [], pendingCount = 0, onNavi
   }, []);
 
   const alerts = buildLiveAlerts(riders);
-  const totalCount = alerts.length + (pendingCount > 0 ? 1 : 0);
+  const totalCount = alerts.length + appNotifications.length + (pendingCount > 0 ? 1 : 0);
 
   return (
     <div style={s.wrap} ref={wrapRef}>
@@ -57,6 +80,21 @@ export default function NotificationBell({ riders = [], pendingCount = 0, onNavi
                   <div style={s.rowSub}>Sellers & riders submitted via mobile app</div>
                 </div>
               </div>
+            </>
+          )}
+
+          {appNotifications.length > 0 && (
+            <>
+              <div style={s.groupLabel}>From the Mobile App</div>
+              {appNotifications.map(n => (
+                <div key={n._id} style={{ ...s.row, cursor: 'pointer' }} onClick={() => { setOpen(false); onNavigate?.('app-notifications'); }}>
+                  <span style={s.dot('#390955')} />
+                  <div>
+                    <div style={s.rowTitle}>{n.title}</div>
+                    <div style={s.rowSub}>{n.message}{n.relatedId ? ` · ${n.relatedId}` : ''}</div>
+                  </div>
+                </div>
+              ))}
             </>
           )}
 

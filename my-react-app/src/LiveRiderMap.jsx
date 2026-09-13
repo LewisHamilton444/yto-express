@@ -8,7 +8,7 @@ import { buildLiveAlerts } from './alertsFeed';
 import { vehicleGlyphSvg, vehicleTypeLabel } from './components/ui/vehicleIconUtils';
 import { VehicleIcon } from './components/ui/vehicleIcons';
 import { AlertTriangle, CircleDot, Flame, Map, Package, RefreshCw, Satellite, TrafficCone, X } from 'lucide-react';
-import { ridersApi, parcelsApi } from './services/api';
+import { ridersApi, parcelsApi, parcelLocationsApi } from './services/api';
 import Tooltip from './components/ui/Tooltip';
 import useSSE from './services/useSSE';
 
@@ -55,21 +55,7 @@ function buildRiderIcon(L, vehicleType, bearing, selected) {
     </div>
   `;
   return L.divIcon({ className: '', html, iconSize: [size, size], iconAnchor: [size / 2, size / 2], popupAnchor: [0, -size / 2 - 6] });
-}
-
-function buildRiderPopupHtml(rider) {
-  const hub = LOGISTICS_HUBS.find(h => h.hubId === rider.destinationHubId);
-  return `
-    <div style="font-family:sans-serif;font-size:12px;line-height:1.8;min-width:180px;">
-      <b style="color:#390955;font-size:13px;">${rider.fullName}</b><br/>
-      <span style="color:#9b82b2;font-size:11px;font-family:monospace;">${rider.riderId}</span><br/>
-      <span style="color:#555;">${vehicleTypeLabel(rider.vehicleType)} · ${rider.vehicleType}</span><br/>
-      <span style="color:#16a34a;font-weight:700;">● Moving • ${rider.speedKmh || 30} km/h</span><br/>
-      <span style="color:#888;">${rider.city || 'Luzon'}</span><br/>
-      <span style="color:#f37021;">${hub ? hub.hubName : '—'}</span>
-    </div>
-  `;
-}
+}function buildRiderPopupHtml(rider) {  const hub = LOGISTICS_HUBS.find(h => h.hubId === rider.destinationHubId);  // Position-source honesty: a real GPS fix (from the app's status-update  // telemetry) vs. the city-derived fallback.  const gpsLine = rider.hasRealGps    ? '<span style="color:#16a34a;font-weight:700;">● Live GPS · ' + (rider.speedKmh || 30) + ' km/h (sim. speed)</span><br/>'    : '<span style="color:#b45309;font-weight:700;">● Approximate (city-level) · ' + (rider.speedKmh || 30) + ' km/h (sim.)</span><br/>';  return `    <div style="font-family:sans-serif;font-size:12px;line-height:1.8;min-width:180px;">      <b style="color:#390955;font-size:13px;">${rider.fullName}</b><br/>      <span style="color:#9b82b2;font-size:11px;font-family:monospace;">${rider.riderId}</span><br/>      <span style="color:#555;">${vehicleTypeLabel(rider.vehicleType)} · ${rider.vehicleType}</span><br/>      ${gpsLine}      <span style="color:#888;">${rider.city || 'Luzon'}</span><br/>      <span style="color:#f37021;">${hub ? hub.hubName : '—'}</span>    </div>  `;}
 
 // One instance per active rider. Renders nothing itself — it owns a Leaflet
 // marker + route polyline directly on the shared map and drives them with
@@ -139,6 +125,10 @@ export default function LiveRiderMap() {
   const [selectedHub, setSelectedHub]     = useState(null);
   const [selectedRider, setSelectedRider] = useState(null);
   const [riderFilter, setRiderFilter]     = useState('all');
+  // Admin-exclusive filters (shipment status / duty / location scope)
+  const [statusFilter, setStatusFilter]   = useState('all');
+  const [dutyFilter, setDutyFilter]       = useState('all');
+  const [locationFilter, setLocationFilter] = useState('all');
   const [mapReady, setMapReady]       = useState(false);
   const [layers, setLayers] = useState({ satellite: false, geofences: true, heatmap: false, traffic: false });
   const [dismissedAlertIds, setDismissedAlertIds] = useState([]);
@@ -155,10 +145,30 @@ export default function LiveRiderMap() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [rData, pData] = await Promise.all([ridersApi.list(), parcelsApi.list()]);
+      const [rData, pData, locData] = await Promise.all([
+        ridersApi.list(),
+        parcelsApi.list(),
+        // Real GPS telemetry (2026-09-11 parity): the mobile app now attaches
+        // riderLat/riderLng to status transitions, bridged here as
+        // ParcelLocation rows keyed by parcelId (tracking number).
+        parcelLocationsApi.list().catch(() => []),
+      ]);
 
       const safeRiders = Array.isArray(rData) ? rData : [];
       const safeParcels = Array.isArray(pData) ? pData : [];
+      const safeLocations = Array.isArray(locData) ? locData : [];
+
+      // parcelId (tracking number) -> { lat, lng } from the newest telemetry.
+      const telemetryByParcel = {};
+      safeLocations.forEach(loc => {
+        const lat = parseFloat(loc.lat);
+        const lng = parseFloat(loc.lng);
+        if (loc.parcelId && Number.isFinite(lat) && Number.isFinite(lng)
+            && !(lat === 0 && lng === 0)) {
+          telemetryByParcel[loc.parcelId] = { lat, lng, updatedAt: loc.updatedAt };
+        }
+      });
+
       const activeRiders = safeRiders
         .filter(r => {
           const st = String(r.status || 'active').toLowerCase();
@@ -166,8 +176,15 @@ export default function LiveRiderMap() {
         })
         .map((r, i) => {
           const coords = CITY_COORDS[r.city] || LUZON_FALLBACK_COORDS;
-          const lat = coords.lat + i * 0.004;
-          const lng = coords.lng + i * 0.003;
+          // Prefer the rider's own real GPS fix when their currently-held
+          // parcel has telemetry; otherwise fall back to the city-derived
+          // position (labeled via hasRealGps so popups can be honest).
+          const heldParcel = safeParcels.find(
+            p => p.riderId && (p.riderId === (r.registrationId || r._id)) && telemetryByParcel[p.trackingNumber]
+          );
+          const fix = heldParcel ? telemetryByParcel[heldParcel.trackingNumber] : null;
+          const lat = fix ? fix.lat : coords.lat + i * 0.004;
+          const lng = fix ? fix.lng : coords.lng + i * 0.003;
           const hub = nearestHub(lat, lng);
           return {
             riderId: r.registrationId || r._id,
@@ -176,6 +193,7 @@ export default function LiveRiderMap() {
             city: r.city || '',
             province: r.state || '',
             lat, lng,
+            hasRealGps: !!fix,
             speedKmh: r.vehicleType === 'Bicycle' ? 18 : r.vehicleType === 'Van' ? 42 : 32,
             destinationHubId: hub.hubId,
             // Real DB records don't carry a planned path, so the honest
@@ -187,8 +205,11 @@ export default function LiveRiderMap() {
       const activeParcels = safeParcels
         .filter(p => !['delivered', 'returned', 'failed'].includes(p.status))
         .map((p, i) => {
+          // Real telemetry first (per-parcel tracking), city coords as fallback.
+          const fix = telemetryByParcel[p.trackingNumber];
+          if (fix) return { ...p, lat: fix.lat, lng: fix.lng, hasRealGps: true };
           const coords = CITY_COORDS[p.destination] || CITY_COORDS[p.origin] || LUZON_FALLBACK_COORDS;
-          return { ...p, lat: coords.lat + i * 0.003, lng: coords.lng + i * 0.0025 };
+          return { ...p, lat: coords.lat + i * 0.003, lng: coords.lng + i * 0.0025, hasRealGps: false };
         });
 
       setRiders(activeRiders);
@@ -346,16 +367,38 @@ export default function LiveRiderMap() {
     });
     const assignedRidersCount = riders.filter(r => r.destinationHubId === hub.hubId).length;
     return { ...hub, activeParcelsCount: parcelsInside.length, parcelsInside, assignedRidersCount };
-  });
-
-  const hub = selectedHub ? hubMetrics.find(h => h.hubId === selectedHub) : null;
+  });  const hub = selectedHub ? hubMetrics.find(h => h.hubId === selectedHub) : null;
   const rider = selectedRider ? riders.find(r => r.riderId === selectedRider) : null;
   const riderDestHub = rider ? LOGISTICS_HUBS.find(h => h.hubId === rider.destinationHubId) : null;
   // "Currently scanned" = whatever's linked to this rider by riderId, the
   // same real signal GenerateRiderDataReport's Currently Held Shipments uses.
   const riderParcels = rider ? parcels.filter(p => p.riderId === rider.riderId) : [];
 
-  const visibleRiders = riderFilter === 'all' ? riders : riders.filter(r => r.riderId === riderFilter);
+  // ── Admin-exclusive filters (2026-09-11 parity) ──
+  // Shipment-status filter (real Parcel.status), duty filter (real
+  // isOnDuty synced from the app's profile toggle), location filter
+  // (city-scoped Active/Inactive view). All client-side over real fields.
+  const PARCEL_STATUS_FILTERS = ['Pending', 'Picked Up', 'In Transit', 'Out for Delivery', 'Delivered', 'Returning'];
+  const availableCities = Array.from(new Set([
+    ...riders.map(r => r.city).filter(Boolean),
+    ...parcels.map(p => (p.destination || p.origin || '')).filter(Boolean),
+  ])).sort();  const visibleRiders = riders.filter(r => {
+    if (riderFilter !== 'all' && r.riderId !== riderFilter) return false;
+    // Duty filter over the real synced toggle. The `raw?.isOnDuty === undefined`
+    // fallback keeps pre-telemetry records (no duty data yet, but Active)
+    // visible under "On Duty" instead of vanishing from the map.
+    const riderIsOnDuty = r.isOnDuty === true || (r.raw?.isOnDuty === true);
+    const dutyUnknownButActive = r.raw?.isOnDuty === undefined && String(r.raw?.status || '').toLowerCase() === 'active';
+    if (dutyFilter === 'on-duty' && !(riderIsOnDuty || dutyUnknownButActive)) return false;
+    if (dutyFilter === 'off-duty' && (riderIsOnDuty || dutyUnknownButActive)) return false;
+    if (locationFilter !== 'all' && r.city !== locationFilter) return false;
+    return true;
+  });
+  const _visibleParcels = parcels.filter(p => {
+    if (statusFilter !== 'all' && String(p.status || '') !== statusFilter) return false;
+    if (locationFilter !== 'all' && (p.destination || p.origin) !== locationFilter) return false;
+    return true;
+  });
 
   const handleSelectRiderFilter = (id) => {
     setRiderFilter(id);
@@ -366,9 +409,9 @@ export default function LiveRiderMap() {
   const activeAlerts = buildLiveAlerts(riders).filter(a => !dismissedAlertIds.includes(a.id));
   const topAlert = activeAlerts[0];
 
-  const card = { background: 'white', borderRadius: 14, border: '1px solid rgba(57,9,85,0.09)', boxShadow: '0 2px 16px rgba(57,9,85,0.06)', overflow: 'hidden' };
+  const card = { background: 'white', borderRadius: 12, border: '1px solid rgba(57,9,85,0.09)', boxShadow: '0 2px 16px rgba(57,9,85,0.06)', overflow: 'hidden' };
   const statRow = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 0', borderBottom: '1px solid #f5f0ff', fontSize: 13 };
-  const layerBtn = (active) => ({ padding: '6px 13px', borderRadius: 20, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', border: `1.5px solid ${active ? '#390955' : '#e0d5f0'}`, background: active ? '#390955' : 'white', color: active ? 'white' : '#555' });
+  const layerBtn = (active) => ({ padding: '6px 13px', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', border: `1.5px solid ${active ? '#390955' : '#e0d5f0'}`, background: active ? '#390955' : 'white', color: active ? 'white' : '#555' });
 
   return (
     <div style={card}>
@@ -381,7 +424,7 @@ export default function LiveRiderMap() {
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {usingMock && <span style={{ fontSize: 10, fontWeight: 700, color: '#c2410c', background: '#fff4ec', padding: '3px 9px', borderRadius: 20 }}>Showing sample Luzon data (backend unreachable)</span>}
+          {usingMock && <span style={{ fontSize: 10, fontWeight: 700, color: '#c2410c', background: '#fff4ec', padding: '3px 9px', borderRadius: 8 }}>Showing sample Luzon data (backend unreachable)</span>}
           {lastUpdated && <span style={{ fontSize: 10, color: '#9b82b2', fontFamily: 'monospace' }}>Updated {lastUpdated}</span>}
           <Tooltip content="Re-fetch the latest rider and parcel positions">
           <button onClick={fetchData} style={{ padding: '5px 12px', background: 'white', border: '1.5px solid #e0d5f0', borderRadius: 8, fontSize: 11, fontWeight: 700, color: '#390955', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}><RefreshCw size={12} aria-hidden="true" /> Refresh</button>
@@ -419,12 +462,34 @@ export default function LiveRiderMap() {
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 20px', borderBottom: '1px solid rgba(57,9,85,0.07)', flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 11, fontWeight: 700, color: '#9b82b2', textTransform: 'uppercase', letterSpacing: 0.4 }}>Filter Rider</span>
+        <span style={{ fontSize: 11, fontWeight: 700, color: '#9b82b2', textTransform: 'uppercase', letterSpacing: 0.4 }}>Admin Filters</span>
         <select value={riderFilter} onChange={(e) => handleSelectRiderFilter(e.target.value)}
-          style={{ padding: '6px 12px', borderRadius: 20, fontSize: 11, fontWeight: 700, fontFamily: 'inherit', border: `1.5px solid ${riderFilter !== 'all' ? '#390955' : '#e0d5f0'}`, background: riderFilter !== 'all' ? '#390955' : 'white', color: riderFilter !== 'all' ? 'white' : '#555', cursor: 'pointer' }}>
+          style={{ padding: '6px 12px', borderRadius: 8, fontSize: 11, fontWeight: 700, fontFamily: 'inherit', border: `1.5px solid ${riderFilter !== 'all' ? '#390955' : '#e0d5f0'}`, background: riderFilter !== 'all' ? '#390955' : 'white', color: riderFilter !== 'all' ? 'white' : '#555', cursor: 'pointer' }}>
           <option value="all">All riders — show every path</option>
           {riders.map(r => <option key={r.riderId} value={r.riderId}>{r.fullName} · {r.riderId}</option>)}
         </select>
+        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
+          style={{ padding: '6px 12px', borderRadius: 8, fontSize: 11, fontWeight: 700, fontFamily: 'inherit', border: `1.5px solid ${statusFilter !== 'all' ? '#390955' : '#e0d5f0'}`, background: statusFilter !== 'all' ? '#390955' : 'white', color: statusFilter !== 'all' ? 'white' : '#555', cursor: 'pointer' }} aria-label="Filter parcels by shipment status">
+          <option value="all">All shipment statuses</option>
+          {PARCEL_STATUS_FILTERS.map(st => <option key={st} value={st}>{st}</option>)}
+        </select>
+        <select value={dutyFilter} onChange={(e) => setDutyFilter(e.target.value)}
+          style={{ padding: '6px 12px', borderRadius: 8, fontSize: 11, fontWeight: 700, fontFamily: 'inherit', border: `1.5px solid ${dutyFilter !== 'all' ? '#390955' : '#e0d5f0'}`, background: dutyFilter !== 'all' ? '#390955' : 'white', color: dutyFilter !== 'all' ? 'white' : '#555', cursor: 'pointer' }} aria-label="Filter riders by duty">
+          <option value="all">Any duty state</option>
+          <option value="on-duty">On Duty (app toggle active)</option>
+          <option value="off-duty">Off Duty</option>
+        </select>
+        <select value={locationFilter} onChange={(e) => setLocationFilter(e.target.value)}
+          style={{ padding: '6px 12px', borderRadius: 8, fontSize: 11, fontWeight: 700, fontFamily: 'inherit', border: `1.5px solid ${locationFilter !== 'all' ? '#390955' : '#e0d5f0'}`, background: locationFilter !== 'all' ? '#390955' : 'white', color: locationFilter !== 'all' ? 'white' : '#555', cursor: 'pointer' }} aria-label="Filter by city location">
+          <option value="all">All locations</option>
+          {availableCities.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+        {(riderFilter !== 'all' || statusFilter !== 'all' || dutyFilter !== 'all' || locationFilter !== 'all') && (
+          <button onClick={() => { setRiderFilter('all'); setStatusFilter('all'); setDutyFilter('all'); setLocationFilter('all'); }}
+            style={{ padding: '6px 12px', borderRadius: 8, fontSize: 11, fontWeight: 700, fontFamily: 'inherit', border: '1.5px solid #e0d5f0', background: 'white', color: '#c2410c', cursor: 'pointer' }}>
+            Clear filters
+          </button>
+        )}
         {riderFilter !== 'all' && <span style={{ fontSize: 11, color: '#9b82b2' }}>Showing 1 of {riders.length} riders</span>}
       </div>
 
@@ -461,10 +526,7 @@ export default function LiveRiderMap() {
                 {x.shape === 'line'   && <div style={{ width: 14, height: 3, background: x.color, borderRadius: 2, flexShrink: 0 }} />}
                 {x.label}
               </div>
-            ))}
-            <div style={{ fontSize: 9, opacity: 0.7, color: '#b45309' }}>
-              Rider routes &amp; speeds are simulated — real positions appear as location pings stream in.
-            </div>
+            ))}            <div style={{ fontSize: 9, opacity: 0.7, color: '#b45309' }}>              Riders without live GPS pings show city-level positions — real positions stream in from app status updates.            </div>
           </div>
         </div>
 
@@ -481,7 +543,7 @@ export default function LiveRiderMap() {
                     onClick={() => setSelectedHub(h.hubId)}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <span style={{ fontSize: 12, fontWeight: 700, color: '#1a0a2e' }}>{h.hubName}</span>
-                      <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 20, background: colors.bg, color: colors.color }}>{h.status}</span>
+                      <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 8, background: colors.bg, color: colors.color }}>{h.status}</span>
                     </div>
                     <div style={{ fontSize: 11, color: '#9b82b2', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}><Package size={11} aria-hidden="true" /> {h.activeParcelsCount} parcels · <VehicleIcon type="motorcycle" size={12} /> {h.assignedRidersCount} riders</div>
                   </div>

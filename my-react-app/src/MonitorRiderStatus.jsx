@@ -148,7 +148,10 @@ export default function MonitorRiderStatus({ currentUser }) {
         latitude:  coords ? coords.lat + (index * 0.0015) : 14.5995 + (index * 0.008),
         longitude: coords ? coords.lng + (index * 0.0015) : 120.9842 + (index * 0.006),
         city: r.location.city || 'Unknown',
-        isOnline: true,
+        // 2026-09-11 parity: reflects the rider's real Android duty toggle
+        // (bridge sync-duty-status) instead of the previous hardcoded true.
+        // isMoving stays simulated until the GPS telemetry pipeline lands.
+        isOnline: r.isOnDuty === true || r.raw?.isOnDuty === true,
         isMoving: true,
       },
       // Simulated device-health telemetry — there's no real battery/app-sync
@@ -327,9 +330,9 @@ export default function MonitorRiderStatus({ currentUser }) {
                         </div>
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 5 }}>
-                        <span style={{ fontSize: '10px', background: '#e6f9ed', color: '#1e7e34', padding: '3px 8px', borderRadius: '10px', fontWeight: 700, display:'flex', alignItems:'center', gap:4 }}>
-                          <span style={{ width:5, height:5, borderRadius:'50%', background:'#22c55e', animation:'pulse 1.5s infinite', display:'inline-block' }}/>
-                          {r.liveGps.isOnline ? 'Online' : 'Offline'} · {r.liveGps.isMoving ? 'Moving' : 'Idle'}
+                        <span style={{ fontSize: '10px', background: r.liveGps.isOnline ? '#e6f9ed' : '#f5f5f5', color: r.liveGps.isOnline ? '#1e7e34' : '#888', padding: '3px 8px', borderRadius: '10px', fontWeight: 700, display:'flex', alignItems:'center', gap:4 }}>
+                          <span style={{ width:5, height:5, borderRadius:'50%', background: r.liveGps.isOnline ? '#22c55e' : '#bbb', animation: r.liveGps.isOnline ? 'pulse 1.5s infinite' : 'none', display:'inline-block' }}/>
+                          {r.liveGps.isOnline ? 'On Duty' : 'Off Duty'} · {r.liveGps.isMoving ? 'Moving' : 'Idle'}
                         </span>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                           <span title="Battery" style={{
@@ -425,7 +428,7 @@ export default function MonitorRiderStatus({ currentUser }) {
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(26,6,40,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }} onClick={() => setSelectedRider(null)}>
           <div style={{ background: 'white', borderRadius: 12, width: '90%', maxWidth: 480, maxHeight: '85vh', overflow: 'hidden', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)' }} onClick={e => e.stopPropagation()}>
             {/* Header */}
-            <div style={{ background: 'linear-gradient(135deg, #390955, #5a1f80)', padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div style={{ background: '#390955', padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                 <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white' }}><VehicleIcon type={selectedRider.vehicleType} size={22} /></div>
                 <div>
@@ -492,13 +495,13 @@ export default function MonitorRiderStatus({ currentUser }) {
                     </div>
                   ) : (
                     <div style={{ position: 'relative', paddingLeft: 24 }}>
-                      <div style={{ position: 'absolute', left: 9, top: 6, bottom: 6, width: 2, background: 'linear-gradient(180deg, #1E88E5 0%, #390955 100%)', borderRadius: 1, opacity: 0.3 }} />
+                      <div style={{ position: 'absolute', left: 9, top: 6, bottom: 6, width: 2, background: '#1E88E5', borderRadius: 1, opacity: 0.3 }} />
                       {riderTimeline.map((evt, idx) => (
                         <div key={idx} style={{ position: 'relative', marginBottom: idx < riderTimeline.length - 1 ? 16 : 0 }}>
                           <div style={{ position: 'absolute', left: -24, top: 2, width: 18, height: 18, borderRadius: '50%', background: '#1E88E5', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1, boxShadow: '0 0 0 3px white, 0 0 0 4px rgba(30,136,229,0.2)' }}>
                             <svg width="10" height="10" viewBox="0 0 24 24" fill="white"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" /></svg>
                           </div>
-                          <div style={{ padding: '8px 12px', background: '#faf7fd', borderRadius: 8, border: '1px solid #ede6f7', borderLeft: '3px solid #1E88E5' }}>
+                          <div style={{ padding: '8px 12px', background: '#faf7fd', borderRadius: 8, border: '1px solid #ede6f7' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
                               <span style={{ fontSize: 11, fontWeight: 700, color: '#1f1329' }}>Status: {evt.status}</span>
                               <span style={{ fontSize: 9, color: '#a890c0' }}>{formatTimelineDate(evt.changedAt)}</span>

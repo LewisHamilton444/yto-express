@@ -197,6 +197,10 @@ export function normalizeRider(raw = {}) {
     bankName: raw.bankName || '',
     accountNumber: raw.accountNumber || '',
     payoutCycle: raw.payoutCycle || 'Weekly',
+    // Real-time duty flag synced from the Android rider profile toggle
+    // (bridge sync-duty-status). Raw kept on `raw.isOnDuty` too — the UI
+    // derives both this and the parcel-based "on-delivery" signal.
+    isOnDuty: raw.isOnDuty === true,
     status: normalizeStatus(raw.status),
     accountCategory: raw.accountCategory || (isDemoEmail(raw.email) || String(raw.riderId || raw.registrationId || '').startsWith('RD-') ? 'DEMO' : 'REAL'),
     performance: {

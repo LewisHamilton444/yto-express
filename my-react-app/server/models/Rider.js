@@ -20,6 +20,12 @@ const riderSchema = new mongoose.Schema({
     payoutRate: Number,
     payoutCycle: String,
     status: { type: String, default: 'Active' },
+    // Real-time duty flag synced from the Android rider profile toggle
+    // (PUT auth/duty-status -> User.isOnDuty). The parcel-derived
+    // "on-delivery" state in the UI is a separate signal; this is the actual
+    // switch the rider flips. Declared explicitly — Mongoose strict mode
+    // strips undeclared fields on save.
+    isOnDuty: { type: Boolean, default: false },
     deliveries: { type: Number, default: 0 },
     rating: { type: Number, default: 5.0 },
     successRate: { type: Number, default: 100 },

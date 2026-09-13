@@ -43,7 +43,12 @@ function Stars({ rating }) {
 //   Offline     — account isn't Active yet (pending verification)
 //   On Delivery — Active and currently holding a pending/in-transit parcel
 //   Online      — Active and free (approved, just not carrying anything)
-const DUTY_LABELS = { online: 'Online', 'on-delivery': 'On Delivery', offline: 'Offline' };
+// 2026-09-11 parity update: a third REAL signal now exists — the rider's
+// own duty toggle from the Android profile tab (raw.isOnDuty, synced via the
+// bridge). A rider who toggled Active in the app shows "On Duty" even when
+// not currently holding a parcel; held-parcel state upgrades it to
+// "On Delivery".
+const DUTY_LABELS = { online: 'On Duty', 'on-delivery': 'On Delivery', offline: 'Off Duty' };
 const DUTY_BADGE = {
   online:        { bg: '#e6f9ed', color: '#1e7e34', dot: '#22c55e' },
   'on-delivery': { bg: '#fff4ec', color: '#c2540d', dot: '#f37021' },
@@ -123,9 +128,16 @@ export default function GenerateRiderDataReport() {
   const getHeldParcels   = (riderObj) => parcels.filter(p => HELD_STATUSES.includes(p.status) && belongsToRider(p, riderObj));
   const getClosedParcels = (riderObj) => parcels.filter(p => CLOSED_STATUSES.includes(p.status) && belongsToRider(p, riderObj));
   const isOnDuty         = (riderObj) => getHeldParcels(riderObj).length > 0;
+  // Duty state now blends the real Android duty toggle (riderObj.isOnDuty,
+  // synced live via the bridge) with the held-parcel signal: a rider who
+  // flipped their profile toggle to Active shows "On Duty" immediately, and
+  // carrying a parcel upgrades the badge to "On Delivery". No toggle data
+  // (older records) keeps the previous parcel-derived behavior.
   const getDutyState     = (riderObj) => {
     if (riderObj.status !== RIDER_STATUS.ACTIVE) return 'offline';
-    return isOnDuty(riderObj) ? 'on-delivery' : 'online';
+    if (isOnDuty(riderObj)) return 'on-delivery';
+    if (riderObj.isOnDuty || riderObj.raw?.isOnDuty === true) return 'online';
+    return 'offline';
   };
 
   // ── Save edit to MongoDB ──
@@ -262,9 +274,9 @@ export default function GenerateRiderDataReport() {
                   <select value={filters.duty} onChange={e => handleFilterChange('duty', e.target.value)}
                     style={{ padding: '9px 12px', border: '1.5px solid #e0d5f0', borderRadius: 8, fontSize: 13, fontFamily: 'inherit', background: '#faf9ff', color: '#1a1a1a' }}>
                     <option value="all">Any Duty State</option>
-                    <option value="online">Online (available)</option>
+                    <option value="online">On Duty (app toggle active)</option>
                     <option value="on-delivery">On Delivery (holding a shipment)</option>
-                    <option value="offline">Offline (not yet active)</option>
+                    <option value="offline">Off Duty (toggle off / not yet active)</option>
                   </select>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -384,10 +396,9 @@ export default function GenerateRiderDataReport() {
 
             {rider && (
               <>
-                <div style={{ background: 'linear-gradient(135deg,#390955,#5c1285)', borderRadius: 12, padding: '24px 28px', color: 'white', position: 'relative', overflow: 'hidden' }}>
-                  <div style={{ position: 'absolute', top: -20, right: -20, width: 120, height: 120, borderRadius: '50%', background: 'rgba(255,255,255,0.06)' }}/>
+                <div style={{ background: '#390955', borderRadius: 12, padding: '24px 28px', color: 'white', position: 'relative', overflow: 'hidden' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 18, position: 'relative' }}>
-                    <div style={{ width: 64, height: 64, borderRadius: '50%', background: '#f37021', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', flexShrink: 0, boxShadow: '0 4px 18px rgba(243,112,33,0.4)', border: '3px solid rgba(255,255,255,0.3)' }}><VehicleIcon type={rider.vehicleType} size={32} /></div>
+                    <div style={{ width: 64, height: 64, borderRadius: '50%', background: '#f37021', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', flexShrink: 0, border: '3px solid rgba(255,255,255,0.3)' }}><VehicleIcon type={rider.vehicleType} size={32} /></div>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: -0.5 }}>{rider.fullName}</div>
                       <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginTop: 3 }}>{rider.riderId} · {rider.vehicleType} · Joined {rider.joined}</div>
@@ -403,15 +414,15 @@ export default function GenerateRiderDataReport() {
                   </div>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr', background: 'white', border: '1px solid #d5cbe4', borderRadius: 12, overflow: 'hidden' }}>
                   {[
-                    { label: 'Deliveries Completed', value: rider.performance.deliveriesCount, color: '#390955' },
-                    { label: 'Rating',                value: rider.performance.rating,          color: '#f37021' },
-                    { label: 'Status',                value: formatStatusLabel(rider.status),   color: '#390955' },
-                  ].map(s => (
-                    <div key={s.label} style={{ background: 'white', border: '1.5px solid #e0d5f0', borderRadius: 12, padding: '16px 18px', textAlign: 'center' }}>
-                      <div style={{ fontSize: 26, fontWeight: 800, color: s.color, lineHeight: 1.1 }}>{s.value}</div>
-                      <div style={{ fontSize: 10, fontWeight: 600, color: '#aaa', textTransform: 'uppercase', letterSpacing: 0.4, marginTop: 5 }}>{s.label}</div>
+                    { label: 'Deliveries Completed', value: rider.performance.deliveriesCount, color: '#390955', accent: true },
+                    { label: 'Rating',               value: rider.performance.rating,         color: '#f37021', accent: false },
+                    { label: 'Status',               value: formatStatusLabel(rider.status),  color: '#390955', accent: false },
+                  ].map((s, i) => (
+                    <div key={s.label} style={{ padding: '13px 18px', borderLeft: i === 0 ? 'none' : '1px solid #e8e1f2', background: s.accent ? '#faf7fd' : 'white' }}>
+                      <div style={{ fontSize: 10, fontWeight: 800, color: '#a890c0', textTransform: 'uppercase', letterSpacing: 0.4 }}>{s.label}</div>
+                      <div style={{ fontSize: s.accent ? 26 : 21, fontWeight: 800, color: s.color, lineHeight: 1.1, marginTop: 4 }}>{s.value}</div>
                     </div>
                   ))}
                 </div>
