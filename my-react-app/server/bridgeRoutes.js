@@ -54,15 +54,11 @@ function statusForError(err) {
   return 500;
 }
 
-// ── User category flagging ──────────────────────────────────────────────
-// REAL = live @gmail.com signup. DEMO = @yto.com / @example.com test
-// account. Anything else defaults to REAL (safer default than silently
-// treating an unrecognized domain as a throwaway test account).
-const DEMO_DOMAINS = ['yto.com', 'example.com', 'ytoexpress.com'];
-function categorizeEmail(email) {
-  const domain = String(email).split('@')[1]?.toLowerCase() || '';
-  return DEMO_DOMAINS.includes(domain) ? 'DEMO' : 'REAL';
-}
+// ── Account category (removed 2026-09-13) ─────────────────────────────
+// The REAL/DEMO realm partition was removed — the platform is single-realm
+// (REAL only). categorizeEmail is kept as a one-liner purely for wire-format
+// compatibility with the Android bridge client.
+const categorizeEmail = () => 'REAL';
 
 // ── Enterprise ID generation ─────────────────────────────────────────────
 // NEW FORMAT (2026-09-11, approved): compact Web-minted enterprise IDs —
@@ -237,7 +233,7 @@ router.post('/sync-user', async (req, res) => {
 });
 
 async function syncSeller(body, email, accountCategory) {
-  const updates = { fullName: body.name, email, accountCategory };
+  const updates = { fullName: body.name, email };
   if (body.phone !== undefined) updates.phone = body.phone;
   if (body.idNumber !== undefined) updates.idNumber = body.idNumber;
   if (body.idType !== undefined) updates.idType = body.idType;
@@ -279,7 +275,7 @@ async function syncSeller(body, email, accountCategory) {
 }
 
 async function syncRider(body, email, accountCategory) {
-  const updates = { riderName: body.name, email, accountCategory };
+  const updates = { riderName: body.name, email };
   if (body.phone !== undefined) updates.phone = body.phone;
   // Real-time duty flag from the Android rider profile toggle. Guarded with
   // !== undefined so a re-sync that omits the field never clobbers a
@@ -325,7 +321,7 @@ async function syncRider(body, email, accountCategory) {
 }
 
 async function syncCustomer(body, email, accountCategory) {
-  const updates = { fullName: body.name, email, accountCategory };
+  const updates = { fullName: body.name, email };
   if (body.phone !== undefined) updates.phone = body.phone;
 
   const existing = await Customer.findOne({ email });
@@ -393,7 +389,6 @@ router.post('/sync-parcel', async (req, res) => {
 
     const senderEmail = body.sender?.email || body.senderEmail || '';
     const recipientEmail = body.recipient?.email || body.recipientEmail || '';
-    const parcelCategory = body.accountCategory || categorizeEmail(senderEmail || recipientEmail);
 
     // Web-generated identity artifacts (see helpers above): canonical QR
     // payload + POD geofence spec. Persisted on the Parcel doc AND echoed in
@@ -408,7 +403,6 @@ router.post('/sync-parcel', async (req, res) => {
       senderName,
       receiverName,
       item: body.item,
-      accountCategory: parcelCategory,
       qrPayload,
       sellerEnterpriseId: sellerEnterpriseId || '',
       customerEnterpriseId: customerEnterpriseId || '',
@@ -442,7 +436,6 @@ router.post('/sync-parcel', async (req, res) => {
       senderName,
       receiverName,
       status: doc.status,
-      accountCategory: doc.accountCategory,
       created,
       timestamp: new Date().toISOString(),
     });
@@ -493,14 +486,13 @@ router.post('/sync-duty-status', async (req, res) => {
         rider.isOnDuty = body.isOnDuty;
         await rider.save();
       }
-    } else {
-      // Minimal record so the toggle state is never lost when duty flips      // happen before registration sync. Demo riders (@yto.com etc.) are      // still categorized the same way as full sync-user.
+    } else {      // Minimal record so the toggle state is never lost when duty flips
+      // happen before registration sync.
       const registrationId = await generateEnterpriseId('rider', Rider, 'registrationId');
       rider = await Rider.create({
         registrationId,
         riderName: isNonEmptyString(body.name) ? body.name : normalizedEmail.split('@')[0],
         email: normalizedEmail,
-        accountCategory: categorizeEmail(normalizedEmail),
         isOnDuty: body.isOnDuty,
         statusHistory: [{
           status: 'Active',
@@ -608,8 +600,6 @@ router.post('/sync-issue', async (req, res) => {
       return res.status(400).json({ success: false, error: '"ticketId" and "trackingNumber" are required.' });
     }
 
-    const issueCategory = body.accountCategory || categorizeEmail(body.reporterEmail || '');
-
     const update = {
       ticketId,
       trackingNumber,
@@ -621,7 +611,6 @@ router.post('/sync-issue', async (req, res) => {
       reporterPhone: body.reporterPhone || '',
       reporterRole: body.reporterRole || 'customer',
       status: body.status || 'Open',
-      accountCategory: issueCategory,
       adminNotes: body.adminNotes || '',
       updatedAt: new Date(),
     };
@@ -650,7 +639,6 @@ router.post('/sync-issue', async (req, res) => {
       trackingNumber: doc.trackingNumber,
       category: doc.category,
       status: doc.status,
-      accountCategory: doc.accountCategory,
       created,
       timestamp: new Date().toISOString(),
     });

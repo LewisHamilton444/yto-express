@@ -11,8 +11,6 @@ const CustomerSchema = new mongoose.Schema({
   fullName:        { type: String, required: true },
   email:           { type: String, required: true, unique: true },
   phone:           { type: String, default: '' },
-  // REAL = live @gmail.com signup, DEMO = @yto.com/@example.com test account.
-  accountCategory: { type: String, enum: ['REAL', 'DEMO'], default: 'REAL' },
   status:          { type: String, default: 'Active' },
   source:          { type: String, default: 'mobile-app' },
   statusHistory: [{

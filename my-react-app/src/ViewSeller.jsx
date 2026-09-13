@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './ViewSeller.css';
-import { normalizeSeller, mockSellers, formatStatusLabel, SELLER_STATUS } from './sellerRiderData';
+import { normalizeSeller, formatStatusLabel, SELLER_STATUS } from './sellerRiderData';
 import PaginationControls from './PaginationControls';
 import { exportToCSV, exportToExcel } from './exportUtils';
 import { apiFetch } from './services/api';
@@ -8,7 +8,6 @@ import StatusBadge from './components/ui/StatusBadge';
 import { SELLER_STATUS_COLORS } from './components/ui/statusColors';
 import Modal from './components/ui/Modal';
 import { useToast } from './components/ui/useToast';
-import { isDemoEmail } from './demoUtils';
 
 const SELLER_EXPORT_COLUMNS = [
   { key: 'sellerId', label: 'Seller ID' },
@@ -31,31 +30,17 @@ const GenerateSellerReport = ({ sellers: externalSellers, onUpdateSellers, curre
         const response = await apiFetch('/sellers');
         if (!response.ok) throw new Error('Failed to fetch');
         const data = await response.json();
-        if (Array.isArray(data) && data.length > 0) {
-
-          const normalized = data.map(normalizeSeller);
-          setSellers(normalized);
-          sellersRef.current = normalized;
-        } else if (currentUser?.isDemo) {
-          setSellers(mockSellers);
-          sellersRef.current = mockSellers;
-        } else {
-          setSellers([]);
-          sellersRef.current = [];
-        }
+        const normalized = Array.isArray(data) ? data.map(normalizeSeller) : [];
+        setSellers(normalized);
+        sellersRef.current = normalized;
       } catch (err) {
         console.error("Error fetching sellers:", err);
-        if (currentUser?.isDemo) {
-          setSellers(mockSellers);
-          sellersRef.current = mockSellers;
-        } else {
-          setSellers([]);
-          sellersRef.current = [];
-        }
+        setSellers([]);
+        sellersRef.current = [];
       }
     };
     fetchSellers();
-  }, [currentUser?.isDemo]);
+  }, []);
 
   const applyUpdate = (next) => {
     sellersRef.current = next;
@@ -82,9 +67,7 @@ const GenerateSellerReport = ({ sellers: externalSellers, onUpdateSellers, curre
       seller.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       seller.sellerId.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === 'All' || seller.status === statusFilter;
-    const cat = seller.accountCategory || (isDemoEmail(seller.email) ? 'DEMO' : 'REAL');
-    const matchesCategory = categoryFilter === 'All' || cat === categoryFilter;
-    return matchesSearch && matchesStatus && matchesCategory;
+    return matchesSearch && matchesStatus;
   });
 
   const indexOfLastRecord  = currentPage * recordsPerPage;
@@ -113,7 +96,7 @@ const GenerateSellerReport = ({ sellers: externalSellers, onUpdateSellers, curre
       events.push({
         status: 'Registered',
         changedAt: seller.raw?.createdAt || seller.createdAt,
-        reason: `${seller.fullName} joined as ${seller.raw?.accountCategory || 'REAL'} seller`,
+        reason: `${seller.fullName} joined as a seller`,
       });
 
       // Status history from DB
@@ -230,14 +213,6 @@ const GenerateSellerReport = ({ sellers: externalSellers, onUpdateSellers, curre
                 <option value={SELLER_STATUS.ACTIVE}>Active Only</option>
               </select>
             </div>
-            <div>
-              <label style={{ fontSize: '11px', fontWeight: 700, color: '#a890c0', textTransform: 'uppercase', display: 'block', marginBottom: '6px' }}>Account Category</label>
-              <select style={s.formInput} value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}>
-                <option value="All">All Categories</option>
-                <option value="REAL">Real Sellers</option>
-                <option value="DEMO">Demo Sellers</option>
-              </select>
-            </div>
           </div>
         </div>
       </div>
@@ -260,7 +235,6 @@ const GenerateSellerReport = ({ sellers: externalSellers, onUpdateSellers, curre
               <thead>
                 <tr>
                   <th style={s.th}>Seller ID</th>
-                  <th style={s.th}>Category</th>
                   <th style={s.th}>Full Name</th>
                   <th style={s.th}>Contact Point (Email/Phone)</th>
                   <th style={s.th}>Payment Cycle / Commission</th>
@@ -276,22 +250,9 @@ const GenerateSellerReport = ({ sellers: externalSellers, onUpdateSellers, curre
                     </td>
                   </tr>
                 ) : (
-                  currentRecords.map((seller, idx) => {
-                    const isDemo = (seller.accountCategory || 'REAL') === 'DEMO';
-                    return (
+                  currentRecords.map((seller, idx) => (
                       <tr key={seller._id || idx} style={{ background: idx % 2 === 0 ? 'white' : '#faf7fd' }}>
                         <td style={{ ...s.td, fontFamily: "'DM Mono', monospace", fontWeight: 600, fontSize: '12px' }}>{seller.sellerId}</td>
-                        <td style={s.td}>
-                          <span style={{
-                            fontSize: '10px', fontWeight: 800, padding: '3px 8px', borderRadius: '6px',
-                            background: isDemo ? '#f3f4f6' : '#ecfdf5',
-                            color: isDemo ? '#6b7280' : '#059669',
-                            border: `1px solid ${isDemo ? '#d1d5db' : '#a7f3d0'}`,
-                            textTransform: 'uppercase',
-                          }}>
-                            {isDemo ? 'DEMO' : 'REAL'}
-                          </span>
-                        </td>
                         <td style={{ ...s.td, fontWeight: 700 }}>{seller.fullName || '—'}</td>
                         <td style={s.td}>
                           <div style={{ fontWeight: 500 }}>{seller.email}</div>
@@ -315,8 +276,7 @@ const GenerateSellerReport = ({ sellers: externalSellers, onUpdateSellers, curre
                           </div>
                         </td>
                       </tr>
-                    );
-                  })
+                  ))
                 )}
               </tbody>
             </table>
@@ -397,13 +357,13 @@ const GenerateSellerReport = ({ sellers: externalSellers, onUpdateSellers, curre
                     </div>
                   ) : (
                     <div style={{ position: 'relative', paddingLeft: 24 }}>
-                      <div style={{ position: 'absolute', left: 9, top: 6, bottom: 6, width: 2, background: 'linear-gradient(180deg, #390955 0%, #1E88E5 100%)', borderRadius: 1, opacity: 0.3 }} />
+                      <div style={{ position: 'absolute', left: 9, top: 6, bottom: 6, width: 2, background: '#390955', borderRadius: 1, opacity: 0.3 }} />
                       {sellerTimeline.map((evt, idx) => (
                         <div key={idx} style={{ position: 'relative', marginBottom: idx < sellerTimeline.length - 1 ? 16 : 0 }}>
                           <div style={{ position: 'absolute', left: -24, top: 2, width: 18, height: 18, borderRadius: '50%', background: '#390955', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1, boxShadow: '0 0 0 3px white, 0 0 0 4px rgba(57,9,85,0.2)' }}>
                             <svg width="10" height="10" viewBox="0 0 24 24" fill="white"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" /></svg>
                           </div>
-                          <div style={{ padding: '8px 12px', background: '#faf7fd', borderRadius: 8, border: '1px solid #ede6f7', borderLeft: '3px solid #390955' }}>
+                          <div style={{ padding: '8px 12px', background: '#faf7fd', borderRadius: 8, border: '1px solid #ede6f7' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
                               <span style={{ fontSize: 11, fontWeight: 700, color: '#1f1329' }}>Status: {evt.status}</span>
                               <span style={{ fontSize: 9, color: '#a890c0' }}>{formatTimelineDate(evt.changedAt)}</span>

@@ -1,8 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { buildLiveAlerts } from './alertsFeed';
 import { apiFetch } from './services/api';
 import useSSE from './services/useSSE';
-import SimulatedFeedBadge from './components/ui/SimulatedFeedBadge';
 import Tooltip from './components/ui/Tooltip';
 
 const s = {
@@ -19,17 +17,14 @@ const s = {
   empty:  { padding: '24px 16px', textAlign: 'center', color: '#bbb', fontSize: 12.5 },
 };
 
-const SEV_COLOR = { danger: '#ef4444', warning: '#f37021', info: '#390955' };
-
 export default function NotificationBell({ riders = [], pendingCount = 0, onNavigate }) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef(null);
 
   // ── Real app notification feed (2026-09-11 parity) ──
   // Durable events bridged from the mobile app (bookings, pickups,
-  // deliveries, POD uploads, issue tickets), replacing the transient-SSE-only
-  // gap. The geofence/overspeed section below keeps its SimulatedFeedBadge
-  // because that derivation is still synthetic.
+  // deliveries, POD uploads, issue tickets). No synthetic alerts are mixed
+  // in — every row here originates from a real app/backend event.
   const [appNotifications, setAppNotifications] = useState([]);
   const fetchAppNotifications = async () => {
     try {
@@ -52,8 +47,7 @@ export default function NotificationBell({ riders = [], pendingCount = 0, onNavi
     return () => document.removeEventListener('mousedown', onClickOutside);
   }, []);
 
-  const alerts = buildLiveAlerts(riders);
-  const totalCount = alerts.length + appNotifications.length + (pendingCount > 0 ? 1 : 0);
+  const totalCount = appNotifications.length + (pendingCount > 0 ? 1 : 0);
 
   return (
     <div style={s.wrap} ref={wrapRef}>
@@ -98,25 +92,7 @@ export default function NotificationBell({ riders = [], pendingCount = 0, onNavi
             </>
           )}
 
-          {alerts.length > 0 && (
-            <>
-              <div style={{ ...s.groupLabel, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                <span>Geofence & Overspeed Alerts</span>
-                <SimulatedFeedBadge />
-              </div>
-              {alerts.map(a => (
-                <div key={a.id} style={{ ...s.row, cursor: 'pointer' }} onClick={() => { setOpen(false); onNavigate?.('geofence'); }}>
-                  <span style={s.dot(SEV_COLOR[a.severity])} />
-                  <div>
-                    <div style={s.rowTitle}>{a.type} · {a.riderName}</div>
-                    <div style={s.rowSub}>{a.zone} · {a.minutesAgo} min ago</div>
-                  </div>
-                </div>
-              ))}
-            </>
-          )}
-
-          {totalCount === 0 && <div style={s.empty}>No active alerts. All clear.</div>}
+          {totalCount === 0 && <div style={s.empty}>No notifications yet.</div>}
         </div>
       )}
     </div>

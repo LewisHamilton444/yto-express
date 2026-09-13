@@ -2,12 +2,10 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { loadLeaflet } from './leafletLoader';
 import { LOGISTICS_HUBS, haversineKm, HUB_STATUS_COLORS } from './hubGeofenceData';
 import { CITY_COORDS, LUZON_FALLBACK_COORDS } from './luzonCityCoords';
-import { MOCK_LUZON_RIDERS, MOCK_LUZON_PARCELS } from './luzonMockData';
 import { useRouteAnimation } from './useRouteAnimation';
-import { buildLiveAlerts } from './alertsFeed';
 import { vehicleGlyphSvg, vehicleTypeLabel } from './components/ui/vehicleIconUtils';
 import { VehicleIcon } from './components/ui/vehicleIcons';
-import { AlertTriangle, CircleDot, Flame, Map, Package, RefreshCw, Satellite, TrafficCone, X } from 'lucide-react';
+import { CircleDot, Flame, Map, Package, RefreshCw, Satellite, TrafficCone, X } from 'lucide-react';
 import { ridersApi, parcelsApi, parcelLocationsApi } from './services/api';
 import Tooltip from './components/ui/Tooltip';
 import useSSE from './services/useSSE';
@@ -120,7 +118,6 @@ export default function LiveRiderMap() {
   const [riders, setRiders]           = useState([]);
   const [parcels, setParcels]         = useState([]);
   const [loading, setLoading]         = useState(true);
-  const [usingMock, setUsingMock]     = useState(false);
   const [lastUpdated, setLastUpdated] = useState('');
   const [selectedHub, setSelectedHub]     = useState(null);
   const [selectedRider, setSelectedRider] = useState(null);
@@ -131,7 +128,6 @@ export default function LiveRiderMap() {
   const [locationFilter, setLocationFilter] = useState('all');
   const [mapReady, setMapReady]       = useState(false);
   const [layers, setLayers] = useState({ satellite: false, geofences: true, heatmap: false, traffic: false });
-  const [dismissedAlertIds, setDismissedAlertIds] = useState([]);
 
   const divRef       = useRef(null);
   const mapRef       = useRef(null);
@@ -214,12 +210,10 @@ export default function LiveRiderMap() {
 
       setRiders(activeRiders);
       setParcels(activeParcels);
-      setUsingMock(false);
     } catch (err) {
-      console.error('LiveRiderMap: falling back to Luzon mock data —', err);
-      setRiders(MOCK_LUZON_RIDERS);
-      setParcels(MOCK_LUZON_PARCELS);
-      setUsingMock(true);
+      console.error('LiveRiderMap: backend unreachable —', err);
+      setRiders([]);
+      setParcels([]);
     } finally {
       setLoading(false);
       setLastUpdated(new Date().toLocaleTimeString());
@@ -406,8 +400,7 @@ export default function LiveRiderMap() {
     setSelectedRider(id === 'all' ? null : id);
   };
 
-  const activeAlerts = buildLiveAlerts(riders).filter(a => !dismissedAlertIds.includes(a.id));
-  const topAlert = activeAlerts[0];
+  const topAlert = null; // synthetic alert derivation removed with the REAL-only migration
 
   const card = { background: 'white', borderRadius: 12, border: '1px solid rgba(57,9,85,0.09)', boxShadow: '0 2px 16px rgba(57,9,85,0.06)', overflow: 'hidden' };
   const statRow = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 0', borderBottom: '1px solid #f5f0ff', fontSize: 13 };
@@ -424,7 +417,7 @@ export default function LiveRiderMap() {
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {usingMock && <span style={{ fontSize: 10, fontWeight: 700, color: '#c2410c', background: '#fff4ec', padding: '3px 9px', borderRadius: 8 }}>Showing sample Luzon data (backend unreachable)</span>}
+
           {lastUpdated && <span style={{ fontSize: 10, color: '#9b82b2', fontFamily: 'monospace' }}>Updated {lastUpdated}</span>}
           <Tooltip content="Re-fetch the latest rider and parcel positions">
           <button onClick={fetchData} style={{ padding: '5px 12px', background: 'white', border: '1.5px solid #e0d5f0', borderRadius: 8, fontSize: 11, fontWeight: 700, color: '#390955', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}><RefreshCw size={12} aria-hidden="true" /> Refresh</button>
@@ -432,18 +425,6 @@ export default function LiveRiderMap() {
         </div>
       </div>
 
-      {topAlert && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 20px', background: topAlert.severity === 'danger' ? '#fee2e2' : '#fff4ec', borderBottom: `1px solid ${topAlert.severity === 'danger' ? '#fca5a5' : '#f9d4b6'}` }}>
-          <span style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>{topAlert.severity === 'danger' ? <AlertTriangle size={17} color="#991b1b" aria-hidden="true" /> : <AlertTriangle size={17} color="#c2410c" aria-hidden="true" />}</span>
-          <span style={{ fontSize: 12.5, fontWeight: 700, color: topAlert.severity === 'danger' ? '#991b1b' : '#c2410c', flex: 1 }}>
-            {topAlert.type} — {topAlert.riderName} in {topAlert.zone} ({topAlert.minutesAgo} min ago)
-            {activeAlerts.length > 1 && <span style={{ fontWeight: 500, opacity: 0.75 }}> · +{activeAlerts.length - 1} more active alert{activeAlerts.length - 1 !== 1 ? 's' : ''}</span>}
-          </span>
-          <Tooltip content="Dismiss this alert">
-          <button onClick={() => setDismissedAlertIds(prev => [...prev, topAlert.id])} aria-label="Dismiss alert" style={{ background: 'none', border: 'none', cursor: 'pointer', color: topAlert.severity === 'danger' ? '#991b1b' : '#c2410c', lineHeight: 1, display: 'inline-flex', padding: 2 }}><X size={16} aria-hidden="true" /></button>
-          </Tooltip>
-        </div>
-      )}
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 20px', borderBottom: '1px solid rgba(57,9,85,0.07)', flexWrap: 'wrap' }}>
         <span style={{ fontSize: 11, fontWeight: 700, color: '#9b82b2', textTransform: 'uppercase', letterSpacing: 0.4 }}>Map Layers</span>

@@ -15,12 +15,6 @@ export const PARCEL_STATUS_COLORS = {
   'Failed':           { bg: '#fee2e2', color: '#991b1b' },
 };
 
-// Account category badging shared by admin views (CustomerList, ManageIssues, ...).
-// Canonical scheme: REAL renders green, DEMO renders neutral gray — matches the
-// long-standing inline badges in ManageAccounts / ViewSeller / ManageParcels.
-export const ACCOUNT_CATEGORY_TONE = { REAL: 'green', DEMO: 'slate' };
-export const ACCOUNT_CATEGORY_LABEL = { REAL: 'Real (Verified)', DEMO: 'Demo' };
-
 // Canonical account-status palettes for seller & rider ledgers. ViewSeller and
 // GenerateRiderDataReport used to each define their own local copies (one solid
 // purple, one tinted-pill style) that drifted apart — now a single source of

@@ -318,7 +318,7 @@ export function startSeedServer() {
         try { email = (JSON.parse(body || '{}').email || email); } catch {}
         json(res, 200, {
           token: 'qa-seed-token',
-          email, role: 'super_admin', isDemo: true,
+          email, role: 'super_admin',
           account: { _id: 'QA-ACC-1', name: 'QA Super Admin', email, role: 'super_admin' },
         });
       });

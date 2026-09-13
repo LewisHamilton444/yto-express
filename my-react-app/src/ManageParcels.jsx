@@ -3,8 +3,6 @@ import { apiFetch } from './services/api';
 import StatusBadge from './components/ui/StatusBadge';
 import { PARCEL_STATUS_COLORS } from './components/ui/statusColors';
 import Modal from './components/ui/Modal';
-import SimulatedFeedBadge from './components/ui/SimulatedFeedBadge';
-import { isDemoEmail } from './demoUtils';
 import Tooltip from './components/ui/Tooltip';
 import { AlertTriangle, Check, CheckCircle2, CircleDot, FileDown, FileText, X, XCircle } from 'lucide-react';
 
@@ -25,7 +23,7 @@ import { AlertTriangle, Check, CheckCircle2, CircleDot, FileDown, FileText, X, X
  * Fetches real parcels from GET /api/parcels and real riders from
  * GET /api/riders (for the Assign Rider list + resolving assignedRider
  * names), normalized via normalizeParcel() below. Falls back to
- * FALLBACK_PARCELS — clearly flagged in the UI — only if the API is
+ * The page renders ONLY live /api/parcels records — no fallback dataset exists.
  * unreachable, so the page never renders blank.
  *
  * Palette (unchanged from the legacy files):
@@ -36,7 +34,7 @@ import { AlertTriangle, Check, CheckCircle2, CircleDot, FileDown, FileText, X, X
 
 // ── Reference Data ──────────────────────────────────────────────────────────
 
-// 'Picked Up' and 'Out for Delivery' are kept for the fallback dataset below,
+// 'Picked Up' and 'Out for Delivery' complete the delivery-lifecycle vocabulary
 // but real /api/parcels records only ever carry pending/in-transit/delivered/
 // returned/failed (see ProcessParcelInformation.jsx's status options) — those
 // two extra values were added to represent that real vocabulary faithfully.
@@ -105,135 +103,11 @@ const PH_CITY_COORDS = {
 const NCR_FALLBACK_CENTER = { lat: 14.6, lng: 121.0 };
 const NCR_BOUNDS = { minLat: 14.45, maxLat: 14.75, minLng: 120.90, maxLng: 121.15 };
 
-// ── Fallback Parcels (used only if the live API is unreachable — every
-// shipment is one person sending to another, with a rider assigned for
-// pickup/delivery) ───────────────────────────────────────────────────────
-
-const RAW_PARCELS = [
-  { id: 'PKG-2025-001',
-    sender: { name: 'Juan Dela Cruz', phone: '+63 917 200 1001', email: 'juan.delacruz@gmail.com' },
-    receiver: { name: 'Maria Santos', phone: '+63 918 334 2210' },
-    address: '123 Rizal St, Manila', city: 'Manila',
-    weight: '2.5 kg', dimensions: '30 x 20 x 15 cm', contents: 'Electronics', value: '$250.00',
-    service: 'Express', status: 'In Transit', registeredDate: '2025-02-15', assignedRider: 'John Doe',
-    instructions: 'Handle with care — fragile electronics.' },
-
-  { id: 'PKG-2025-002',
-    sender: { name: 'Sarah Alonzo', phone: '+63 917 200 1002', email: 'sarah.alonzo@gmail.com' },
-    receiver: { name: 'Jose Reyes', phone: '+63 919 445 3321' },
-    address: '456 Mabini Ave, Makati', city: 'Makati City',
-    weight: '1.2 kg', dimensions: '25 x 18 x 10 cm', contents: 'Apparel', value: '$120.00',
-    service: 'Standard', status: 'Out for Delivery', registeredDate: '2025-02-15', assignedRider: 'Mark Tan',
-    instructions: 'Call recipient before arrival.' },
-
-  { id: 'PKG-2025-003',
-    sender: { name: 'Michael Reyes', phone: '+63 917 200 1003', email: 'michael.reyes@gmail.com' },
-    receiver: { name: 'Ana Cruz', phone: '+63 920 556 4432' },
-    address: '789 Quezon Blvd, QC', city: 'Quezon City',
-    weight: '3.8 kg', dimensions: '35 x 25 x 20 cm', contents: 'Computer Parts', value: '$520.00',
-    service: 'Overnight', status: 'Picked Up', registeredDate: '2025-02-14', assignedRider: 'Angela Reyes',
-    instructions: 'Signature required on delivery.' },
-
-  { id: 'PKG-2025-004',
-    sender: { name: 'Angela Bautista', phone: '+63 917 200 1004', email: 'angela.bautista@gmail.com' },
-    receiver: { name: 'Carlo Mendoza', phone: '+63 921 667 5543' },
-    address: '12 Taft Ave, Pasay', city: 'Pasay',
-    weight: '0.9 kg', dimensions: '20 x 15 x 8 cm', contents: 'Books & Merch', value: '$95.00',
-    service: 'Standard', status: 'Pending', registeredDate: '2025-02-14', assignedRider: 'Paolo Santos',
-    instructions: 'Leave at door if not home.' },
-
-  { id: 'PKG-2025-005',
-    sender: { name: 'Juan Dela Cruz', phone: '+63 917 200 1001', email: 'juan.delacruz@gmail.com' },
-    receiver: { name: 'Liza Soriano', phone: '+63 922 778 6654' },
-    address: '88 Shaw Blvd, Mandaluyong', city: 'Mandaluyong City',
-    weight: '1.7 kg', dimensions: '28 x 20 x 12 cm', contents: 'Electronics', value: '$180.00',
-    service: 'Express', status: 'Delivered', registeredDate: '2025-02-13', assignedRider: 'Kevin Cruz',
-    instructions: 'Ring doorbell twice.' },
-
-  { id: 'PKG-2025-006',
-    sender: { name: 'Ramon Villanueva', phone: '+63 920 441 7712', email: 'ramon.v@gmail.com' },
-    receiver: { name: 'Grace Tan', phone: '+63 927 118 9902' },
-    address: '55 Ortigas Ave, Pasig', city: 'Pasig City',
-    weight: '1.0 kg', dimensions: '22 x 16 x 10 cm', contents: 'Personal Parcel', value: '$60.00',
-    service: 'Standard', status: 'In Transit', registeredDate: '2025-02-15', assignedRider: 'John Doe',
-    instructions: 'Call recipient before arrival.' },
-
-  { id: 'PKG-2025-007',
-    sender: { name: 'Jenny Pascual', phone: '+63 918 774 2201', email: 'jenny.pascual@yahoo.com' },
-    receiver: { name: 'Mark Aquino', phone: '+63 921 305 5567' },
-    address: '23 España Blvd, Manila', city: 'Manila',
-    weight: '0.5 kg', dimensions: '18 x 12 x 8 cm', contents: 'Documents', value: '$20.00',
-    service: 'Express', status: 'Pending', registeredDate: '2025-02-15', assignedRider: 'Mark Tan',
-    instructions: 'Signature required on delivery.' },
-
-  { id: 'PKG-2025-008',
-    sender: { name: 'Roberto Flores', phone: '+63 917 902 3345', email: 'roberto.flores@gmail.com' },
-    receiver: { name: 'Diana Castillo', phone: '+63 906 447 8821' },
-    address: '101 Katipunan Ave, QC', city: 'Quezon City',
-    weight: '2.1 kg', dimensions: '26 x 18 x 14 cm', contents: 'Gift Item', value: '$85.00',
-    service: 'Overnight', status: 'Delivered', registeredDate: '2025-02-14', assignedRider: 'Angela Reyes',
-    instructions: 'Leave with building guard if unavailable.' },
-
-  { id: 'PKG-2025-009',
-    sender: { name: 'Marivic Santos', phone: '+63 917 220 6690', email: 'marivic.santos@gmail.com' },
-    receiver: { name: 'Paolo Gutierrez', phone: '+63 928 550 1123' },
-    address: '77 EDSA, Mandaluyong', city: 'Mandaluyong City',
-    weight: '0.8 kg', dimensions: '20 x 14 x 8 cm', contents: 'Personal Parcel', value: '$45.00',
-    service: 'Standard', status: 'Out for Delivery', registeredDate: '2025-02-13', assignedRider: 'Kevin Cruz',
-    instructions: 'Leave at door if not home.' },
-];
-
 // ── Derived-data helpers ─────────────────────────────────────────────────────
 
-function addDays(dateStr, days) {
-  const d = new Date(`${dateStr}T00:00:00`);
-  d.setDate(d.getDate() + days);
-  return d;
-}
-function addHours(dateStr, hours) {
-  const d = new Date(`${dateStr}T08:00:00`);
-  d.setHours(d.getHours() + hours);
-  return d;
-}
 function fmtDate(dateStr) {
   return new Date(`${dateStr}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
-function fmtDateTime(d) {
-  return d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-}
-
-// Cumulative step timeline, in the spirit of StatusReport.jsx's
-// DELIVERY_EVENTS_MAP, personalized with each parcel's own sender/city/address.
-const STEP_META = [
-  { status: 'Pending',          label: 'Order Received',   loc: (p) => `${p.sender.name} — Order Processing` },
-  { status: 'Picked Up',        label: 'Picked Up',         loc: (p) => `Picked up by ${p.assignedRider || 'rider'} from ${p.sender.name}` },
-  { status: 'In Transit',       label: 'In Transit',        loc: () => 'Metro Manila Sorting Hub' },
-  { status: 'Out for Delivery', label: 'Out for Delivery',  loc: (p) => `${p.city} Local Delivery Station` },
-  { status: 'Delivered',        label: 'Delivered',         loc: (p) => p.address },
-];
-const STEP_OFFSET_HOURS = [0, 6, 26, 46, 52];
-
-function buildTimeline(p) {
-  const idx = STATUSES.indexOf(p.status);
-  return STEP_META.slice(0, idx + 1).map((step, i) => ({
-    status: step.status,
-    label: step.label,
-    location: step.loc(p),
-    timestamp: fmtDateTime(addHours(p.registeredDate, STEP_OFFSET_HOURS[i])),
-  }));
-}
-
-const FALLBACK_PARCELS = RAW_PARCELS.map((p) => {
-  const base = PH_CITY_COORDS[p.city] || NCR_FALLBACK_CENTER;
-  return {
-    ...p,
-    trackingNumber: `TRK-${p.id.replace('PKG-', '')}`,
-    estimatedDelivery: addDays(p.registeredDate, 3).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }),
-    lat: base.lat,
-    lng: base.lng,
-    timeline: buildTimeline(p),
-  };
-});
 
 // ── Real-data adapter ───────────────────────────────────────────────────────
 // Maps a raw /api/parcels document (trackingNumber, senderName, receiverName,
@@ -296,7 +170,6 @@ function normalizeParcel(raw, riderNameById) {
     lat: base.lat,
     lng: base.lng,
     podPhoto: raw.podPhoto || '',
-    accountCategory: raw.accountCategory || (isDemoEmail(raw.senderEmail || raw.sender?.email) || String(raw.trackingNumber || raw._id || '').startsWith('DEMO-') ? 'DEMO' : 'REAL'),
   };
 
   // Real per-scan history when the backend recorded any events. When it
@@ -683,10 +556,8 @@ function ParcelModal({ parcel, onClose, allParcels }) {
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 12 }}>
                   <div style={{ fontSize: 10, fontWeight: 800, color: '#390955', textTransform: 'uppercase', letterSpacing: 0.7 }}>Live GPS &amp; Geofence</div>
-                  {mapLoading ? (
-                    <span style={{ fontSize: 11, color: '#390955', fontWeight: 700 }}>Locating…</span>
-                  ) : (
-                    gps && <SimulatedFeedBadge text="Simulated GPS preview" />
+                  !mapLoading && gps && (
+                    <span style={{ fontSize: 10, fontWeight: 700, color: '#16a34a' }}>Live GPS fix</span>
                   )}
                 </div>
                 {mapLoading ? (
@@ -800,7 +671,7 @@ function ParcelModal({ parcel, onClose, allParcels }) {
 
 // ── Toolbar (search + status filter + Export PDF/CSV) ──────────────────────
 
-function Toolbar({ search, setSearch, statusFilter, setStatusFilter, categoryFilter, setCategoryFilter, onExportCSV, onExportPDF, resultCount }) {
+function Toolbar({ search, setSearch, statusFilter, setStatusFilter, onExportCSV, onExportPDF, resultCount }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
 
@@ -834,17 +705,6 @@ function Toolbar({ search, setSearch, statusFilter, setStatusFilter, categoryFil
       >
         <option value="All">All Statuses</option>
         {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-      </select>
-
-      <select
-        value={categoryFilter}
-        onChange={(e) => setCategoryFilter(e.target.value)}
-        className="mp-select"
-        style={{ padding: '9px 12px', border: '1.5px solid #e0d5f0', borderRadius: 8, fontSize: 13, color: '#1a1a1a', background: 'white', fontFamily: 'inherit', outline: 'none', cursor: 'pointer' }}
-      >
-        <option value="All">All Categories</option>
-        <option value="REAL">Real Parcels</option>
-        <option value="DEMO">Demo Parcels</option>
       </select>
 
       <span style={{ fontSize: 12, color: '#aaa' }}>{resultCount} result{resultCount !== 1 ? 's' : ''}</span>
@@ -919,7 +779,6 @@ export default function ManageParcels({ currentUser }) {
   const [actionError, setActionError]   = useState('');
   const [search, setSearch]             = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
-  const [categoryFilter, setCategoryFilter] = useState(currentUser?.isDemo ? 'DEMO' : 'REAL');
   const [viewParcel, setViewParcel]     = useState(null);
 
   const flashActionError = useCallback((msg) => { setActionError(msg); setTimeout(() => setActionError(''), 4000); }, []);
@@ -945,9 +804,6 @@ export default function ManageParcels({ currentUser }) {
       if (normalized.length > 0) {
         setParcels(normalized);
         setUsingFallback(false);
-      } else if (currentUser?.isDemo) {
-        setParcels(FALLBACK_PARCELS.map(p => ({ ...p, accountCategory: 'DEMO' })));
-        setUsingFallback(true);
       } else {
         setParcels([]);
         setUsingFallback(false);
@@ -955,19 +811,14 @@ export default function ManageParcels({ currentUser }) {
       setRiders(riderList);
     } catch (err) {
       console.error('ManageParcels: error loading parcels —', err);
-      if (currentUser?.isDemo) {
-        setParcels(FALLBACK_PARCELS.map(p => ({ ...p, accountCategory: 'DEMO' })));
-        setUsingFallback(true);
-      } else {
-        setParcels([]);
-        setUsingFallback(false);
-        flashActionError('Could not reach the server.');
-      }
+      setParcels([]);
+      setUsingFallback(false);
+      flashActionError('Could not reach the server.');
       setRiders([]);
     } finally {
       setLoading(false);
     }
-  }, [currentUser?.isDemo, flashActionError]);
+  }, [flashActionError]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -975,7 +826,6 @@ export default function ManageParcels({ currentUser }) {
     const q = search.trim().toLowerCase();
     return parcels.filter((p) => {
       if (statusFilter !== 'All' && p.status !== statusFilter) return false;
-      if (categoryFilter !== 'All' && (p.accountCategory || 'REAL') !== categoryFilter) return false;
       if (!q) return true;
       return (
         p.id.toLowerCase().includes(q) ||
@@ -985,7 +835,7 @@ export default function ManageParcels({ currentUser }) {
         (p.assignedRider && p.assignedRider.toLowerCase().includes(q))
       );
     });
-  }, [parcels, search, statusFilter, categoryFilter]);
+  }, [parcels, search, statusFilter]);
 
   // Persists the assignment to the real parcel record (PUT /api/parcels/:id)
   // when we're on live data; in fallback mode (API unreachable) there's
@@ -1009,7 +859,7 @@ export default function ManageParcels({ currentUser }) {
     }
   };
 
-  const COLS = ['Parcel ID', 'Category', 'Sender', 'Receiver', 'Delivery Address', 'Weight', 'Assigned Rider', 'Status'];
+  const COLS = ['Parcel ID', 'Sender', 'Receiver', 'Delivery Address', 'Weight', 'Assigned Rider', 'Status'];
 
   return (
     <div style={{ flex: 1, overflowY: 'auto', backgroundColor: '#f9f7ff', fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" }}>
@@ -1044,7 +894,7 @@ export default function ManageParcels({ currentUser }) {
       <div style={{ padding: '24px 32px', display: 'flex', flexDirection: 'column', gap: 20 }}>
         {usingFallback && !loading && (
           <div style={{ padding: '12px 16px', background: '#fff4ec', color: '#c2410c', border: '1px solid #f9d4b6', borderRadius: 10, fontSize: 12.5, fontWeight: 600 }}>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}><AlertTriangle size={15} aria-hidden="true" /> Showing demo test parcels (Demo Mode active).</span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}><AlertTriangle size={15} aria-hidden="true" /> Live parcel feed unavailable — showing an empty roster until the server responds.</span>
           </div>
         )}
         {actionError && (
@@ -1068,7 +918,7 @@ export default function ManageParcels({ currentUser }) {
           <Toolbar
             search={search} setSearch={setSearch}
             statusFilter={statusFilter} setStatusFilter={setStatusFilter}
-            categoryFilter={categoryFilter} setCategoryFilter={setCategoryFilter}
+
             onExportCSV={() => exportCSV(filtered)}
             onExportPDF={() => exportPDF(filtered)}
             resultCount={filtered.length}
@@ -1088,21 +938,10 @@ export default function ManageParcels({ currentUser }) {
                 {loading ? (
                   <tr><td colSpan={COLS.length + 1} style={{ padding: '48px 20px', textAlign: 'center', color: '#aaa', fontSize: 13 }}>Loading parcels…</td></tr>
                 ) : filtered.length === 0 ? (
-                  <tr><td colSpan={COLS.length + 1} style={{ padding: '48px 20px', textAlign: 'center', color: '#aaa', fontSize: 13 }}>No parcels found in this category.</td></tr>
+                  <tr><td colSpan={COLS.length + 1} style={{ padding: '48px 20px', textAlign: 'center', color: '#aaa', fontSize: 13 }}>No parcels found.</td></tr>
                 ) : filtered.map((p, idx) => (
                   <tr key={p.id} className="mp-row" style={{ background: idx % 2 === 0 ? 'white' : '#faf9ff' }}>
                     <td style={{ padding: '12px 16px', fontFamily: 'monospace', color: '#390955', fontWeight: 700, whiteSpace: 'nowrap', borderBottom: '1px solid #f3f0f8' }}>{p.id}</td>
-                    <td style={{ padding: '12px 16px', whiteSpace: 'nowrap', borderBottom: '1px solid #f3f0f8' }}>
-                      <span style={{
-                        fontSize: 10, fontWeight: 800, padding: '3px 8px', borderRadius: 6,
-                        background: p.accountCategory === 'DEMO' ? '#f3f4f6' : '#ecfdf5',
-                        color: p.accountCategory === 'DEMO' ? '#6b7280' : '#059669',
-                        border: `1px solid ${p.accountCategory === 'DEMO' ? '#d1d5db' : '#a7f3d0'}`,
-                        textTransform: 'uppercase',
-                      }}>
-                        {p.accountCategory || 'REAL'}
-                      </span>
-                    </td>
                     <td style={{ padding: '12px 16px', color: '#1a1a1a', fontWeight: 600, whiteSpace: 'nowrap', borderBottom: '1px solid #f3f0f8' }}>{p.sender.name}</td>
                     <td style={{ padding: '12px 16px', color: '#374151', whiteSpace: 'nowrap', borderBottom: '1px solid #f3f0f8' }}>{p.receiver.name}</td>
                     <td style={{ padding: '12px 16px', color: '#666', borderBottom: '1px solid #f3f0f8', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.address}</td>

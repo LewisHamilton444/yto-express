@@ -9,7 +9,6 @@ import CardSectionHeader from './components/ui/CardSectionHeader';
 import CardFooter from './components/ui/CardFooter';
 import TableSkeleton from './components/ui/TableSkeleton';
 import EmptyState from './components/ui/EmptyState';
-import { ACCOUNT_CATEGORY_TONE, ACCOUNT_CATEGORY_LABEL } from './components/ui/statusColors';
 import {
   Users, Search, X,
   Hash, User, Mail, Phone, Tag, Activity, Globe, Calendar,
@@ -21,7 +20,6 @@ const CUSTOMER_EXPORT_COLUMNS = [
   { key: 'fullName', label: 'Full Name' },
   { key: 'email', label: 'Email' },
   { key: 'phone', label: 'Phone' },
-  { key: 'accountCategory', label: 'Category' },
   { key: 'status', label: 'Status' },
   { key: 'source', label: 'Source' },
 ];
@@ -42,7 +40,6 @@ const TABLE_HEADERS = [
   { label: 'Name', icon: User },
   { label: 'Email', icon: Mail },
   { label: 'Phone', icon: Phone },
-  { label: 'Category', icon: Tag },
   { label: 'Status', icon: Activity },
   { label: 'Source', icon: Globe },
   { label: 'Joined', icon: Calendar },
@@ -58,7 +55,6 @@ const CustomerList = ({ currentUser }) => {
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState(currentUser?.isDemo ? 'DEMO' : 'REAL');
   const [currentPage, setCurrentPage] = useState(1);
   const [recordsPerPage, setRecordsPerPage] = useState(10);
   const [detailCustomer, setDetailCustomer] = useState(null);
@@ -120,8 +116,7 @@ const CustomerList = ({ currentUser }) => {
 
       events.push({
         type: 'registration',
-        title: 'Account Registered',
-        description: `${customer.fullName} joined as a ${customer.accountCategory || 'REAL'} account`,
+        title: 'Account Registered',                        description: `${customer.fullName} joined as a customer`,
         timestamp: customer.createdAt,
       });
 
@@ -180,16 +175,12 @@ const CustomerList = ({ currentUser }) => {
     const matchSearch = c.fullName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                         c.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                         c.customerId?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchCategory = categoryFilter === 'All' || c.accountCategory === categoryFilter;
-    return matchSearch && matchCategory;
+    return matchSearch;
   });
 
   const indexOfLast = currentPage * recordsPerPage;
   const indexOfFirst = indexOfLast - recordsPerPage;
   const currentRecords = filtered.slice(indexOfFirst, indexOfLast);
-
-  const realCount = customers.filter(c => c.accountCategory !== 'DEMO').length;
-  const demoCount = customers.filter(c => c.accountCategory === 'DEMO').length;
 
   const handleExport = () => {
     exportToCSV(filtered, CUSTOMER_EXPORT_COLUMNS, 'yto_customers');
@@ -248,15 +239,6 @@ const CustomerList = ({ currentUser }) => {
                 className="pl-10 pr-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 w-72"
               />
             </div>
-            <select
-              value={categoryFilter}
-              onChange={e => { setCategoryFilter(e.target.value); setCurrentPage(1); }}
-              className="px-3 py-2 border border-slate-200 rounded-xl text-sm bg-white cursor-pointer font-semibold text-brand-purple"
-            >
-              <option value="All">All Categories</option>
-              <option value="REAL">Real</option>
-              <option value="DEMO">Demo</option>
-            </select>
             <span className="text-xs text-slate-400 whitespace-nowrap">{filtered.length} results</span>
           </div>
           <button
@@ -297,9 +279,9 @@ const CustomerList = ({ currentUser }) => {
               ) : currentRecords.length === 0 ? (
                 <tr>
                   <td colSpan={TABLE_HEADERS.length} className="py-12 text-sm text-center text-slate-400">
-                    {customers.length === 0 && !currentUser?.isDemo
+                    {customers.length === 0
                       ? 'No active production records found.'
-                      : 'No records found in this category.'}
+                      : 'No records match the current search.'}
                   </td>
                 </tr>
               ) : currentRecords.map((c, i) => (
@@ -312,7 +294,6 @@ const CustomerList = ({ currentUser }) => {
                   <td className="px-4 py-3 text-sm font-semibold text-gray-900">{c.fullName || '-'}</td>
                   <td className="px-4 py-3 text-xs text-gray-500">{c.email || '-'}</td>
                   <td className="px-4 py-3 text-xs text-gray-500">{c.phone || '-'}</td>
-                  <td className="px-4 py-3"><Badge tone={ACCOUNT_CATEGORY_TONE[c.accountCategory] || 'slate'}>{ACCOUNT_CATEGORY_LABEL[c.accountCategory] || c.accountCategory || 'Real (Verified)'}</Badge></td>
                   <td className="px-4 py-3"><Badge tone={STATUS_TONE[c.status] || 'green'}>{c.status || 'Active'}</Badge></td>
                   <td className="px-4 py-3 text-xs text-gray-500">{c.source || 'mobile-app'}</td>
                   <td className="px-4 py-3 text-xs text-gray-500">{formatDate(c.createdAt)}</td>
@@ -325,8 +306,7 @@ const CustomerList = ({ currentUser }) => {
         <CardFooter
           resultsLabel={`Showing ${filtered.length} of ${customers.length} results`}
           pills={[
-            { label: 'Real', value: realCount, tone: 'green' },
-            { label: 'Demo', value: demoCount, tone: 'amber' },
+            { label: 'Active', value: customers.filter(c => c.status !== 'Deactivated').length, tone: 'green' },
           ]}
         />
       </div>
@@ -385,7 +365,6 @@ const CustomerList = ({ currentUser }) => {
                   { label: 'Full Name', value: detailCustomer.fullName },
                   { label: 'Email', value: detailCustomer.email },
                   { label: 'Phone', value: detailCustomer.phone || '---' },
-                  { label: 'Account Category', value: ACCOUNT_CATEGORY_LABEL[detailCustomer.accountCategory] || detailCustomer.accountCategory || 'Real (Verified)', badge: true, tone: ACCOUNT_CATEGORY_TONE[detailCustomer.accountCategory] || 'green' },
                   { label: 'Status', value: detailCustomer.status || 'Active', badge: true, tone: STATUS_TONE[detailCustomer.status] || 'green' },
                   { label: 'Source', value: detailCustomer.source || 'mobile-app' },
                   { label: 'Joined', value: formatDateTime(detailCustomer.createdAt) },

@@ -57,7 +57,6 @@ function authenticateToken(req, res, next) {
     try {
         const decoded = jwt.verify(token, JWT_SECRET);
         req.user = decoded;
-        req.category = decoded.isDemo ? 'DEMO' : 'REAL';
         next();
     } catch (error) {
         if (error.name === 'TokenExpiredError') {
@@ -65,23 +64,6 @@ function authenticateToken(req, res, next) {
         }
         return res.status(403).json({ error: 'Invalid token.' });
     }
-}
-
-// ── CATEGORY PARTITIONING HELPER ─────────────────────────────────────────
-function getCategoryFilter(req) {
-    const requested = (req.query.category || '').toUpperCase();
-    if (requested === 'ALL') return {};
-    if (requested === 'REAL' || requested === 'DEMO') return { accountCategory: requested };
-    return { accountCategory: req.category || 'REAL' };
-}
-
-// ── DEMO / REAL ACCOUNT CLASSIFICATION ──────────────────────────────────
-const DEMO_DOMAINS = ['yto.com', 'example.com', 'ytoexpress.com'];
-const DEMO_EMAILS = ['superadmin@gmail.com', 'staff@gmail.com', 'hub@gmail.com'];
-function isDemoEmail(email) {
-    const value = String(email || '').toLowerCase().trim();
-    const domain = value.split('@')[1] || '';
-    return DEMO_EMAILS.includes(value) || DEMO_DOMAINS.includes(domain) || value.startsWith('demo');
 }
 
 // ── ROOT ROUTE ──
@@ -151,10 +133,7 @@ app.use('/api/bridge', require('./bridgeRoutes'));
 // ── SELLER ROUTES ──
 app.post('/api/sellers', authenticateToken, async (req, res) => {
     try {
-        const newSeller = new Seller({
-            ...req.body,
-            accountCategory: req.body.accountCategory || req.category || 'REAL',
-        });
+        const newSeller = new Seller({ ...req.body });
         await newSeller.save();
         res.status(201).json({ message: "Seller saved!" });
     } catch (error) {
@@ -164,7 +143,7 @@ app.post('/api/sellers', authenticateToken, async (req, res) => {
 
 app.get('/api/sellers', authenticateToken, async (req, res) => {
     try {
-        const sellers = await Seller.find(getCategoryFilter(req)).sort({ createdAt: -1 });
+        const sellers = await Seller.find({}).sort({ createdAt: -1 });
         res.json(sellers);
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -179,8 +158,7 @@ app.put('/api/sellers/:id', authenticateToken, async (req, res) => {
             { new: true, runValidators: false }
         );
 
-        // REAL realm only: DEMO-realm sellers have no Android account to approve.
-        if (req.body.status && updated.email && updated.accountCategory !== 'DEMO') {
+        if (req.body.status && updated.email) {
             BridgeClient.sendApproval(updated.email, 'seller', req.body.status, updated.registrationId)
                 .catch(e => console.warn('[Bridge→Android] sendApproval failed:', e.message));
         }
@@ -203,10 +181,7 @@ app.delete('/api/sellers/:id', authenticateToken, async (req, res) => {
 // ── RIDER ROUTES ──
 app.post('/api/riders', authenticateToken, async (req, res) => {
     try {
-        const newRider = new Rider({
-            ...req.body,
-            accountCategory: req.body.accountCategory || req.category || 'REAL',
-        });
+        const newRider = new Rider({ ...req.body });
         await newRider.save();
         res.status(201).json({ message: "Rider saved!" });
     } catch (error) {
@@ -216,7 +191,7 @@ app.post('/api/riders', authenticateToken, async (req, res) => {
 
 app.get('/api/riders', authenticateToken, async (req, res) => {
     try {
-        const riders = await Rider.find(getCategoryFilter(req)).sort({ createdAt: -1 });
+        const riders = await Rider.find({}).sort({ createdAt: -1 });
         res.json(riders);
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -231,8 +206,7 @@ app.put('/api/riders/:id', authenticateToken, async (req, res) => {
             { new: true, runValidators: false }
         );
 
-        // REAL realm only: DEMO-realm riders have no Android account to approve.
-        if (req.body.status && updated.email && updated.accountCategory !== 'DEMO') {
+        if (req.body.status && updated.email) {
             BridgeClient.sendApproval(updated.email, 'rider', req.body.status, updated.registrationId)
                 .catch(e => console.warn('[Bridge→Android] sendApproval failed:', e.message));
         }
@@ -255,7 +229,7 @@ app.delete('/api/riders/:id', authenticateToken, async (req, res) => {
 // ── CUSTOMER ROUTES ──
 app.get('/api/customers', authenticateToken, async (req, res) => {
     try {
-        const customers = await Customer.find(getCategoryFilter(req)).sort({ createdAt: -1 });
+        const customers = await Customer.find({}).sort({ createdAt: -1 });
         res.json(customers);
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -264,12 +238,8 @@ app.get('/api/customers', authenticateToken, async (req, res) => {
 
 app.get('/api/customers/stats', authenticateToken, async (req, res) => {
     try {
-        const [total, realCount, demoCount] = await Promise.all([
-            Customer.countDocuments(),
-            Customer.countDocuments({ accountCategory: 'REAL' }),
-            Customer.countDocuments({ accountCategory: 'DEMO' }),
-        ]);
-        res.json({ total, realCount, demoCount });
+        const total = await Customer.countDocuments();
+        res.json({ total });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
@@ -293,11 +263,10 @@ app.get('/api/activity-log', authenticateToken, async (req, res) => {
     try {
         const limit = Math.min(parseInt(req.query.limit) || 50, 200);
         const roleFilter = req.query.role;
-        const catFilter = getCategoryFilter(req);
         const events = [];
 
         if (!roleFilter || roleFilter === 'customer') {
-            const customers = await Customer.find(catFilter);
+            const customers = await Customer.find({});
             customers.forEach(c => {
                 events.push({
                     role: 'customer',
@@ -305,7 +274,7 @@ app.get('/api/activity-log', authenticateToken, async (req, res) => {
                     actorId: c.customerId,
                     type: 'registration',
                     status: c.status || 'Active',
-                    description: `${c.fullName} registered as ${c.accountCategory || 'REAL'} customer`,
+                    description: `${c.fullName} registered as a customer`,
                     timestamp: c.createdAt,
                 });
                 if (c.statusHistory && c.statusHistory.length > 0) {
@@ -325,7 +294,7 @@ app.get('/api/activity-log', authenticateToken, async (req, res) => {
         }
 
         if (!roleFilter || roleFilter === 'seller') {
-            const sellers = await Seller.find(catFilter);
+            const sellers = await Seller.find({});
             sellers.forEach(s => {
                 events.push({
                     role: 'seller',
@@ -333,7 +302,7 @@ app.get('/api/activity-log', authenticateToken, async (req, res) => {
                     actorId: s.registrationId,
                     type: 'registration',
                     status: s.status || 'ACTIVE',
-                    description: `${s.fullName} registered as ${s.accountCategory || 'REAL'} seller`,
+                    description: `${s.fullName} registered as a seller`,
                     timestamp: s.createdAt,
                 });
                 if (s.statusHistory && s.statusHistory.length > 0) {
@@ -353,7 +322,7 @@ app.get('/api/activity-log', authenticateToken, async (req, res) => {
         }
 
         if (!roleFilter || roleFilter === 'rider') {
-            const riders = await Rider.find(catFilter);
+            const riders = await Rider.find({});
             riders.forEach(r => {
                 events.push({
                     role: 'rider',
@@ -361,7 +330,7 @@ app.get('/api/activity-log', authenticateToken, async (req, res) => {
                     actorId: r.registrationId,
                     type: 'registration',
                     status: r.status || 'Active',
-                    description: `${r.riderName} registered as ${r.accountCategory || 'REAL'} rider`,
+                    description: `${r.riderName} registered as a rider`,
                     timestamp: r.createdAt,
                 });
                 if (r.statusHistory && r.statusHistory.length > 0) {
@@ -390,10 +359,7 @@ app.get('/api/activity-log', authenticateToken, async (req, res) => {
 // ── PARCEL ROUTES ──
 app.post('/api/parcels', authenticateToken, async (req, res) => {
     try {
-        const newParcel = new Parcel({
-            ...req.body,
-            accountCategory: req.body.accountCategory || req.category || 'REAL',
-        });
+        const newParcel = new Parcel({ ...req.body });
         await newParcel.save();
         res.status(201).json({ message: "Parcel saved!", parcel: newParcel });
     } catch (error) {
@@ -403,7 +369,7 @@ app.post('/api/parcels', authenticateToken, async (req, res) => {
 
 app.get('/api/parcels', authenticateToken, async (req, res) => {
     try {
-        const parcels = await Parcel.find(getCategoryFilter(req)).sort({ createdAt: -1 });
+        const parcels = await Parcel.find({}).sort({ createdAt: -1 });
         res.json(parcels);
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -418,10 +384,7 @@ app.put('/api/parcels/:id', authenticateToken, async (req, res) => {
             { new: true, runValidators: false }
         );
 
-        // REAL realm only: DEMO-realm parcels (web-only, e.g. @yto.com senders)
-        // have no Android counterpart, so bridging their status would only
-        // produce guaranteed 404 round-trips on the Android side.
-        if (req.body.status && updated.trackingNumber && updated.accountCategory !== 'DEMO') {
+        if (req.body.status && updated.trackingNumber) {
             BridgeClient.sendStatus(updated.trackingNumber, req.body.status)
                 .catch(e => console.warn('[Bridge→Android] sendStatus failed:', e.message));
         }
@@ -493,14 +456,13 @@ app.delete('/api/parcel-locations/:id', authenticateToken, async (req, res) => {
 // ── DASHBOARD ANALYTICS ──
 app.get('/api/dashboard/stats', authenticateToken, async (req, res) => {
     try {
-        const catFilter = getCategoryFilter(req);
         const [totalParcels, deliveredCount, totalRiders, activeRidersCount, totalSellers, riderStats] = await Promise.all([
-            Parcel.countDocuments(catFilter),
-            Parcel.countDocuments({ ...catFilter, status: { $regex: /^delivered$/i } }),
-            Rider.countDocuments(catFilter),
-            Rider.countDocuments({ ...catFilter, status: { $regex: /^active$/i } }),
-            Seller.countDocuments(catFilter),
-            Rider.find(catFilter, 'rating deliveries'),
+            Parcel.countDocuments({}),
+            Parcel.countDocuments({ status: { $regex: /^delivered$/i } }),
+            Rider.countDocuments({}),
+            Rider.countDocuments({ status: { $regex: /^active$/i } }),
+            Seller.countDocuments({}),
+            Rider.find({}, 'rating deliveries'),
         ]);
 
         const deliverySuccessPct = totalParcels
@@ -520,7 +482,6 @@ app.get('/api/dashboard/stats', authenticateToken, async (req, res) => {
             avgRiderRating,
             totalDeliveries,
             totalSellers,
-            category: req.category,
         });
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -530,7 +491,7 @@ app.get('/api/dashboard/stats', authenticateToken, async (req, res) => {
 // ── ACCOUNT ROUTES ──
 app.get('/api/accounts', authenticateToken, async (req, res) => {
     try {
-        const accounts = await Account.find(getCategoryFilter(req)).select('-password');
+        const accounts = await Account.find({}).select('-password');
         res.json(accounts);
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -544,11 +505,9 @@ app.post('/api/accounts', authenticateToken, async (req, res) => {
         if (existing) {
             return res.status(400).json({ error: 'An account with this email already exists.' });
         }
-        const isDemo = isDemoEmail(email);
         const newAccount = new Account({
             ...req.body,
             email,
-            accountCategory: isDemo ? 'DEMO' : 'REAL',
         });
         await newAccount.save();
         const result = newAccount.toObject();
@@ -564,7 +523,6 @@ app.put('/api/accounts/:id', authenticateToken, async (req, res) => {
         const updateData = { ...req.body };
         if (updateData.email) {
             updateData.email = updateData.email.toLowerCase().trim();
-            updateData.accountCategory = isDemoEmail(updateData.email) ? 'DEMO' : 'REAL';
         }
         if (updateData.password && updateData.password.trim()) {
             const salt = await bcrypt.genSalt(10);
@@ -614,16 +572,15 @@ app.post('/api/accounts/login', async (req, res) => {
         if (account.status === 'Deactivated') {
             return res.status(403).json({ error: 'This account has been deactivated. Contact your Super Admin.' });
         }
-        const isDemo = isDemoEmail(account.email);
         const result = account.toObject();
         delete result.password;
 
         const token = jwt.sign(
-            { id: account._id, email: account.email, role: account.role, isDemo },
+            { id: account._id, email: account.email, role: account.role },
             JWT_SECRET,
             { expiresIn: '24h' }
         );
-        res.json({ ...result, token, loginRole: 'admin', isDemo, accountCategory: isDemo ? 'DEMO' : 'REAL' });
+        res.json({ ...result, token, loginRole: 'admin' });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
@@ -664,7 +621,7 @@ app.patch('/api/notifications/:id/read', authenticateToken, async (req, res) => 
 // ── SUPPORT TICKET / ISSUE ROUTES ──
 app.get('/api/issues', authenticateToken, async (req, res) => {
     try {
-        const issues = await Issue.find(getCategoryFilter(req)).sort({ createdAt: -1 });
+        const issues = await Issue.find({}).sort({ createdAt: -1 });
         res.json(issues);
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -887,26 +844,32 @@ if (!MONGO_URI) {
   process.exit(1);
 }
 
-// ── DEMO ADMIN BOOTSTRAP ──
-const DEMO_ADMIN_BOOTSTRAP = [
-  { email: 'superadmin@gmail.com', name: 'YTO Super Admin (Demo)',      role: 'super_admin',  passwordEnv: 'DEMO_ADMIN_PASSWORD_SUPERADMIN', phone: '09170000000' },
-  { email: 'staff@gmail.com',      name: 'YTO Operations Staff (Demo)', role: 'staff',        passwordEnv: 'DEMO_ADMIN_PASSWORD_STAFF',      phone: '09170000000' },
-  { email: 'hub@gmail.com',        name: 'YTO Hub Receiver (Demo)',     role: 'hub_receiver', passwordEnv: 'DEMO_ADMIN_PASSWORD_HUB',        phone: '09170000000' },
+// ── ADMIN BOOTSTRAP ──
+// Insert-only: ensures the canonical admin accounts exist with bcrypt-hashed
+// passwords from env. Passwords are never overwritten on restart.
+const ADMIN_BOOTSTRAP = [
+  { email: 'superadmin@ytoexpress.com', name: 'YTO Super Admin',      role: 'super_admin',  passwordEnv: 'ADMIN_PASSWORD_SUPERADMIN', legacyEnv: 'DEMO_ADMIN_PASSWORD_SUPERADMIN', phone: '09170000000' },
+  { email: 'staff@ytoexpress.com',      name: 'YTO Operations Staff', role: 'staff',        passwordEnv: 'ADMIN_PASSWORD_STAFF',      legacyEnv: 'DEMO_ADMIN_PASSWORD_STAFF',      phone: '09170000000' },
+  { email: 'hub@ytoexpress.com',        name: 'YTO Hub Receiver',     role: 'hub_receiver', passwordEnv: 'ADMIN_PASSWORD_HUB',        legacyEnv: 'DEMO_ADMIN_PASSWORD_HUB',        phone: '09170000000' },
 ];
 
-function resolveDemoPassword(entry) {
+function resolveAdminPassword(entry) {
   const fromEnv = process.env[entry.passwordEnv];
-  if (fromEnv && fromEnv.trim()) return fromEnv.trim();
+  if (fromEnv && fromEnv.trim()) return { password: fromEnv.trim(), source: entry.passwordEnv };
+  // Legacy fallback (pre-de-demo env names) so existing deployments keep working.
+  const fromLegacy = process.env[entry.legacyEnv];
+  if (fromLegacy && fromLegacy.trim()) return { password: fromLegacy.trim(), source: entry.legacyEnv };
   const generated = crypto.randomBytes(12).toString('base64url');
   console.log('[Bootstrap] No ' + entry.passwordEnv + ' set for ' + entry.email + '. Generated a one-time password (record it now): ' + generated);
-  return generated;
+  return { password: generated, source: 'generated' };
 }
 
-async function ensureDemoAdminAccounts() {
+async function ensureAdminAccounts() {
   try {
     const today = new Date().toISOString().split('T')[0];
-    for (const d of DEMO_ADMIN_BOOTSTRAP) {
-      const passwordHash = await bcrypt.hash(resolveDemoPassword(d), 10);
+    for (const d of ADMIN_BOOTSTRAP) {
+      const { password, source } = resolveAdminPassword(d);
+      const passwordHash = await bcrypt.hash(password, 10);
       await Account.collection.updateOne(
         { email: d.email },
         {
@@ -917,29 +880,29 @@ async function ensureDemoAdminAccounts() {
             role: d.role,
             password: passwordHash,
             status: 'Active',
-            accountCategory: 'DEMO',
             createdDate: today,
           },
         },
         { upsert: true }
       );
+      if (source !== d.passwordEnv) console.log(`[Bootstrap] ${d.email}: password sourced from ${source}.`);
     }
-    console.log('[Bootstrap] Demo admin accounts ensured (bcrypt-hashed, insert-only).');
+    console.log('[Bootstrap] Admin accounts ensured (bcrypt-hashed, insert-only).');
   } catch (err) {
-    console.error('[Bootstrap Warning] Could not ensure demo admin accounts:', err.message);
+    console.error('[Bootstrap Warning] Could not ensure admin accounts:', err.message);
   }
 }
 
-const bootstrapRequested = process.env.ENABLE_DEMO_BOOTSTRAP === '1';
-const bootstrapAllowedInProd = process.env.ALLOW_DEMO_BOOTSTRAP_IN_PROD === '1';
+const bootstrapRequested = process.env.ENABLE_ADMIN_BOOTSTRAP === '1' || process.env.ENABLE_DEMO_BOOTSTRAP === '1';
+const bootstrapAllowedInProd = process.env.ALLOW_ADMIN_BOOTSTRAP_IN_PROD === '1' || process.env.ALLOW_DEMO_BOOTSTRAP_IN_PROD === '1';
 const bootstrapActive = bootstrapRequested && (process.env.NODE_ENV !== 'production' || bootstrapAllowedInProd);
 
 mongoose.connect(MONGO_URI, { serverSelectionTimeoutMS: 15000 })
   .then(async () => {
     if (bootstrapActive) {
-      await ensureDemoAdminAccounts();
+      await ensureAdminAccounts();
     } else if (bootstrapRequested) {
-      console.log('[Bootstrap] ENABLE_DEMO_BOOTSTRAP=1 while NODE_ENV=production without ALLOW_DEMO_BOOTSTRAP_IN_PROD=1 - skipped for safety.');
+      console.log('[Bootstrap] ENABLE_ADMIN_BOOTSTRAP=1 while NODE_ENV=production without ALLOW_ADMIN_BOOTSTRAP_IN_PROD=1 - skipped for safety.');
     }
     app.listen(PORT, () => console.log(`Server running on port ${PORT} and Connected to MongoDB!`));
   })

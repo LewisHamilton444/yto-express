@@ -18,28 +18,25 @@ const Rider = require('./models/Rider');
 const Parcel = require('./models/Parcel');
 const Issue = require('./models/Issue');
 
-const PRESERVED_DEMO_EMAILS = [
-  'seller@gmail.com',
-  'customer@gmail.com',
-  'rider@gmail.com',
-];
+// No preserved accounts — the platform is single-realm (REAL) since the
+// 2026-09-13 de-demo migration; this script wipes all operational data.
 
 async function cleanWebDatabase() {
   try {
     await mongoose.connect(MONGO_URI);
     console.log('Connected to Web MongoDB.');
 
-    // Delete test customers
-    const delCust = await Customer.deleteMany({ email: { $nin: PRESERVED_DEMO_EMAILS } });
-    console.log(`Deleted ${delCust.deletedCount} temporary customers.`);
+    // Delete customers
+    const delCust = await Customer.deleteMany({});
+    console.log(`Deleted ${delCust.deletedCount} customers.`);
 
-    // Delete test sellers
-    const delSell = await Seller.deleteMany({ email: { $nin: PRESERVED_DEMO_EMAILS } });
-    console.log(`Deleted ${delSell.deletedCount} temporary sellers.`);
+    // Delete sellers
+    const delSell = await Seller.deleteMany({});
+    console.log(`Deleted ${delSell.deletedCount} sellers.`);
 
-    // Delete test riders
-    const delRide = await Rider.deleteMany({ email: { $nin: PRESERVED_DEMO_EMAILS } });
-    console.log(`Deleted ${delRide.deletedCount} temporary riders.`);
+    // Delete riders
+    const delRide = await Rider.deleteMany({});
+    console.log(`Deleted ${delRide.deletedCount} riders.`);
 
     // Delete test parcels generated during automated testing (with test / e2e / dummy tracking)
     const delParcels = await Parcel.deleteMany({

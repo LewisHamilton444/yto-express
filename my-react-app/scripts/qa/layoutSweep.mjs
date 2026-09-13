@@ -81,13 +81,14 @@ function findChrome() {
 }
 
 // Mint an offline JWT that App.jsx will accept (header.payload.sig, payload
-// decoded client-side, `exp` in the future, super_admin role).
+// decoded client-side, `exp` in the future, super_admin role). QA-only tooling
+// — the `@yto.com` address is a test fixture, not a demo-classification input
+// (the REAL/DEMO partition no longer exists).
 function mintToken() {
   const b64 = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
   const payload = {
     email: 'qa.superadmin@yto.com',
     role: 'super_admin',
-    isDemo: true,
     exp: Math.floor(Date.now() / 1000) + 86400,
   };
   return `${b64({ alg: 'none', typ: 'JWT' })}.${b64(payload)}.qa-seed-signature`;

@@ -8,9 +8,7 @@ import CardSectionHeader from './components/ui/CardSectionHeader';
 import CardFooter from './components/ui/CardFooter';
 import TableSkeleton from './components/ui/TableSkeleton';
 import { useToast } from './components/ui/useToast';
-import { ACCOUNT_CATEGORY_TONE, ACCOUNT_CATEGORY_LABEL } from './components/ui/statusColors';
 import PaginationControls from './PaginationControls';
-import { isDemoEmail } from './demoUtils';
 import {
   Eye, Search, ShieldAlert, X,
   Camera, Tag, User, Hash, Package,
@@ -45,7 +43,6 @@ export default function ManageIssues({ currentUser }) {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [categoryFilter, setCategoryFilter] = useState('All Categories');
-  const [accountCategoryFilter, setAccountCategoryFilter] = useState(currentUser?.isDemo ? 'DEMO' : 'REAL');
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [selectedIssue, setSelectedIssue] = useState(null);
@@ -129,12 +126,10 @@ export default function ManageIssues({ currentUser }) {
 
       const matchStatus = statusFilter === 'All' || issue.status === statusFilter;
       const matchCategory = categoryFilter === 'All Categories' || issue.category === categoryFilter;
-      const cat = issue.accountCategory || (isDemoEmail(issue.reporterEmail) ? 'DEMO' : 'REAL');
-      const matchAccountCategory = accountCategoryFilter === 'All' || cat === accountCategoryFilter;
 
-      return matchSearch && matchStatus && matchCategory && matchAccountCategory;
+      return matchSearch && matchStatus && matchCategory;
     });
-  }, [issues, search, statusFilter, categoryFilter, accountCategoryFilter]);
+  }, [issues, search, statusFilter, categoryFilter]);
 
   const stats = useMemo(() => ({
     open: issues.filter(i => i.status === 'Open').length,
@@ -142,7 +137,7 @@ export default function ManageIssues({ currentUser }) {
     resolved: issues.filter(i => i.status === 'Resolved').length,
   }), [issues]);
 
-  useEffect(() => { setCurrentPage(1); }, [search, statusFilter, categoryFilter, accountCategoryFilter]);
+  useEffect(() => { setCurrentPage(1); }, [search, statusFilter, categoryFilter]);
 
   const indexOfLast = currentPage * rowsPerPage;
   const currentIssues = filteredIssues.slice(indexOfLast - rowsPerPage, indexOfLast);
@@ -184,15 +179,6 @@ export default function ManageIssues({ currentUser }) {
               className="px-3 py-2 border border-slate-200 rounded-xl text-sm bg-white cursor-pointer font-semibold text-brand-purple"
             >
               {CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-            </select>
-            <select
-              value={accountCategoryFilter}
-              onChange={e => setAccountCategoryFilter(e.target.value)}
-              className="px-3 py-2 border border-slate-200 rounded-xl text-sm bg-white cursor-pointer font-semibold text-brand-purple"
-            >
-              <option value="All">All Types</option>
-              <option value="REAL">Real User Reports</option>
-              <option value="DEMO">Demo Reports</option>
             </select>
 
             {/* Status filter tabs */}
@@ -236,20 +222,17 @@ export default function ManageIssues({ currentUser }) {
               ) : currentIssues.length === 0 ? (
                 <tr>
                   <td colSpan={TABLE_HEADERS.length + 1} className="py-12 text-sm text-center text-slate-400">
-                    {issues.length === 0 && !currentUser?.isDemo
+                    {issues.length === 0
                       ? 'No active production records found.'
-                      : 'No records found in this category.'}
+                      : 'No records match the current filters.'}
                   </td>
                 </tr>
               ) : (
                 currentIssues.map((issue, idx) => {
-                  const isDemo = issue.accountCategory === 'DEMO' || isDemoEmail(issue.reporterEmail);
-                  const catKey = isDemo ? 'DEMO' : 'REAL';
                   const dateStr = issue.createdAt ? new Date(issue.createdAt).toLocaleString() : 'N/A';
                   return (
                     <tr key={issue._id || idx} className="border-b border-slate-100 text-[13px] transition hover:bg-slate-50">
                       <td className="px-4 py-3.5 font-extrabold text-brand-purple">{issue.ticketId}</td>
-                      <td className="px-4 py-3.5"><Badge tone={ACCOUNT_CATEGORY_TONE[catKey]} hint={catKey === 'REAL' ? 'Live ticket from the production database' : 'Demo/test record — not a live production ticket'}>{ACCOUNT_CATEGORY_LABEL[catKey]}</Badge></td>
                       <td className="px-4 py-3.5 font-bold text-brand-orange">{issue.trackingNumber}</td>
                       <td className="px-4 py-3.5 font-semibold text-gray-700">{issue.category}</td>
                       <td className="px-4 py-3.5">

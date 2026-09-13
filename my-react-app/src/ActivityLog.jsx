@@ -182,9 +182,9 @@ const ActivityLog = ({ currentUser }) => {
             <ListSkeleton rows={6} />
           ) : filtered.length === 0 ? (
             <div className="py-12 text-sm text-center text-slate-400">
-              {events.length === 0 && !currentUser?.isDemo
-                ? 'No active production records found.'
-                : 'No records found in this category.'}
+              {events.length === 0
+                ? 'No activity records yet.'
+                : 'No records match the current filters.'}
             </div>
           ) : (
             <div className="relative">

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import './ProcessSellerInformation.css';
 
-import { initialPendingSellers } from './verification/mockPendingRegistrations';
+import { initialPendingSellers } from './verification/registrationCredentials';
 import { buildSellerPayloadFromPendingRegistration } from './sellerRiderData';
 import { useRegistrationApproval } from './verification/useRegistrationApproval';
 import PendingVerificationsTable from './verification/PendingVerificationsTable';

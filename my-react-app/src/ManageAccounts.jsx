@@ -5,7 +5,6 @@ import TableSkeleton from './components/ui/TableSkeleton';
 import EmptyState from './components/ui/EmptyState';
 import { useToast } from './components/ui/useToast';
 import { Users, AlertTriangle, ClipboardList, Package } from 'lucide-react';
-import { isDemoEmail } from './demoUtils';
 
 const ROLE_LABELS = {
   super_admin:  'Super Admin',
@@ -19,29 +18,16 @@ const ROLE_COLORS = {
   hub_receiver: { bg: '#fef3c7', color: '#92400e' },
 };
 
-// Shown only when the real API is unreachable or returns nothing, so the
-// layout stays testable offline. Clearly labeled in the UI (see the banner
-// below) rather than silently standing in for real records — an admin
-// screen that can activate/deactivate accounts should never let someone
-// mistake sample rows for real ones.
-const MOCK_ACCOUNTS = [
-  { _id: 'mock-1', name: 'Sample Staff',        email: 'staff.sample@ytoexpress.ph', phone: '09171234567', role: 'staff',        status: 'Active',      createdDate: '2026-01-15' },
-  { _id: 'mock-2', name: 'Sample Hub Receiver', email: 'hub.sample@ytoexpress.ph',   phone: '09179876543', role: 'hub_receiver', status: 'Active',      createdDate: '2026-02-03' },
-  { _id: 'mock-3', name: 'Jane Dela Cruz',      email: 'jane.delacruz@ytoexpress.ph',phone: '09051112222', role: 'staff',        status: 'Deactivated', createdDate: '2025-11-20' },
-];
-
 export default function ManageAccounts({ currentUser }) {
   const [accounts,     setAccounts]     = useState([]);
   const [loading,      setLoading]      = useState(true);
   const [searchTerm,   setSearchTerm]   = useState('');
   const [roleFilter,   setRoleFilter]   = useState('All');
   const [statusFilter, setStatusFilter] = useState('All');
-  const [categoryFilter, setCategoryFilter] = useState('All');
   const [showModal,    setShowModal]    = useState(false);
   const [editingAccount, setEditingAccount] = useState(null);
   const [showDeactivateConfirm, setShowDeactivateConfirm] = useState(null);
   const [showFormPass, setShowFormPass] = useState(false);
-  const [usingMockData, setUsingMockData] = useState(false);
   const toast = useToast();
 
   const blankForm = { name: '', email: '', phone: '', role: 'staff', password: '' };
@@ -56,31 +42,14 @@ export default function ManageAccounts({ currentUser }) {
       const res = await apiFetch('/accounts');
       if (!res.ok) throw new Error(`Server responded ${res.status}`);
       const data = await res.json();
-      if (Array.isArray(data) && data.length > 0) {
-        setAccounts(data);
-        setUsingMockData(false);
-      } else if (currentUser?.isDemo) {
-        // Backend empty but in Demo Admin mode: provide test fixture rows
-        setAccounts(MOCK_ACCOUNTS);
-        setUsingMockData(true);
-      } else {
-        // Real non-demo admin: strict clean empty state
-        setAccounts([]);
-        setUsingMockData(false);
-      }
+      setAccounts(Array.isArray(data) ? data : []);
     } catch {
-      if (currentUser?.isDemo) {
-        setAccounts(MOCK_ACCOUNTS);
-        setUsingMockData(true);
-      } else {
-        setAccounts([]);
-        setUsingMockData(false);
-        flash('Could not reach the server.', 'error');
-      }
+      setAccounts([]);
+      flash('Could not reach the server.', 'error');
     } finally {
       setLoading(false);
     }
-  }, [currentUser?.isDemo, flash]);
+  }, [flash]);
 
   useEffect(() => {
     fetchAccounts();
@@ -174,9 +143,7 @@ export default function ManageAccounts({ currentUser }) {
     const matchSearch = a.name.toLowerCase().includes(searchTerm.toLowerCase()) || a.email.toLowerCase().includes(searchTerm.toLowerCase());
     const matchRole   = roleFilter   === 'All' || a.role   === roleFilter;
     const matchStatus = statusFilter === 'All' || a.status === statusFilter;
-    const cat = a.accountCategory || (isDemoEmail(a.email) ? 'DEMO' : 'REAL');
-    const matchCategory = categoryFilter === 'All' || cat === categoryFilter;
-    return matchSearch && matchRole && matchStatus && matchCategory;
+    return matchSearch && matchRole && matchStatus;
   });
 
   // ── Styles ────────────────────────────────────────────────────────────────
@@ -213,21 +180,6 @@ export default function ManageAccounts({ currentUser }) {
     </span>
   );
 
-  const CategoryBadge = ({ category, email }) => {
-    const isDemo = category === 'DEMO' || isDemoEmail(email);
-    return (
-      <span style={{
-        fontSize: '10px', fontWeight: 800, padding: '3px 8px', borderRadius: '6px',
-        background: isDemo ? '#f3f4f6' : '#ecfdf5',
-        color: isDemo ? '#6b7280' : '#059669',
-        border: `1px solid ${isDemo ? '#d1d5db' : '#a7f3d0'}`,
-        textTransform: 'uppercase',
-      }}>
-        {isDemo ? 'DEMO' : 'REAL'}
-      </span>
-    );
-  };
-
   return (
     <div style={s.main}>
       <header style={s.header}>
@@ -251,23 +203,17 @@ export default function ManageAccounts({ currentUser }) {
         </div>
       </header>
 
-      {usingMockData && !loading && (
-        <div style={{ padding: '14px 20px', background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a', borderRadius: '12px', fontSize: '13px', fontWeight: 600, marginBottom: '16px' }}>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}><AlertTriangle size={15} aria-hidden="true" /> Showing sample accounts — the server didn't return live data. Actions below won't be saved until it's back.</span>
-        </div>
-      )}
-
       {/* Stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px', marginBottom: '20px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr 1fr', marginBottom: '20px', background: 'white', border: '1px solid #d5cbe4', borderRadius: '12px', overflow: 'hidden' }}>
         {[
-          { label: 'Total Accounts', value: accounts.length,                                          color: '#390955' },
-          { label: 'Staff',          value: accounts.filter(a => a.role === 'staff').length,          color: '#1e5f9e' },
-          { label: 'Hub Receivers',  value: accounts.filter(a => a.role === 'hub_receiver').length,   color: '#92400e' },
-          { label: 'Active',         value: accounts.filter(a => a.status === 'Active').length,       color: '#065f46' },
-        ].map(stat => (
-          <div key={stat.label} style={{ background: 'white', borderRadius: '12px', padding: '16px 20px', border: '1px solid rgba(57,9,85,0.08)', boxShadow: '0 2px 8px rgba(57,9,85,0.04)' }}>
-            <div style={{ fontSize: '26px', fontWeight: 800, color: stat.color, lineHeight: 1 }}>{stat.value}</div>
-            <div style={{ fontSize: '11px', fontWeight: 700, color: '#a890c0', textTransform: 'uppercase', letterSpacing: '0.5px', marginTop: '6px' }}>{stat.label}</div>
+          { label: 'Total Accounts', value: accounts.length,                                        color: '#390955', accent: true },
+          { label: 'Staff',          value: accounts.filter(a => a.role === 'staff').length,        color: '#1e5f9e', accent: false },
+          { label: 'Hub Receivers',  value: accounts.filter(a => a.role === 'hub_receiver').length, color: '#92400e', accent: false },
+          { label: 'Active',         value: accounts.filter(a => a.status === 'Active').length,     color: '#065f46', accent: false },
+        ].map((stat, i) => (
+          <div key={stat.label} style={{ padding: '14px 20px', borderLeft: i === 0 ? 'none' : '1px solid #e8e1f2', background: stat.accent ? '#faf7fd' : 'white' }}>
+            <div style={{ fontSize: '11px', fontWeight: 800, color: '#a890c0', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{stat.label}</div>
+            <div style={{ fontSize: stat.accent ? '26px' : '22px', fontWeight: 800, color: stat.color, lineHeight: 1, marginTop: '3px' }}>{stat.value}</div>
           </div>
         ))}
       </div>
@@ -276,7 +222,7 @@ export default function ManageAccounts({ currentUser }) {
       <div style={s.panel}>
         <div style={s.panelHeader}><h2 style={s.panelHeading}>Search & Filter</h2></div>
         <div style={s.panelBody}>
-          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: '16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '16px' }}>
             <div><label style={s.label}>Search Name or Email</label><input style={s.input} placeholder="Type to search..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} /></div>
             <div><label style={s.label}>Role</label>
               <select style={s.select} value={roleFilter} onChange={e => setRoleFilter(e.target.value)}>
@@ -291,13 +237,6 @@ export default function ManageAccounts({ currentUser }) {
                 <option value="All">All Statuses</option>
                 <option value="Active">Active</option>
                 <option value="Deactivated">Deactivated</option>
-              </select>
-            </div>
-            <div><label style={s.label}>Category</label>
-              <select style={s.select} value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}>
-                <option value="All">All Categories</option>
-                <option value="REAL">Real Accounts</option>
-                <option value="DEMO">Demo Accounts</option>
               </select>
             </div>
           </div>
@@ -317,7 +256,6 @@ export default function ManageAccounts({ currentUser }) {
                 <tr>
                   <th style={s.th}>Name</th>
                   <th style={s.th}>Email</th>
-                  <th style={s.th}>Category</th>
                   <th style={s.th}>Phone</th>
                   <th style={s.th}>Role</th>
                   <th style={s.th}>Status</th>
@@ -327,14 +265,14 @@ export default function ManageAccounts({ currentUser }) {
               </thead>
               <tbody>
                 {loading ? (
-                  <TableSkeleton rows={6} columns={8} />
+                  <TableSkeleton rows={6} columns={7} />
                 ) : filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={8} style={{ ...s.td, padding: 0 }}>
+                    <td colSpan={7} style={{ ...s.td, padding: 0 }}>
                       <EmptyState
                         icon={Users}
-                        title="No accounts found in this category"
-                        description={accounts.length === 0 ? 'Create a Staff or Hub Receiver account to get started.' : 'Try a different search, role, status, or category filter.'}
+                        title="No accounts found"
+                        description={accounts.length === 0 ? 'Create a Staff or Hub Receiver account to get started.' : 'Try a different search, role, or status filter.'}
                         className="m-4"
                       />
                     </td>
@@ -351,7 +289,6 @@ export default function ManageAccounts({ currentUser }) {
                       </div>
                     </td>
                     <td style={{ ...s.td, fontSize: '12px' }}>{account.email}</td>
-                    <td style={s.td}><CategoryBadge category={account.accountCategory} email={account.email} /></td>
                     <td style={{ ...s.td, color: '#a890c0', fontSize: '12px' }}>{account.phone || '—'}</td>
                     <td style={s.td}><RoleBadge role={account.role} /></td>
                     <td style={s.td}><StatusBadge status={account.status} /></td>

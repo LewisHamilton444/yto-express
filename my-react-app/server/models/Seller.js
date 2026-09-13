@@ -17,7 +17,6 @@ const sellerSchema = new mongoose.Schema({
     commissionRate: Number,
     paymentCycle: String,
     status: { type: String, default: 'ACTIVE' },
-    accountCategory: { type: String, enum: ['REAL', 'DEMO'], default: 'REAL' },
     statusHistory: [{
         status: String,
         changedAt: { type: Date, default: Date.now },

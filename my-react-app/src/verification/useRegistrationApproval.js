@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { apiFetch, notificationsApi } from '../services/api';
-import { generateCredentials, buildSmsMessage } from './mockPendingRegistrations';
+import { generateCredentials, buildSmsMessage } from './registrationCredentials';
 import { useToasts } from './useToasts';
 
 /**

@@ -8,20 +8,14 @@ const AccountSchema = new mongoose.Schema({
   role:        { type: String, enum: ['super_admin', 'staff', 'hub_receiver'], default: 'staff' },
   password:    { type: String, required: true },
   status:      { type: String, enum: ['Active', 'Deactivated'], default: 'Active' },
-  accountCategory: { type: String, enum: ['REAL', 'DEMO'], default: 'REAL' },
   createdDate: { type: String, default: () => new Date().toISOString().split('T')[0] },
 });
 
 // Hash password before save if modified
-AccountSchema.pre('save', async function (next) {
-  if (!this.isModified('password')) return next();
-  try {
-    const salt = await bcrypt.genSalt(10);
-    this.password = await bcrypt.hash(this.password, salt);
-    next();
-  } catch (error) {
-    next(error);
-  }
+AccountSchema.pre('save', async function () {
+  if (!this.isModified('password')) return;
+  const salt = await bcrypt.genSalt(10);
+  this.password = await bcrypt.hash(this.password, salt);
 });
 
 // Compare password with bcrypt (supports legacy plaintext migration)

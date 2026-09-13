@@ -32,7 +32,7 @@ import ManageIssues                      from "./ManageIssues";
 import ConnectionHistoryChart             from "./ConnectionHistoryChart";
 import PeakAlertBanner                   from "./PeakAlertBanner";
 import GlobalHeader                      from "./GlobalHeader";
-import { initialPendingSellers, initialPendingRiders } from "./verification/mockPendingRegistrations";
+import { initialPendingSellers, initialPendingRiders } from "./verification/registrationCredentials";
 
 // ── Dashboard parcel-report exports (CSV + printable PDF) ───────────────
 const DASH_PARCEL_COLUMNS = [

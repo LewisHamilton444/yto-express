@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { normalizeRider, mockRiders, RIDER_STATUS } from './sellerRiderData';
+import { normalizeRider, RIDER_STATUS } from './sellerRiderData';
 import { ridersApi } from './services/api';
-import SimulatedFeedBadge from './components/ui/SimulatedFeedBadge';
 import Tooltip from './components/ui/Tooltip';
 import { VehicleIcon } from './components/ui/vehicleIcons';
 import { vehicleGlyphSvg } from './components/ui/vehicleIconUtils';
-import { Archive, BatteryMedium, Check, Database, MapPin, RefreshCw, RotateCw, X } from 'lucide-react';
+import { Archive, RefreshCw, X } from 'lucide-react';
 
 const CITY_COORDS = {
   Manila:{lat:14.5995,lng:120.9842}, 'Quezon City':{lat:14.6760,lng:121.0437}, Makati:{lat:14.5547,lng:121.0244},
@@ -31,23 +30,6 @@ const CITY_COORDS = {
   Cauayan:{lat:16.9333,lng:121.7667}, Santiago:{lat:16.6875,lng:121.5500}, Ilagan:{lat:17.1489,lng:121.8894},
   Bayombong:{lat:16.4833,lng:121.1500}, 'Davao City':{lat:7.0731,lng:125.6128},
 };
-
-// Deterministic pseudo-random generator seeded from a string, so the same
-// rider always gets the same simulated battery/sync reading instead of a new
-// random one on every re-render or 15s poll.
-function seededRandom(seed) {
-  let h = 0;
-  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
-  return () => { h = (h * 1103515245 + 12345) >>> 0; return (h % 1000) / 1000; };
-}
-
-function getDeviceHealth(riderId) {
-  const rand = seededRandom(String(riderId));
-  return {
-    battery: Math.floor(15 + rand() * 85),          // 15–100%
-    syncStatus: rand() > 0.15 ? 'synced' : 'syncing', // ~85% synced
-  };
-}
 
 function MapView({ lat, lng, vehicle, uniqueId }) {
   const containerRef = useRef(null);
@@ -132,13 +114,6 @@ export default function MonitorRiderStatus({ currentUser }) {
   const [riderTab, setRiderTab] = useState('details');
   const [riderTimeline, setRiderTimeline] = useState([]);
   const [timelineLoading, setTimelineLoading] = useState(false);
-  const [geofences, setGeofences] = useState([
-    { id: 'G001', name: 'Makati District',  center: '14.5547, 121.0244', radius: '2 km',   status: 'Active'   },
-    { id: 'G002', name: 'Quezon City Hub',  center: '14.6760, 121.0437', radius: '1.5 km', status: 'Active'   },
-    { id: 'G003', name: 'BGC Zone',         center: '14.5409, 121.0503', radius: '1.8 km', status: 'Inactive' },
-    { id: 'G004', name: 'Pasig Depot',      center: '14.5764, 121.0851', radius: '1 km',   status: 'Active'   },
-    { id: 'G005', name: 'Hagonoy Bulacan',  center: '14.8340, 120.7310', radius: '1.2 km', status: 'Active'   },
-  ]);
 
   const attachLiveGps = useCallback((normalizedRiders) => normalizedRiders.map((r, index) => {
     const coords = CITY_COORDS[r.location.city];
@@ -148,17 +123,11 @@ export default function MonitorRiderStatus({ currentUser }) {
         latitude:  coords ? coords.lat + (index * 0.0015) : 14.5995 + (index * 0.008),
         longitude: coords ? coords.lng + (index * 0.0015) : 120.9842 + (index * 0.006),
         city: r.location.city || 'Unknown',
-        // 2026-09-11 parity: reflects the rider's real Android duty toggle
-        // (bridge sync-duty-status) instead of the previous hardcoded true.
-        // isMoving stays simulated until the GPS telemetry pipeline lands.
+        // Duty state comes from the rider's real Android profile toggle
+        // (bridge sync-duty-status). Moving/idle is not sent by the app yet,
+        // so no such claim is made here.
         isOnline: r.isOnDuty === true || r.raw?.isOnDuty === true,
-        isMoving: true,
       },
-      // Simulated device-health telemetry — there's no real battery/app-sync
-      // API yet (same placeholder situation as isOnline/isMoving above),
-      // seeded per rider ID so values stay stable across re-renders/polls
-      // instead of flickering randomly.
-      deviceHealth: getDeviceHealth(r.riderId),
     };
   }), []);
 
@@ -173,9 +142,6 @@ export default function MonitorRiderStatus({ currentUser }) {
 
         setRiders(attachLiveGps(activeOnes));
         setArchivedCount(archivedNum);
-      } else if (currentUser?.isDemo) {
-        setRiders(attachLiveGps(mockRiders.filter(r => r.status === RIDER_STATUS.ACTIVE)));
-        setArchivedCount(mockRiders.length - mockRiders.filter(r => r.status === RIDER_STATUS.ACTIVE).length);
       } else {
         setRiders([]);
         setArchivedCount(0);
@@ -183,17 +149,12 @@ export default function MonitorRiderStatus({ currentUser }) {
       setLastUpdated(new Date().toLocaleTimeString());
     } catch (err) {
       console.error('Error fetching riders:', err);
-      if (currentUser?.isDemo) {
-        setRiders(attachLiveGps(mockRiders.filter(r => r.status === RIDER_STATUS.ACTIVE)));
-        setArchivedCount(mockRiders.length - mockRiders.filter(r => r.status === RIDER_STATUS.ACTIVE).length);
-      } else {
-        setRiders([]);
-        setArchivedCount(0);
-      }
+      setRiders([]);
+      setArchivedCount(0);
     } finally {
       setLoading(false);
     }
-  }, [currentUser?.isDemo, attachLiveGps]);
+  }, [attachLiveGps]);
 
   const formatTimelineDate = (dateStr) => {
     if (!dateStr) return '-';
@@ -210,7 +171,7 @@ export default function MonitorRiderStatus({ currentUser }) {
     events.push({
       status: 'Registered',
       changedAt: rider.raw?.createdAt || rider.joined,
-      reason: `${rider.fullName} joined as ${rider.raw?.accountCategory || 'REAL'} rider`,
+      reason: `${rider.fullName} joined as a rider`,
     });
 
     // Status history from DB
@@ -276,7 +237,6 @@ export default function MonitorRiderStatus({ currentUser }) {
             <span style={{ width:6, height:6, borderRadius:'50%', background:'#22c55e', animation:'pulse 1.5s infinite', display:'inline-block' }}/>
             {riders.length} Riders Shown
           </span>
-          <SimulatedFeedBadge text="Simulated presence" />
         </div>
       </header>
 
@@ -285,21 +245,13 @@ export default function MonitorRiderStatus({ currentUser }) {
         {/* TABS */}
         <div style={{ display: 'flex', borderBottom: '2px solid #e0d5f0', marginBottom: 20 }}>
           {[
-            ['gps-coords', 'GPS Coordinates'],
-            ['geofence',   'Geofence Boundary']
+            ['gps-coords', 'GPS Coordinates']
           ].map(([k, l]) => (
             <button key={k} onClick={() => setActiveTab(k)}
               style={{ padding: '12px 20px', border: 'none', background: 'none', color: activeTab === k ? '#390955' : '#666', fontSize: 13, fontWeight: 600, cursor: 'pointer', borderBottom: activeTab === k ? '3px solid #390955' : '3px solid transparent', marginBottom: -2, fontFamily: 'inherit' }}>
               {l}
             </button>
           ))}
-        </div>
-
-        {/* Honest-label strip: no real heartbeat/GPS feed exists yet — the
-            positions, battery %, and online states below are simulated. */}
-        <div style={{ marginBottom: 16, fontSize: 12, color: '#b45309', background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 8, padding: '8px 12px', lineHeight: 1.5 }}>
-          Rider positions, device battery, and online/moving state below are <strong>simulated</strong> — real
-          telemetry will appear here automatically once the mobile app sends location and heartbeat pings.
         </div>
 
         {/* TAB 1: GPS COORDINATES - Only active DB riders */}
@@ -332,24 +284,8 @@ export default function MonitorRiderStatus({ currentUser }) {
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 5 }}>
                         <span style={{ fontSize: '10px', background: r.liveGps.isOnline ? '#e6f9ed' : '#f5f5f5', color: r.liveGps.isOnline ? '#1e7e34' : '#888', padding: '3px 8px', borderRadius: '10px', fontWeight: 700, display:'flex', alignItems:'center', gap:4 }}>
                           <span style={{ width:5, height:5, borderRadius:'50%', background: r.liveGps.isOnline ? '#22c55e' : '#bbb', animation: r.liveGps.isOnline ? 'pulse 1.5s infinite' : 'none', display:'inline-block' }}/>
-                          {r.liveGps.isOnline ? 'On Duty' : 'Off Duty'} · {r.liveGps.isMoving ? 'Moving' : 'Idle'}
+                          {r.liveGps.isOnline ? 'On Duty' : 'Off Duty'}
                         </span>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                          <span title="Battery" style={{
-                            fontSize: '9px', fontWeight: 700, padding: '2px 7px', borderRadius: '8px',
-                            background: r.deviceHealth.battery > 50 ? '#e6f9ed' : r.deviceHealth.battery > 20 ? '#fff4ec' : '#fff0f0',
-                            color: r.deviceHealth.battery > 50 ? '#1e7e34' : r.deviceHealth.battery > 20 ? '#c2540d' : '#b91c1c',
-                          }}>
-                            <BatteryMedium size={10} aria-hidden="true" /> {r.deviceHealth.battery}%
-                          </span>
-                          <span title="App Sync Status" style={{
-                            fontSize: '9px', fontWeight: 700, padding: '2px 7px', borderRadius: '8px',
-                            background: r.deviceHealth.syncStatus === 'synced' ? '#f0eaf8' : '#fff4ec',
-                            color: r.deviceHealth.syncStatus === 'synced' ? '#390955' : '#c2540d',
-                          }}>
-                            {r.deviceHealth.syncStatus === 'synced' ? <><Check size={10} aria-hidden="true" /> Synced</> : <><RotateCw size={10} aria-hidden="true" /> Syncing</>}
-                          </span>
-                        </div>
                       </div>
                     </div>
 
@@ -386,39 +322,6 @@ export default function MonitorRiderStatus({ currentUser }) {
               ))}
             </div>
           )
-        )}
-
-        {/* TAB 2: GEOFENCE BOUNDARY */}
-        {activeTab === 'geofence' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div style={{ fontSize: 12, color: '#b45309', background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 8, padding: '8px 12px', lineHeight: 1.5 }}>
-              Sample geofence zones listed below are a local demo list — toggling a zone is a preview only and is not persisted or enforced.
-            </div>
-          <div style={{ background: 'white', borderRadius: 12, border: '1px solid #e0d5f0', overflow: 'hidden' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-              <thead>
-                <tr>{['Geofence Region', 'Center Coordinate Pins', 'Radius Boundary', 'Operational Status', 'Toggle Control'].map(h => <th key={h} style={th}>{h}</th>)}</tr>
-              </thead>
-              <tbody>
-                {geofences.map((g, i) => (
-                  <tr key={g.id} style={i % 2 === 0 ? {} : { background: 'rgba(57,9,85,0.015)' }}>
-                    <td style={{ ...td, fontWeight: 700, color: '#390955' }}><span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><MapPin size={13} aria-hidden="true" /> {g.name}</span></td>
-                    <td style={{ ...td, fontFamily: 'monospace', fontSize: 12 }}>{g.center}</td>
-                    <td style={{ ...td, fontWeight: 600 }}>{g.radius}</td>
-                    <td style={td}>
-                      <span style={{ padding: '3px 9px', borderRadius: 12, fontSize: 11, fontWeight: 700, background: g.status === 'Active' ? '#e6f9ed' : '#fff0f0', color: g.status === 'Active' ? '#1e7e34' : '#b91c1c' }}>
-                        {g.status}
-                      </span>
-                    </td>
-                    <td style={td}>
-                      <input type="checkbox" checked={g.status === 'Active'} onChange={() => handleToggleGeofence(g.id)} style={{ cursor: 'pointer' }} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          </div>
         )}
 
       </div>

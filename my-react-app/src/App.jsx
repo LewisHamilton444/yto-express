@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { setAuthToken, getAuthToken } from './services/api';
-import { isDemoEmail } from './demoUtils';
 import { ToastProvider } from './components/ui/ToastContext';
 import ErrorBoundary from './components/ui/ErrorBoundary';
 
@@ -59,8 +58,7 @@ function App() {
       try {
         const payload = JSON.parse(atob(token.split('.')[1]));
         if (payload.exp * 1000 > Date.now()) {
-          const isDemo = payload.isDemo !== undefined ? !!payload.isDemo : isDemoEmail(payload.email);
-          return { token, email: payload.email, role: payload.role, loginRole: payload.role, isDemo };
+          return { token, email: payload.email, role: payload.role, loginRole: payload.role };
         }
       } catch { /* malformed token payload: fall through to a clean logout */ }
       setAuthToken(null);

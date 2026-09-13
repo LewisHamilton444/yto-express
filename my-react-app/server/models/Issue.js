@@ -63,11 +63,6 @@ const IssueSchema = new mongoose.Schema({
     enum: ['Open', 'Under Investigation', 'Resolved', 'Closed'],
     default: 'Open',
   },
-  accountCategory: {
-    type: String,
-    enum: ['REAL', 'DEMO'],
-    default: 'REAL',
-  },
   adminNotes: {
     type: String,
     default: '',

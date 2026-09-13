@@ -37,12 +37,10 @@ export default function Logout({ setActivePage, onLogout, currentUser }) {
   };
 
   const roleLabel = currentUser ? ROLE_LABELS[currentUser.role] : null;
-  const isDemo = !!(currentUser && currentUser.isDemo);
 
   return (
     <div className="logout-root">
       <div className={`logout-card ${visible ? 'in' : ''} ${exiting ? 'exit' : ''}`}>
-        <div className="logout-accent" />
 
         {/* Active session user: avatar, email, role/demo badge */}
         {currentUser && (
@@ -50,9 +48,9 @@ export default function Logout({ setActivePage, onLogout, currentUser }) {
             <div className="logout-avatar">{initials(currentUser.email)}</div>
             <div className="logout-user-meta">
               <span className="logout-user-email">{currentUser.email || ''}</span>
-              {(isDemo || roleLabel) && (
-                <span className={isDemo ? 'logout-user-demo' : 'logout-user-role'}>
-                  {isDemo ? 'Demo' : roleLabel}
+              {roleLabel && (
+                <span className="logout-user-role">
+                  {roleLabel}
                 </span>
               )}
             </div>

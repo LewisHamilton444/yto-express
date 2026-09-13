@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { normalizeRider, mockRiders, formatStatusLabel, RIDER_STATUS } from './sellerRiderData';
+import { normalizeRider, formatStatusLabel, RIDER_STATUS } from './sellerRiderData';
 import PaginationControls from './PaginationControls';
 import { exportToCSV, exportToExcel } from './exportUtils';
 import ParcelProgressTimeline from './ParcelProgressTimeline';
@@ -93,12 +93,11 @@ export default function GenerateRiderDataReport() {
   const fetchRiders = async () => {
     try {
       const data = await ridersApi.list();
-      // Guard: a non-array response would crash data.map below — fall back
-      // to the mock roster the same way the catch path does.
+      // Guard: a non-array response would crash data.map below.
       setRiders((Array.isArray(data) ? data : []).map(normalizeRider));
     } catch (err) {
       console.error('Error fetching riders:', err);
-      setRiders(mockRiders);
+      setRiders([]);
     } finally {
       setLoading(false);
     }
