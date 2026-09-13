@@ -2,9 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import {
   PackageCheck, Bike, Truck, UserCheck,
   TrendingUp, TrendingDown,
-  Trophy, Star, Route,
   ClipboardList, Download, Share2,
-  Users, PackageSearch, BarChart3, AlertTriangle,
+  Users, PackageSearch, AlertTriangle,
 } from 'lucide-react';
 import { apiFetch, parcelsApi, ridersApi } from './services/api';
 import { exportToCSV } from './exportUtils';
@@ -28,6 +27,7 @@ import ManageAccounts                    from "./ManageAccounts";
 import HubParcelReceiving                from "./HubParcelReceiving";
 import CustomerList                      from "./CustomerList";
 import ActivityLog                       from "./ActivityLog";
+import AppNotifications                  from "./AppNotifications";
 import ManageIssues                      from "./ManageIssues";
 import ConnectionHistoryChart             from "./ConnectionHistoryChart";
 import PeakAlertBanner                   from "./PeakAlertBanner";
@@ -74,46 +74,75 @@ function dashboardExportPDF(parcels) {
   w.document.close();
 }
 
-// Menu is built per-role — Super Admin gets everything, Staff gets day-to-day
-// operations (no GPS tracking or account management), Hub Receiver gets only
-// Dashboard + a restricted parcel-receiving screen.
-const getMenuItems = (role) => [
-  { label: 'Dashboard', key: 'dashboard' },
+// Sidebar information architecture — noun-based sections grouped by domain
+// (Overview / People / Shipments / Tracking & Maps / Support / Admin), the
+// standard logistics-admin pattern. Route keys are unchanged; only grouping
+// and display labels moved (previous verb-stuffed labels live on as page
+// titles inside each view). Role gating: Super Admin gets everything, Staff
+// gets day-to-day operations (no Tracking & Maps or Accounts), Hub Receiver
+// gets only Overview + a restricted Shipments screen. Empty sections are
+// filtered out at render time, so role rules stay exact.
+const getMenuSections = (role) => [
+  {
+    label: 'Overview',
+    items: [{ label: 'Dashboard', key: 'dashboard' }],
+  },
 
   ...(role !== 'hub_receiver' ? [{
-    label: 'Manage Seller Information', key: 'seller', children: [
-      { label: 'Process Seller Information', key: 'process-seller' },
-      { label: 'View Seller',                key: 'seller-report'  },
+    label: 'People',
+    items: [
+      { label: 'Customers', key: 'customer-list' },
+      {
+        label: 'Sellers', key: 'seller', children: [
+          { label: 'Registration Review', key: 'process-seller' },
+          { label: 'Seller Directory',    key: 'seller-report'  },
+        ],
+      },
+      {
+        label: 'Riders', key: 'rider', children: [
+          { label: 'Registration Review', key: 'process-rider' },
+          { label: 'Duty Monitor',        key: 'monitor-rider' },
+          { label: 'Rider Reports',       key: 'rider-report'  },
+        ],
+      },
     ],
   }] : []),
 
-  role === 'hub_receiver'
-    ? { label: 'Manage Parcels', key: 'hub-parcels' }
-    : { label: 'Manage Parcels', key: 'manage-parcels' },
-
-  ...(role !== 'hub_receiver' ? [{
-    label: 'Manage Rider Information', key: 'rider', children: [
-      { label: 'Process Rider Information',  key: 'process-rider' },
-      { label: 'Monitor Rider Status',       key: 'monitor-rider' },
-      { label: 'Generate Rider Data Report', key: 'rider-report'  },
+  {
+    label: 'Shipments',
+    items: [
+      ...(role === 'hub_receiver'
+        ? [{ label: 'Hub Receiving', key: 'hub-parcels' }]
+        : [{ label: 'All Parcels', key: 'manage-parcels' }]),
+      ...(role !== 'hub_receiver'
+        ? [{ label: 'Tracking Reports', key: 'tracking-info' }]
+        : []),
     ],
-  }] : []),
-
-  ...(role !== 'hub_receiver' ? [
-    { label: 'Customers', key: 'customer-list' },
-    { label: 'Customer Issues', key: 'manage-issues' },
-    { label: 'Activity Log', key: 'activity-log' },
-  ] : []),
+  },
 
   ...(role === 'super_admin' ? [{
-    label: 'GPS-Based Parcel Tracking', key: 'gps', children: [
-      { label: 'Manage Parcel Location',        key: 'parcel-location' },
-      { label: 'Monitor Parcel',                key: 'geofence'        },
-      { label: 'Generate Tracking Information', key: 'tracking-info'   },
+    label: 'Tracking & Maps',
+    items: [
+      { label: 'Parcel Map',       key: 'parcel-location' },
+      { label: 'Geofence Monitor', key: 'geofence'        },
     ],
   }] : []),
 
-  ...(role === 'super_admin' ? [{ label: 'Manage Accounts', key: 'manage-accounts' }] : []),
+  ...(role !== 'hub_receiver' ? [{
+    label: 'Support',
+    items: [
+      { label: 'Issues',            key: 'manage-issues' },
+      { label: 'App Notifications', key: 'app-notifications' },
+    ],
+  }] : []),
+
+  ...(role !== 'hub_receiver' ? [{
+    label: 'Admin',
+    items: [
+      ...(role === 'super_admin' ? [{ label: 'Accounts', key: 'manage-accounts' }] : []),
+      { label: 'Activity Log', key: 'activity-log' },
+    ],
+  }] : []),
 ];
 
 const icons = {
@@ -151,6 +180,11 @@ const icons = {
       <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
       <line x1="12" y1="8" x2="12" y2="12"/>
       <line x1="12" y1="16" x2="12.01" y2="16"/>
+    </svg>
+  ),
+  'app-notifications': (
+    <svg className="ad-sidebar-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>
     </svg>
   ),
   'activity-log': (
@@ -192,6 +226,18 @@ const icons = {
 
 icons['hub-parcels'] = icons.parcel;
 icons['manage-parcels'] = icons.parcel;
+icons['parcel-location'] = icons.gps;
+icons['geofence'] = (
+  <svg className="ad-sidebar-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <circle cx="12" cy="12" r="2"/><path d="M16.24 7.76a6 6 0 0 1 0 8.49"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+  </svg>
+);
+icons['tracking-info'] = (
+  <svg className="ad-sidebar-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+    <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+  </svg>
+);
 
 const getIcon = (key) => icons[key] || icons.sub;
 
@@ -264,6 +310,8 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
   const [railFlyout, setRailFlyout] = useState(null);
 
   const toggleSidebar = () => {
+    setOpenSection(null);
+    setRailFlyout(null);
     setSidebarCollapsed(prev => {
       const next = !prev;
       try { localStorage.setItem('yto_sidebar_collapsed', next ? '1' : '0'); } catch { /* localStorage unavailable (private mode): collapse state is best-effort */ }
@@ -329,7 +377,8 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
   };
   const goToSettings    = () => { setActiveMenuItem('settings'); setMobileNavOpen(false); };
 
-  const visibleMenuItems = getMenuItems(currentUser?.role);
+  const visibleSections = getMenuSections(currentUser?.role);
+  const visibleMenuItems = visibleSections.flatMap(section => section.items);
 
   // Keep the sidebar's open section in sync whenever the active page is a
   // nested child — covers header/search navigation and Logout's page resets.
@@ -429,6 +478,13 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
   const inTransitCount = parcels.filter(p => String(p.status || '').toLowerCase().includes('transit')).length;
   const pendingVerificationsCount = pendingSellers.length + pendingRiders.length;
 
+  // Delivery-fee revenue (2026-09-11 parity): the mobile app's booking fee
+  // now bridges onto every Parcel as deliveryFee — sum it over completed
+  // deliveries, mirroring the app's Transactions screen. Hidden entirely
+  // when no fee data has synced yet (honest empty state, not a zero lie).
+  const completedFeeParcels = parcels.filter(p => p.status === 'Delivered' && typeof p.deliveryFee === 'number' && p.deliveryFee > 0);
+  const collectedFees = completedFeeParcels.reduce((sum, p) => sum + p.deliveryFee, 0);
+
   // Four primary metric cards — replaces the old 8-card KPI grid.
   const primaryKpis = [
     {
@@ -447,6 +503,10 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
       key: 'pending-verifications', label: 'Pending Verifications', icon: UserCheck, tone: 'purple',
       value: `${pendingVerificationsCount}`, sub: `${pendingSellers.length} sellers, ${pendingRiders.length} riders`, trend: null,
     },
+    ...(collectedFees > 0 ? [{
+      key: 'collected-fees', label: 'Delivery Fees Collected', icon: Truck, tone: 'purple',
+      value: `₱${collectedFees.toFixed(2)}`, sub: `from ${completedFeeParcels.length} completed ${completedFeeParcels.length !== 1 ? 'deliveries' : 'delivery'}`, trend: null,
+    }] : []),
   ];
 
   const weekly = useMemo(() => buildLastNWeeks(parcels, 6), [parcels]);
@@ -472,6 +532,7 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
       case 'seller-report':       return <ViewSeller sellers={sharedSellers} onUpdateSellers={setSharedSellers} currentUser={currentUser} />;
       case 'manage-parcels':      return <ManageParcels currentUser={currentUser} />;
       case 'customer-list':       return <CustomerList currentUser={currentUser} />;
+      case 'app-notifications':  return <AppNotifications currentUser={currentUser} />;
       case 'activity-log':        return <ActivityLog currentUser={currentUser} />;
       case 'manage-issues':       return <ManageIssues currentUser={currentUser} />;
       case 'process-rider':
@@ -515,12 +576,21 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points={sidebarExpanded ? '15 18 9 12 15 6' : '9 18 15 12 9 6'} /></svg>
           </button>
           </Tooltip>
-          <div className="ad-sidebar-logo">
-            <div className="ad-sidebar-logo-circle">
-              <img src={yto_logo} alt="YTO Express" className="ad-sidebar-logo-img" onError={(e) => { e.target.src = 'https://via.placeholder.com/150?text=YTO'; }} />
-            </div>
-            <div className="ad-sidebar-logo-text">YTO <span>EXPRESS</span></div>
-          </div>
+          <Tooltip content={sidebarCollapsed ? 'Expand sidebar to full menu' : 'Collapse sidebar to icon rail'}>
+          <button
+            type="button"
+            className="ad-sidebar-logo ad-sidebar-logo--toggle"
+            onClick={toggleSidebar}
+            aria-expanded={!sidebarCollapsed}
+            aria-label={sidebarCollapsed ? 'Expand sidebar to full menu' : 'Collapse sidebar to icon rail'}
+            title={sidebarCollapsed ? 'Expand sidebar to full menu' : 'Collapse sidebar to icon rail'}
+          >
+            <span className="ad-sidebar-logo-circle" aria-hidden="true">
+              <img src={yto_logo} alt="" className="ad-sidebar-logo-img" onError={(e) => { e.target.src = 'https://via.placeholder.com/150?text=YTO'; }} />
+            </span>
+            <span className="ad-sidebar-nav-text ad-sidebar-logo-text">YTO <span>EXPRESS</span></span>
+          </button>
+          </Tooltip>
         </div>
 
         {/* Show logged in user info if available */}
@@ -534,10 +604,11 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
         )}
 
         <nav className="ad-sidebar-nav">
-          <div className="ad-sidebar-nav-section">
-            <p className="ad-sidebar-nav-section-label">General</p>
-            <ul className="ad-sidebar-nav-list">
-              {visibleMenuItems.map(item => (
+          {visibleSections.map(section => (
+            <div className="ad-sidebar-nav-section" key={section.label}>
+              <p className="ad-sidebar-nav-section-label">{section.label}</p>
+              <ul className="ad-sidebar-nav-list">
+                {section.items.map(item => (
                 <li key={item.key}>
                   {item.children ? (
                     <div className="ad-sidebar-dropdown"
@@ -583,8 +654,9 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
                   )}
                 </li>
               ))}
-            </ul>
-          </div>
+              </ul>
+            </div>
+          ))}
         </nav>
       </aside>
 
@@ -599,12 +671,12 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
         />
         {activeMenuItem !== 'dashboard' ? renderPage() : (
           <div className="enhanced-dashboard-root">
-            <header className="ed-header">
-              <div className="ed-header-titles">
+            <header className="ed-toolbar">
+              <div className="ed-toolbar-titles">
                 <h1>Dashboard</h1>
-                <p>YTO Express • Delivery Performance Overview</p>
+                <p>Delivery Performance Overview</p>
               </div>
-              <div className="ed-header-controls">
+              <div className="ed-toolbar-controls">
                 {/* SSE Connection Count */}
                 <Tooltip content="Admin clients currently connected to the realtime dashboard feed">
                 <div style={{
@@ -644,32 +716,37 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><AlertTriangle size={13} aria-hidden="true" /> Stats endpoint unreachable — KPIs below are computed from the full parcel/rider lists instead.</span>
                   </div>
                 )}
-                <div className="ed-kpi-row">
-                  {primaryKpis.map((kpi) => {
-                    const Icon = kpi.icon;
-                    const hasTrend = kpi.trend !== null && kpi.trend !== undefined;
-                    const trendUp = hasTrend && kpi.trend >= 0;
+                {/* Dominant KPI anchor + compact inline tickers — asymmetric, no uniform card grid */}
+                <div className="ed-anchor-row">
+                  {(() => {
+                    const anchor = primaryKpis[0];
+                    const hasTrend = anchor.trend !== null && anchor.trend !== undefined;
+                    const trendUp = hasTrend && anchor.trend >= 0;
                     return (
-                      <div className="ed-kpi-card" key={kpi.key}>
-                        <div className="ed-kpi-top">
-                          <span className={`ed-kpi-icon-wrap ${kpi.tone}`}><Icon size={20} strokeWidth={2.25} /></span>
-                          {hasTrend && (
-                            <Tooltip content={`${kpi.label}: change vs the previous week`}>
-                              <span className={`ed-kpi-trend ${trendUp ? 'up' : 'down'}`}>
-                                {trendUp ? <TrendingUp size={12} strokeWidth={3} /> : <TrendingDown size={12} strokeWidth={3} />}
-                                {trendUp ? '+' : ''}{kpi.trend} pts
-                              </span>
-                            </Tooltip>
-                          )}
-                        </div>
-                        <div className="ed-kpi-body">
-                          <h2>{kpi.value}</h2>
-                          <span className="ed-kpi-label">{kpi.label}</span>
-                          <p className="ed-kpi-sub">{kpi.sub}</p>
-                        </div>
+                      <div className="ed-anchor-metric">
+                        <span className="ed-anchor-label">{anchor.label}</span>
+                        <h2>{anchor.value}</h2>
+                        <p className="ed-anchor-sub">{anchor.sub}</p>
+                        {hasTrend && (
+                          <Tooltip content={`${anchor.label}: change vs the previous week`}>
+                            <span className={`ed-kpi-trend ${trendUp ? 'up' : 'down'}`}>
+                              {trendUp ? <TrendingUp size={12} strokeWidth={3} /> : <TrendingDown size={12} strokeWidth={3} />}
+                              {trendUp ? '+' : ''}{anchor.trend} pts
+                            </span>
+                          </Tooltip>
+                        )}
                       </div>
                     );
-                  })}
+                  })()}
+                  <div className="ed-ticker-rail">
+                    {primaryKpis.slice(1).map((kpi) => (
+                      <div className="ed-ticker" key={kpi.key}>
+                        <label>{kpi.label}</label>
+                        <strong>{kpi.value}</strong>
+                        <span>{kpi.sub}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
 
                 {/* Peak Connection Alert Banner */}
@@ -680,128 +757,10 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
                   <ConnectionHistoryChart />
                 </div>
 
-                <div className="ed-workspace-grid">
-                  <section className="ed-panel ed-panel-left">
+                <div className="ed-canvas-grid">
+                  <section className="ed-canvas">
                     <div className="ed-panel-head">
                       <div>
-                        <span className="ed-tag-badge orange">By Success Rate</span>
-                        <h2>Rider Performance</h2>
-                      </div>
-                      <span className="ed-live-indicator"><span className="ed-live-dot" />Live</span>
-                    </div>
-
-                    {riders.length === 0 ? (
-                      <DashboardEmptyState icon={Users} title="No riders registered yet" subtitle="Performance rankings will appear here once riders are added." />
-                    ) : (
-                      <div className="ed-chart-axis-row">
-                        <div className="ed-axis-ticks">
-                          <span>{maxRider}%</span>
-                          <span>{Math.round(maxRider / 2)}%</span>
-                          <span>0%</span>
-                        </div>
-                        <div className="ed-bar-chart">
-                          {riderScores.map((score, i) => {
-                            const isTop = score === maxRider;
-                            return (
-                              <div className="ed-bar-column" key={i}>
-                                <span className="ed-bar-score" style={{ color: isTop ? '#f37021' : '#390955' }}>{score}%</span>
-                                <div className="ed-bar-track">
-                                  <div className={`ed-bar-fill ${isTop ? 'peak' : 'standard'}`} style={{ height: `${(score / maxRider) * 100}%` }} />
-                                </div>
-                                <span className="ed-bar-day">{riderLabels[i]}</span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="ed-chart-footer">
-                      <Tooltip content="Rider with the highest delivery success rate this period">
-                      <div className="ed-footer-badge highlight">
-                        <span className="ed-footer-badge-icon"><Trophy size={14} /></span>
-                        <div><label>Top Performing Rider</label><strong>{peakRider}</strong></div>
-                      </div>
-                      </Tooltip>
-                      <Tooltip content="Average of rider delivery ratings, out of 5">
-                      <div className="ed-footer-badge">
-                        <span className="ed-footer-badge-icon"><Star size={14} /></span>
-                        <div><label>Average Delivery Rating</label><strong>{avgRating} / 5</strong></div>
-                      </div>
-                      </Tooltip>
-                      <Tooltip content="Completed delivery rides recorded across all riders">
-                      <div className="ed-footer-badge">
-                        <span className="ed-footer-badge-icon"><Route size={14} /></span>
-                        <div><label>Total Completed Rides</label><strong>{totalRides.toLocaleString()}</strong></div>
-                      </div>
-                      </Tooltip>
-                    </div>
-                  </section>
-
-                  <section className="ed-panel ed-panel-right">
-                    <div className="ed-panel-head">
-                      <div>
-                        <span className="ed-tag-badge purple">Live Totals</span>
-                        <h2>Parcel Report</h2>
-                      </div>
-                    </div>
-
-                    <div className="ed-stat-split">
-                      <div className="ed-split-box purple">
-                        <p className="box-label">Overall Success Rate</p>
-                        <h3>{deliverySuccessPct}%</h3>
-                        <p className="box-sub">{deliveredCount} of {totalParcels} parcels</p>
-                      </div>
-                      <div className="ed-split-box orange">
-                        <p className="box-label">Return Rate</p>
-                        <h3>{returnRatePct}%</h3>
-                        <p className="box-sub">{returnedCount} of {totalParcels} parcels</p>
-                      </div>
-                    </div>
-
-                    <div className="ed-mini-histogram-block">
-                      <div className="ed-mini-head"><h6>Parcel Deliveries (7d)</h6><span>{deliveryVals.reduce((a, b) => a + b, 0)}</span></div>
-                      <div className="ed-mini-bars purple">
-                        {deliveryVals.map((v, i) => (
-                          <div key={i} className="ed-mini-bar" style={{ height: `${Math.max(4, (v / maxDelivery) * 100)}%`, background: v === maxDelivery && v > 0 ? '#f37021' : '#390955' }} />
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="ed-mini-histogram-block">
-                      <div className="ed-mini-head"><h6>Returned Parcels (7d)</h6><span style={{ color: '#f37021' }}>{maxReturn} peak</span></div>
-                      <div className="ed-mini-bars orange">
-                        {returnVals.map((v, i) => (
-                          <div key={i} className="ed-mini-bar" style={{ height: `${Math.max(4, (v / maxReturn) * 100)}%`, background: v === maxReturn && v > 0 ? '#390955' : '#f37021' }} />
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="ed-action-bar">
-                      <Tooltip content="Open the full Manage Parcels page">
-                      <button className="ed-action-btn primary" onClick={() => handleMenuClick('manage-parcels')}>
-                        <ClipboardList size={15} /> Generate Full Report
-                      </button>
-                      </Tooltip>
-                      <Tooltip content="Download the current parcel list as a PDF report">
-                      <button className="ed-action-btn secondary" disabled={parcels.length === 0} onClick={() => dashboardExportPDF(parcels)}>
-                        <Download size={15} /> Download PDF
-                      </button>
-                      </Tooltip>
-                      <Tooltip content="Export the current parcel list as a CSV file">
-                      <button className="ed-action-btn secondary" disabled={parcels.length === 0} onClick={() => dashboardExportCSV(parcels)}>
-                        <Share2 size={15} /> Export CSV
-                      </button>
-                      </Tooltip>
-                    </div>
-                  </section>
-                </div>
-
-                <div className="ed-workspace-grid" style={{ marginTop: 20 }}>
-                  <section className="ed-panel ed-panel-left">
-                    <div className="ed-panel-head">
-                      <div>
-                        <span className="ed-tag-badge purple">{volumeView === 'daily' ? 'Last 7 Days' : 'Last 6 Weeks'}</span>
                         <h2>Parcel Volume</h2>
                       </div>
                       <div style={{ display: 'flex', gap: 6 }}>
@@ -811,9 +770,9 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
                             onClick={() => setVolumeView(v)}
                             style={{
                               padding: '5px 12px', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', textTransform: 'capitalize',
-                              border: `1.5px solid ${volumeView === v ? '#390955' : '#e0d5f0'}`,
+                              border: `1px solid ${volumeView === v ? '#390955' : '#d5cbe4'}`,
                               background: volumeView === v ? '#390955' : 'white',
-                              color: volumeView === v ? 'white' : '#555',
+                              color: volumeView === v ? 'white' : '#390955',
                             }}
                           >
                             {v}
@@ -845,57 +804,122 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
                       </div>
                     )}
 
-                    <div className="ed-chart-footer">
-                      <div className="ed-footer-badge">
-                        <span className="ed-footer-badge-icon"><BarChart3 size={14} /></span>
-                        <div><label>Total ({volumeView})</label><strong>{volumeVals.reduce((a, b) => a + b, 0)}</strong></div>
-                      </div>
-                      <div className="ed-footer-badge highlight">
-                        <span className="ed-footer-badge-icon"><TrendingUp size={14} /></span>
-                        <div><label>Peak</label><strong>{maxVolume}</strong></div>
-                      </div>
+                    <div className="ed-canvas-footer">
+                      <div className="ed-rail-stat"><label>Total ({volumeView})</label><strong>{volumeVals.reduce((a, b) => a + b, 0)}</strong></div>
+                      <div className="ed-rail-stat"><label>Peak</label><strong>{maxVolume}</strong></div>
                     </div>
                   </section>
 
-                  <section className="ed-panel ed-panel-right">
-                    <div className="ed-panel-head">
-                      <div>
-                        <span className="ed-tag-badge orange">By Deliveries Completed</span>
-                        <h2>Rider Activity</h2>
+                  <aside className="ed-rail">
+                    <div className="ed-rail-block">
+                      <div className="ed-block-head">
+                        <h2>Rider Performance</h2>
+                        <span className="ed-live-indicator"><span className="ed-live-dot" />Live</span>
                       </div>
-                    </div>
 
-                    {activityRiders.length === 0 ? (
-                      <DashboardEmptyState icon={Users} title="No riders registered yet" subtitle="Delivery activity per rider will show up here once riders are added." />
+                    {riders.length === 0 ? (
+                      <DashboardEmptyState icon={Users} title="No riders registered yet" subtitle="Performance rankings will appear here once riders are added." />
                     ) : (
-                      <div className="ed-mini-histogram-block">
-                        <div className="ed-mini-head"><h6>Deliveries per Rider (Top 7)</h6><span>{activityVals.reduce((a, b) => a + b, 0)} total</span></div>
-                        <div className="ed-mini-bars purple">
-                          {activityVals.map((v, i) => (
-                            <div key={i} className="ed-mini-bar" style={{ height: `${Math.max(4, (v / maxActivity) * 100)}%`, background: v === maxActivity && v > 0 ? '#f37021' : '#390955' }} />
-                          ))}
+                      <div className="ed-chart-axis-row">
+                        <div className="ed-axis-ticks">
+                          <span>{maxRider}%</span>
+                          <span>{Math.round(maxRider / 2)}%</span>
+                          <span>0%</span>
                         </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
-                          {activityLabels.map((label, i) => (
-                            <span key={i} style={{ fontSize: 10, color: '#390955', flex: 1, textAlign: 'center' }}>{label}</span>
-                          ))}
+                        <div className="ed-bar-chart">
+                          {riderScores.map((score, i) => {
+                            const isTop = score === maxRider;
+                            return (
+                              <div className="ed-bar-column" key={i}>
+                                <span className="ed-bar-score" style={{ color: isTop ? '#f37021' : '#390955' }}>{score}%</span>
+                                <div className="ed-bar-track">
+                                  <div className={`ed-bar-fill ${isTop ? 'peak' : 'standard'}`} style={{ height: `${(score / maxRider) * 100}%` }} />
+                                </div>
+                                <span className="ed-bar-day">{riderLabels[i]}</span>
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
                     )}
 
-                    <div className="ed-stat-split" style={{ marginTop: 20 }}>
-                      <div className="ed-split-box purple">
-                        <p className="box-label">Online Now</p>
-                        <h3>{activeRidersCount}</h3>
-                        <p className="box-sub">of {riders.length} total riders</p>
-                      </div>
-                      <div className="ed-split-box orange">
-                        <p className="box-label">Offline</p>
-                        <h3>{offlineRidersCount}</h3>
-                        <p className="box-sub">not currently on duty</p>
+                      <div className="ed-rail-stats">
+                        <div className="ed-rail-stat"><label>Top Performing Rider</label><strong>{peakRider}</strong></div>
+                        <div className="ed-rail-stat"><label>Average Delivery Rating</label><strong>{avgRating} / 5</strong></div>
+                        <div className="ed-rail-stat"><label>Total Completed Rides</label><strong>{totalRides.toLocaleString()}</strong></div>
                       </div>
                     </div>
-                  </section>
+
+                    <div className="ed-rail-block">
+                      <div className="ed-block-head"><h2>Parcel Operations</h2></div>
+                      <div className="ed-rail-stats">
+                        <div className="ed-rail-stat"><label>Overall Success Rate</label><strong>{deliverySuccessPct}%</strong><span>{deliveredCount} of {totalParcels} parcels</span></div>
+                        <div className="ed-rail-stat"><label>Return Rate</label><strong>{returnRatePct}%</strong><span>{returnedCount} of {totalParcels} parcels</span></div>
+                      </div>
+
+                      <div className="ed-mini-histogram-block">
+                      <div className="ed-mini-head"><h6>Parcel Deliveries (7d)</h6><span>{deliveryVals.reduce((a, b) => a + b, 0)}</span></div>
+                      <div className="ed-mini-bars purple">
+                        {deliveryVals.map((v, i) => (
+                          <div key={i} className="ed-mini-bar" style={{ height: `${Math.max(4, (v / maxDelivery) * 100)}%`, background: v === maxDelivery && v > 0 ? '#f37021' : '#390955' }} />
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="ed-mini-histogram-block">
+                      <div className="ed-mini-head"><h6>Returned Parcels (7d)</h6><span style={{ color: '#f37021' }}>{maxReturn} peak</span></div>
+                      <div className="ed-mini-bars orange">
+                        {returnVals.map((v, i) => (
+                          <div key={i} className="ed-mini-bar" style={{ height: `${Math.max(4, (v / maxReturn) * 100)}%`, background: v === maxReturn && v > 0 ? '#390955' : '#f37021' }} />
+                        ))}
+                      </div>
+                    </div>
+
+                    </div>
+
+                    <div className="ed-rail-block">
+                      <div className="ed-block-head"><h2>Rider Activity</h2></div>
+                      {activityRiders.length === 0 ? (
+                        <DashboardEmptyState icon={Users} title="No riders registered yet" subtitle="Delivery activity per rider will show up here once riders are added." />
+                      ) : (
+                        <div className="ed-mini-histogram-block">
+                          <div className="ed-mini-head"><h6>Deliveries per Rider (Top 7)</h6><span>{activityVals.reduce((a, b) => a + b, 0)} total</span></div>
+                          <div className="ed-mini-bars purple">
+                            {activityVals.map((v, i) => (
+                              <div key={i} className="ed-mini-bar" style={{ height: `${Math.max(4, (v / maxActivity) * 100)}%`, background: v === maxActivity && v > 0 ? '#f37021' : '#390955' }} />
+                            ))}
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
+                            {activityLabels.map((label, i) => (
+                              <span key={i} style={{ fontSize: 10, color: '#390955', flex: 1, textAlign: 'center' }}>{label}</span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      <div className="ed-rail-stats">
+                        <div className="ed-rail-stat"><label>Riders On Duty</label><strong>{activeRidersCount} of {riders.length}</strong></div>
+                        <div className="ed-rail-stat"><label>Not On Duty</label><strong>{offlineRidersCount}</strong></div>
+                      </div>
+                    </div>
+
+                    <div className="ed-action-bar">
+                      <Tooltip content="Open the full Manage Parcels page">
+                      <button className="ed-action-btn primary" onClick={() => handleMenuClick('manage-parcels')}>
+                        <ClipboardList size={15} /> Generate Full Report
+                      </button>
+                      </Tooltip>
+                      <Tooltip content="Download the current parcel list as a PDF report">
+                      <button className="ed-action-btn secondary" disabled={parcels.length === 0} onClick={() => dashboardExportPDF(parcels)}>
+                        <Download size={15} /> Download PDF
+                      </button>
+                      </Tooltip>
+                      <Tooltip content="Export the current parcel list as a CSV file">
+                      <button className="ed-action-btn secondary" disabled={parcels.length === 0} onClick={() => dashboardExportCSV(parcels)}>
+                        <Share2 size={15} /> Export CSV
+                      </button>
+                      </Tooltip>
+                    </div>
+                  </aside>
                 </div>
               </>
             )}

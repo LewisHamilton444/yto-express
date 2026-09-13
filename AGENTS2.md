@@ -1,4 +1,4 @@
-﻿# AGENTS2.md — YTO Express Web Admin Platform — Architecture & Engineering Reference
+# AGENTS2.md — YTO Express Web Admin Platform — Architecture & Engineering Reference
 
 > *Complete architecture, file mappings, and engineering rules for the Web Admin portal (React frontend + Node/Express backend), including the real-time SSE layer and the cross-platform bridge to the Android app.*
 
@@ -33,8 +33,15 @@
 - `src/main.jsx` — React DOM entry; imports `index.css` + `tailwind.css`.
 - `src/App.jsx` — auth-state router. Restores `currentUser` from the JWT (parses `payload.isDemo ?? isDemoEmail(payload.email)`); listens for `yto:auth_expired`; renders `LoginPage` when logged out; otherwise routes via `PAGE_MAP` and passes `activePage`/`setActivePage`/`currentUser`/`onLogout`.
 
-### `PAGE_MAP` (18 views)
-`dashboard` → AnalyticsDashboard · `process-seller` → ProcessSellerInformation · `seller-report` → ViewSeller · `process-parcel` → ProcessParcelInformation · `manage-parcels` → ManageParcels · `process-rider` → ProcessRiderInformation · `monitor-rider` → MonitorRiderStatus · `rider-report` → GenerateRiderDataReport · `customer-list` → CustomerList · `activity-log` → ActivityLog · `manage-accounts` → ManageAccounts · `hub-parcels` → HubParcelReceiving · `manage-issues` → ManageIssues · `parcel-location` → ManageParcelLocation · `geofence` → MonitorParcel · `tracking-info` → GenerateTrackingInformation · `settings` → Settings · `logout` → Logout
+### `PAGE_MAP` (19 views)
+`dashboard` → AnalyticsDashboard · `process-seller` → ProcessSellerInformation · `seller-report` → ViewSeller · `process-parcel` → ProcessParcelInformation · `manage-parcels` → ManageParcels · `process-rider` → ProcessRiderInformation · `monitor-rider` → MonitorRiderStatus · `rider-report` → GenerateRiderDataReport · `customer-list` → CustomerList · `activity-log` → ActivityLog · `manage-accounts` → ManageAccounts · `hub-parcels` → HubParcelReceiving · `manage-issues` → ManageIssues · `parcel-location` → ManageParcelLocation · `geofence` → MonitorParcel · `tracking-info` → GenerateTrackingInformation · `settings` → Settings · `app-notifications` → AppNotifications · `logout` → Logout
+
+### Sidebar IA (2026-09-13)
+The sidebar in `AnalyticsDashboard.jsx` is **section-grouped** (`getMenuSections(role)` → `OVERVIEW / PEOPLE / SHIPMENTS / TRACKING & MAPS / SUPPORT / ADMIN` quiet headers, rendered as `ad-sidebar-nav-section` blocks) — not the older flat "Manage X Information" groups. Rules:
+- Route keys are the contract (must stay identical to `PAGE_MAP`); display labels are free to change. Sidebar sub-labels are noun-based destinations: `process-seller`/`process-rider` show as **"Registration Review"**, `seller-report` → **"Seller Directory"**, `monitor-rider` → **"Duty Monitor"**, `rider-report` → **"Rider Reports"**, `manage-parcels` → **"All Parcels"**, `parcel-location` → **"Parcel Map"**, `geofence` → **"Geofence Monitor"**, `manage-issues` → **"Issues"**, `manage-accounts` → **"Accounts"**, `tracking-info` → **"Tracking Reports"** (moved under SHIPMENTS, out of the GPS group).
+- Page components keep their own full titles (e.g. `MonitorRiderStatus.jsx` still renders "Monitor Rider Status" as its `<h1>`); only the menu label is shortened.
+- `handleMenuClick`/section-sync work off `visibleMenuItems` (a flatMap of all sections), so parent auto-open and rail flyouts need no per-section logic. Empty role-filtered sections are skipped at render.
+- Breadcrumbs in `PageHeader` consumers must mirror the section names: `['Dashboard', 'People', 'Customer List']`, `['Dashboard', 'Support', 'Issues']`, `['Dashboard', 'Support', 'App Notifications']`, `['Dashboard', 'Admin', 'Activity Log']`.
 
 ### Design system (`src/components/ui/`)
 `Badge`, `Modal`, `AlertBanner`, `EmptyState`, `ListSkeleton`, `TableSkeleton`, `StatCard`, `PageHeader`, `CardSectionHeader`, `CardFooter`, `StatusBadge`, `ErrorBoundary` (wraps every routed page — a page crash shows a Retry/Back-to-dashboard card instead of blanking the whole app), `SimulatedFeedBadge` (honest-labeling for demo/simulated feeds), `Tooltip` (+ `Tooltip.css`), `ToastContext` (global toast provider — wraps the app in `App.jsx`, replaces per-screen toast stacks), `vehicleIcons` (`VehicleIcon` lucide component + `vehicleGlyphSvg` SVG data-URI + `vehicleTypeLabel` for Leaflet markers), `statusColors.js` (canonical palettes: `PARCEL_STATUS_COLORS`, `SELLER_STATUS_COLORS`, `RIDER_STATUS_COLORS`, `RIDER_STATUS_BADGE`, **`ACCOUNT_CATEGORY_TONE` = REAL emerald green / DEMO slate gray** (Tailwind tones in `Badge.jsx`, not raw hexes), `ACCOUNT_CATEGORY_LABEL`).
@@ -45,6 +52,7 @@
 - Read `skills/no-slop-ui/SKILL.md` before making any visual, layout, or styling change.
 - On conflict, `skills/no-slop-ui/YTO_ADAPTATIONS.md` outranks the skill defaults.
 - After UI changes, run `skills/no-slop-ui/examples/review-checklist.md`.
+- `skills/avoid-ai-design/` is the audit/rewrite skill (upstream: funboy322/avoid-ai-design): use it when asked to audit existing UI for AI-design tells, de-slop a screen, or as the post-build audit of generated frontend. It complements `no-slop-ui` (which stays the build-time guardrail); in rewrite mode it stops at this project's brand tokens and conventions — see `skills/avoid-ai-design/YTO_ADAPTATIONS.md`.
 
 ### Services
 - `src/services/api.js` — centralized client: `API_ROOT = import.meta.env.VITE_API_URL || 'https://yto-express-backend.onrender.com'`; `apiFetch(path, opts)` attaches `Authorization: Bearer`; on 401 with token-expiry errors clears the token and dispatches `yto:auth_expired`. **Token key: `yto_token`** — `remember=true` → `localStorage`, `remember=false` → `sessionStorage` (session storage wins on read). `adminLogin(email, password, remember)`; `notificationsApi.sendEmail`; collection helpers (`sellersApi`, `ridersApi`, `parcelsApi`, `parcelLocationsApi`, `accountsApi`, `dashboardApi`).
@@ -79,6 +87,7 @@
 | `/api/customers` | GET | Category-filtered. **GET-only** — customers are created exclusively via the bridge (`POST /api/bridge/sync-user`), never via a POST here. |
 | `/api/customers/stats`, `/api/customers/:id/orders` | GET | Customer aggregates + order history by `customerId` |
 | `/api/activity-log` | GET | Audit trail from registration/statusHistory across roles; `limit` ≤ 200, `role` filter |
+| `/api/app-notifications` (GET) + `/api/app-notifications/:id/read` (PATCH) | GET/PATCH | App-originated notifications (`AdminNotification` collection); `limit` ≤ 200, `type`/`read` filters; PATCH marks one read (auth) |
 | `/api/parcels`, `/api/parcel-locations` | GET/POST/PUT/DELETE | Parcel status PUT pushes `BridgeClient.sendStatus` + SSE `parcel-updated` |
 | `/api/dashboard/stats` | GET | Category-filtered KPIs: parcels, delivered %, riders, active riders, avg rating, total deliveries, sellers |
 | `/api/accounts` | GET/POST | Admin accounts; POST derives `accountCategory` from email |
@@ -99,18 +108,19 @@
 |---|---|
 | `Account` | `name`, `email` (unique), `phone`, `role` (`super_admin`/`staff`/`hub_receiver`), `password` (bcrypt, `comparePassword()`), `status` (`Active`/`Deactivated`), `accountCategory` (`REAL`/`DEMO`), `createdDate` |
 | `Seller` | `registrationId` (`YTO-SELL-YYYY-XXXXX`), `accountNumber`, `fullName`, `email`, `phone`, `idType`, `idNumber`, `status` (`ACTIVE`), `accountCategory`, `statusHistory[]` |
-| `Rider` | `registrationId` (`YTO-RIDE-YYYY-XXXXX`), `accountNumber`, `riderName`, `email`, `phone`, `vehicleType`, `vehiclePlate`, `status`, `deliveries`, `rating`, `successRate`, `accountCategory`, `statusHistory[]` |
+| `Rider` | `registrationId` (`YTO-RIDE-YYYY-XXXXX`), `accountNumber`, `riderName`, `email`, `phone`, `vehicleType`, `vehiclePlate`, `status`, `deliveries`, `rating`, `successRate`, `accountCategory`, `isOnDuty` (real duty toggle synced from Android `PUT auth/duty-status` via `/api/bridge/sync-duty-status`), `statusHistory[]` |
 | `Customer` | `customerId` (`YTO-CUST-YYYY-XXXXX`), `fullName`, `email` (unique), `phone`, `address`, `accountCategory`, `status`, `source` (`mobile-app`), `statusHistory[]` |
-| `Parcel` | `trackingNumber` (unique), `senderName`, `receiverName`, `recipientEmail`, `item`, `weight`, `value`, `origin`, `destination`, `status`, `riderId`, `sellerId`, **`accountCategory` (`REAL`/`DEMO`, default `REAL` — added 2026-09-09; previously absent, so Mongoose strict mode silently stripped it and the UI had to guess via sender-email/`DEMO-` prefix heuristics)**, `podPhoto` (Base64 JPEG), `events[]`. |
+| `Parcel` | `trackingNumber` (unique), `senderName`, `receiverName`, `recipientEmail`, `item`, `weight`, `value`, `origin`, `destination`, `status`, `riderId`, `sellerId`, **`accountCategory` (`REAL`/`DEMO`, default `REAL` — added 2026-09-09; previously absent, so Mongoose strict mode silently stripped it and the UI had to guess via sender-email/`DEMO-` prefix heuristics)**, `podPhoto` (Base64 JPEG), `events[]`, `deliveryFee`, `bookedAt`, `pickedUpAt`, `deliveredAt`, `riderLat`/`riderLng` (rider GPS telemetry carried by status updates). |
 | `ParcelLocation` | `parcelId` (unique), `lat`, `lng`, `location`, `type` (`Warehouse`), `status`, `geofence` (`Inside`) |
 | `Issue` | `ticketId` (`TICK-2026-XXXXX`), `trackingNumber`, `category`, `description`, `evidenceImages[]`, `reporterName/Email/Phone/Role`, `status` (`Open`→`Under Investigation`→`Resolved`→`Closed`), `accountCategory`, `adminNotes`, `resolvedAt` |
+| `AdminNotification` | `title`, `body`, `type` (`ORDER`/`SECURITY`/`SYSTEM`), `targetUserId`, `targetRole`, `refId` (shipment id), `read` (bool), `createdAt` — app-originated notifications fanned in via `/api/bridge/sync-notification`, surfaced in the App Notifications panel + bell |
 
 ---
 
 ## 5. Real-Time Layer (SSE)
 
 - **`/api/events/stream`**: `text/event-stream`, 30s heartbeat, no JWT on the stream itself. `sseBroadcaster` singleton tracks connected clients, connection history (capped 500), peak alerts (threshold `SSE_PEAK_THRESHOLD` default 5, 1-min cooldown, optional email via `ADMIN_EMAIL`).
-- **Events broadcast**: `user-synced`, `parcel-synced`, `location-synced`, `parcel-updated`, `issue-synced`, `issue-status-updated`, `peak-alert`.
+- **Events broadcast**: `user-synced`, `parcel-synced`, `location-synced`, `parcel-updated`, `issue-synced`, `issue-status-updated`, `duty-status-synced`, `notification-synced`, `peak-alert`.
 - **Client hook (`useSSE.js`)**: connects to `/api/events/stream?token=<jwt>`; auto-reconnect every 3s; after **5 failed attempts falls back to HTTP polling every 5s** (`/api/activity-log?limit=10`, diffing timestamps); exposes `{ connected, mode: 'sse'|'polling'|'offline', lastEvent, on(type, cb), retry() }`; optional browser notifications per event type.
 
 ---
@@ -123,10 +133,12 @@ Bidirectional REST bridge with the Android backend (`yto_express_backend`). Ever
 |---|---|
 | `POST /api/bridge/sync-user` | Mobile `User.js` → `Seller`/`Rider`/`Customer` by role; **Enterprise ID generation** `YTO-<PREFIX>-<YEAR>-<5-digit>` (sequence per collection per year); partial-update merge (only fields the client sent); SSE `user-synced` |
 | `POST /api/bridge/sync-parcel` | Mobile `Shipment.js` → `Parcel.js` (nested sender/recipient flattened; tolerates flat payloads); server-side weight validation (>0); upsert by `trackingNumber`; SSE `parcel-synced` |
-| `POST /api/bridge/sync-issue` | Mobile `Issue.js` → `Issue.js`; SSE `issue-synced` |
+| `POST /api/bridge/sync-issue` | Mobile `Issue.js` → `Issue.js`; SSE `issue-synced`. Mobile `createdAt` is the source of truth for the stored submission time when present (web arrival time is fallback) |
 | `POST /api/bridge/sync-location` | Rider GPS telemetry → `ParcelLocation`; SSE `location-synced` |
 | `POST /api/bridge/receive-status` | Rider terminal transitions; SSE `parcel-synced` |
 | `POST /api/bridge/receive-issue-status` | Mobile-side ticket status; SSE `issue-status-updated` |
+| `POST /api/bridge/sync-duty-status` | Rider duty toggle from Android `PUT auth/duty-status`; upserts `isOnDuty` on the matching `Rider` (email/phone match); SSE `duty-status-synced` |
+| `POST /api/bridge/sync-notification` | App-originated notification (`ORDER`/`SECURITY`/`SYSTEM`, target user/role) → `AdminNotification`; SSE `notification-synced` |
 | `GET /api/bridge/health` | Bridge liveness |
 
 **Outbound** (`server/utils/BridgeClient.js`): `sendStatus(trackingNumber, status)`, `sendApproval(email, role, status)`, `syncParcel(parcelData)`, `pollChanges(since)`, `sendIssueStatus(ticketId, status, adminNotes)`, `healthCheck()` — HTTP(S) POST with retry (3 attempts, exponential backoff, 10s timeout) to `ANDROID_BACKEND_URL`.
@@ -165,7 +177,7 @@ Bidirectional REST bridge with the Android backend (`yto_express_backend`). Ever
 
 1. **State isolation & navigation** — views route via `PAGE_MAP`; `currentUser` is top-level state; 401 expiry → clean logout to `LoginPage`.
 2. **Backend robustness** — external services (Twilio, Semaphore, Nodemailer) fall back to simulation when credentials are absent; bridge routes never throw unhandled; errors logged with payload context and structured JSON.
-3. **Data integrity & Enterprise IDs** — strict formats: tickets `TICK-<YEAR>-<5-digit>`; sellers `YTO-SELL-<YEAR>-<5-digit>`; riders `YTO-RIDE-<YEAR>-<5-digit>`; customers `YTO-CUST-<YEAR>-<5-digit>`; admins `YTO-ADM-XXX`.
+3. **Data integrity & Enterprise IDs** — strict formats: tickets `TICK-<YEAR>-<5-digit>`; **mobile-account enterprise IDs use the compact Web-minted format (2026-09-11):** sellers `YTOS<YEAR><4-digit>`, riders `YTOR<YEAR><4-digit>`, customers `YTOC<YEAR><4-digit>` (per-collection-per-year sequence counted across BOTH compact and legacy shapes, collision-safe probe before minting; legacy `YTO-SELL/RIDE/CUST-<YEAR>-<5-digit>` rows remain valid/grandfathered); admins `YTO-ADM-XXX`. The Web is the sole minting authority: the sync-user response carries `data.enterpriseId`, the Android backend persists it (`User.webEnterpriseId`) and it is backfilled via `receive-approval` (`enterpriseId` field). Sync-parcel additionally mints + returns the canonical QR payload (`YTOQR1|<tracking>|<sellerEntId>|<customerEntId>`, degraded to the plain tracking number when no enterprise party resolves) and the POD geofence spec (`trackingGeofence` = `{kind:'POD_RING', center:{lat,lng}, radiusMeters:100}`) — both persisted on the web `Parcel` (`qrPayload`, `sellerEnterpriseId`, `customerEnterpriseId`, `trackingGeofence`) and echoed to the mobile side. Web-created parcels pushed to Android must resolve a seller explicitly (`sellerId`/registered `sellerEmail`) — no arbitrary-seller fallback.
 4. **Input hygiene** — email `.toLowerCase().trim()`; phone `.replaceAll("[^0-9]","")`; no emojis in UI strings or logs; no hardcoded impersonating fallbacks (`"seller@gmail.com"`, `"YTO Rider"`, `"Store Warehouse"`).
 5. **Code quality** — retain docstrings/comments/schemas; responsive desktop + mobile layouts; clear error boundaries.
 6. **Auth** — bcrypt 10 rounds; JWT 24h; token key `yto_token`; 401 interceptor clears storage + emits `yto:auth_expired`.
@@ -297,4 +309,4 @@ Rules to follow so the keep-alive actually works and stays honest:
 4. **Re-check after backend redeploys** — a fresh Render deploy restarts the idle timer; the monitor resumes keeping it warm automatically.
 
 Once a monitor is active, the login pill should read green `System Operational` within ~1s on every visit (no `Connecting...` wait, no red flash).
-
+

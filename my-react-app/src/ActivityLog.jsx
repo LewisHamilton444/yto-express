@@ -106,7 +106,7 @@ const ActivityLog = ({ currentUser }) => {
       <PageHeader
         title="Activity Log"
         subtitle="Global timeline of all registration and status events across roles"
-        breadcrumb={['Dashboard', 'System Monitoring', 'Activity Log']}
+        breadcrumb={['Dashboard', 'Admin', 'Activity Log']}
       />
 
       {/* Main content card */}
@@ -190,7 +190,7 @@ const ActivityLog = ({ currentUser }) => {
             <div className="relative">
               <div
                 className="absolute bottom-2 left-[16px] top-2 w-0.5 rounded-full opacity-15"
-                style={{ background: 'linear-gradient(180deg, #390955 0%, #3b82f6 33%, #f59e0b 66%, #22c55e 100%)' }}
+                style={{ background: '#e2d9ef' }}
               />
               <div className="space-y-3">
                 {filtered.map((evt, idx) => {
@@ -205,7 +205,6 @@ const ActivityLog = ({ currentUser }) => {
 
                       <div
                         className="rounded-xl border border-slate-100 bg-slate-50/60 px-4 py-3 hover:bg-slate-50 transition"
-                        style={{ borderLeftWidth: 3, borderLeftColor: accent.accent }}
                       >
                         <div className="mb-1 flex items-center justify-between gap-2">
                           <div className="flex flex-wrap items-center gap-2">

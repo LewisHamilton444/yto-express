@@ -224,7 +224,7 @@ const CustomerList = ({ currentUser }) => {
       <PageHeader
         title="Customer List"
         subtitle="Mobile-registered customers synced via bridge"
-        breadcrumb={['Dashboard', 'Customer Management', 'Customer List']}
+        breadcrumb={['Dashboard', 'People', 'Customer List']}
       />
 
       {/* Main table card */}
@@ -448,7 +448,6 @@ const CustomerList = ({ currentUser }) => {
                           </div>
                           <div
                             className="rounded-lg border border-brand-purple-100 bg-brand-purple-50 px-3.5 py-2.5"
-                            style={{ borderLeftWidth: 3, borderLeftColor: t.accent }}
                           >
                             <div className="mb-1 flex items-center justify-between">
                               <span className="text-xs font-bold text-gray-900">{evt.title}</span>

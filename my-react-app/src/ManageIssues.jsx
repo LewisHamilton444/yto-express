@@ -153,7 +153,7 @@ export default function ManageIssues({ currentUser }) {
       <PageHeader
         title="Customer Support & Issues"
         subtitle="Manage customer parcel issue reports, damaged goods disputes, and investigation tickets."
-        breadcrumb={['Dashboard', 'Customer Management', 'Customer Issues']}
+        breadcrumb={['Dashboard', 'Support', 'Issues']}
       />
 
 
