@@ -18,6 +18,15 @@ const parcelSchema = new mongoose.Schema({
     // sync-parcel) so the admin From/To cards show complete contact info.
     senderPhone: { type: String, default: '' },
     receiverPhone: { type: String, default: '' },
+    // Seller contact email (Android BridgeClient.syncParcel sends sellerEmail);
+    // declared so strict mode keeps it — also the fallback for QR seller-ID
+    // resolution when the payload's nested sender.email is absent.
+    senderEmail: { type: String, default: '' },
+    // Last-known rider position, stamped by POST /api/bridge/receive-status
+    // when the Android payload carries a POD GPS fix. Powers location-aware
+    // admin views without touching the separate ParcelLocation upsert stream.
+    riderLat: { type: Number, default: null },
+    riderLng: { type: Number, default: null },
     // Cross-platform bridge fields (synced from the mobile Shipment.js schema by
     // POST /api/bridge/sync-parcel). Mongoose strict mode strips undeclared fields
     // on save, which is why each of these must be declared on the schema.

@@ -140,10 +140,11 @@ function normalizeParcel(raw, riderNameById) {
   const parcel = {
     id: raw.trackingNumber || raw._id,
     _id: raw._id,
-    // Contact phones now sync from the mobile sender/recipient via the bridge
-    // (senderPhone / receiverPhone on the Parcel schema).
-    sender: { name: raw.senderName || 'Unknown', phone: raw.senderPhone || '—', email: '—' },
-    receiver: { name: raw.receiverName || 'Unknown', phone: raw.receiverPhone || '—' },
+    // Contact phones/emails now sync from the mobile sender/recipient via the
+    // bridge (senderPhone / receiverPhone / senderEmail / recipientEmail on
+    // the Parcel schema).
+    sender: { name: raw.senderName || 'Unknown', phone: raw.senderPhone || '—', email: raw.senderEmail || '—' },
+    receiver: { name: raw.receiverName || 'Unknown', phone: raw.receiverPhone || '—', email: raw.recipientEmail || '—' },
     address: raw.destination || raw.origin || 'Unknown',
     city,
     weight: raw.weight || '—',
@@ -157,7 +158,10 @@ function normalizeParcel(raw, riderNameById) {
     registeredDate: createdAt,
     riderId,
     assignedRider: riderId ? (riderNameById[riderId] || riderId) : '',
-    instructions: raw.instructions || '—',
+    // Delivery instructions: the bridge syncs the app's shipment `notes`
+    // (field on Parcel since the phone-fields pass); the legacy web-only
+    // `instructions` field is kept as fallback for pre-bridge rows.
+    instructions: raw.notes || raw.instructions || '—',
     trackingNumber: raw.trackingNumber || '—',
     // Real ETA/actual delivery from the synced dates — '—' only when the
     // mobile side never supplied them.

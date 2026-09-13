@@ -237,6 +237,7 @@ async function syncSeller(body, email, accountCategory) {
   if (body.phone !== undefined) updates.phone = body.phone;
   if (body.idNumber !== undefined) updates.idNumber = body.idNumber;
   if (body.idType !== undefined) updates.idType = body.idType;
+  if (body.storeName !== undefined) updates.storeName = body.storeName;
   if (body.accountNumber !== undefined) updates.accountNumber = body.accountNumber;
   Object.assign(updates, pickDefined(body, ['address', 'city', 'state', 'country', 'postalCode', 'bankName', 'commissionRate', 'paymentCycle']));
 
@@ -389,6 +390,12 @@ router.post('/sync-parcel', async (req, res) => {
 
     const senderEmail = body.sender?.email || body.senderEmail || '';
     const recipientEmail = body.recipient?.email || body.recipientEmail || '';
+    // Android BridgeClient.syncParcel carries the seller email as sellerEmail
+    // (nested sender.email is absent in its flattened payload). Without this
+    // fallback the QR payload's seller-ID resolution silently got ''. Also
+    // persisted below so the admin From card shows the merchant's email.
+    const sellerEmail = body.sellerEmail || '';
+    const resolvedSenderEmail = senderEmail || sellerEmail;
     // Contact phones arrive either flattened (Android BridgeClient.syncParcel:
     // senderPhone / recipientPhone) or nested (sender.phone / recipient.phone);
     // recipient maps to the receiverPhone column.
@@ -398,7 +405,7 @@ router.post('/sync-parcel', async (req, res) => {
     // Web-generated identity artifacts (see helpers above): canonical QR
     // payload + POD geofence spec. Persisted on the Parcel doc AND echoed in
     // the response so the mobile backend can persist them on the Shipment.
-    const sellerEnterpriseId = await resolveSellerEnterpriseId(senderEmail);
+    const sellerEnterpriseId = await resolveSellerEnterpriseId(resolvedSenderEmail);
     const customerEnterpriseId = await resolveCustomerEnterpriseId(recipientEmail);
     const qrPayload = buildParcelQrPayload(trackingNumber, sellerEnterpriseId, customerEnterpriseId);
     const trackingGeofence = buildTrackingGeofence(body);
@@ -409,6 +416,7 @@ router.post('/sync-parcel', async (req, res) => {
       receiverName,
       senderPhone,
       receiverPhone,
+      senderEmail: resolvedSenderEmail,
       item: body.item,
       qrPayload,
       sellerEnterpriseId: sellerEnterpriseId || '',
@@ -721,9 +729,17 @@ module.exports = router;
 // Accepts rider terminal slider swipes (Out for Delivery, Delivered, Returning, Returned)
 router.post('/receive-status', async (req, res) => {
   try {
-    const { trackingId, status, riderId, riderName, podPhoto, timestamp } = req.body;
+    // Android BridgeClient.sendStatus() sends { trackingNumber, status } —
+    // accept trackingNumber FIRST and trackingId as legacy alias (the field
+    // mismatch previously 400'd every rider status transition from the app).
+    const trackingId = (req.body.trackingNumber || req.body.trackingId || '').toString().trim();
+    const { status, podPhoto, timestamp } = req.body;
+    const riderId = (req.body.riderId || '').toString();
+    const riderName = (req.body.riderName || '').toString();
+    const riderLat = Number(req.body.riderLat);
+    const riderLng = Number(req.body.riderLng);
     if (!trackingId || !status) {
-      return res.status(400).json({ success: false, error: '"trackingId" and "status" are required.' });
+      return res.status(400).json({ success: false, error: '"trackingNumber" and "status" are required.' });
     }
 
     const parcel = await Parcel.findOne({ trackingNumber: trackingId });
@@ -738,9 +754,15 @@ router.post('/receive-status', async (req, res) => {
 
     parcel.status = status;
     if (podPhoto) parcel.podPhoto = podPhoto;
+    // Last-known rider position (Android sends the POD fix when available);
+    // guards keep a malformed payload from stamping non-numeric coords.
+    if (Number.isFinite(riderLat) && Number.isFinite(riderLng)) {
+      parcel.riderLat = riderLat;
+      parcel.riderLng = riderLng;
+    }
     parcel.events.push({
       time: timestamp || new Date().toISOString(),
-      event: `Status updated to ${status} via Android bridge`,
+      event: `Status updated to ${status} via Android bridge${riderName ? ` by ${riderName}` : ''}`,
       location: parcel.destination || '',
       status: status,
     });
@@ -803,12 +825,53 @@ router.post('/receive-issue-status', async (req, res) => {
   }
 });
 
+// ── POLL CHANGES: Delta feed for the Android backend ────────────────────
+// GET /api/bridge/poll-changes?since=<ISO timestamp>
+// Mirrors the mobile backend's route of the same name (Android BridgeClient
+// .pollChanges() targets the WEB side, which previously 404'd). Returns web
+// records updated after `since` so the app can pull deltas it missed while
+// offline. Capped at 100 docs per collection per call.
+router.get('/poll-changes', async (req, res) => {
+  try {
+    const since = req.query.since;
+    if (!since) {
+      return res.status(400).json({ success: false, error: 'since parameter is required.' });
+    }
+    const sinceDate = new Date(since);
+    if (isNaN(sinceDate.getTime())) {
+      return res.status(400).json({ success: false, error: 'Invalid timestamp format.' });
+    }
+
+    const [parcels, sellers, riders, customers] = await Promise.all([
+      Parcel.find({ updatedAt: { $gt: sinceDate } }).limit(100).lean(),
+      Seller.find({ updatedAt: { $gt: sinceDate } }).limit(100).lean(),
+      Rider.find({ updatedAt: { $gt: sinceDate } }).limit(100).lean(),
+      Customer.find({ updatedAt: { $gt: sinceDate } }).limit(100).lean(),
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        parcels,
+        sellers,
+        riders,
+        customers,
+        lastSync: new Date().toISOString(),
+        counts: { parcels: parcels.length, sellers: sellers.length, riders: riders.length, customers: customers.length },
+      },
+    });
+  } catch (err) {
+    logBridgeError('poll-changes', err, req.query);
+    return res.status(statusForError(err)).json({ success: false, error: 'Failed to poll changes.', details: err.message });
+  }
+});
+
 // ── BRIDGE HEALTH CHECK ─────────────────────────────────────────────────
 router.get('/health', (req, res) => {
   res.status(200).json({
     success: true,
     message: 'Bridge operational',
     timestamp: new Date().toISOString(),
-    routes: ['sync-user', 'sync-duty-status', 'sync-parcel', 'sync-issue', 'sync-location', 'sync-notification', 'receive-status', 'receive-issue-status'],
+    routes: ['sync-user', 'sync-duty-status', 'sync-parcel', 'sync-issue', 'sync-location', 'sync-notification', 'receive-status', 'receive-issue-status', 'poll-changes'],
   });
 });

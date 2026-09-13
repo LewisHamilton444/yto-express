@@ -106,10 +106,10 @@ The sidebar in `AnalyticsDashboard.jsx` is **section-grouped** (`getMenuSections
 | Model | Key fields |
 |---|---|
 | `Account` | `name`, `email` (unique), `phone`, `role` (`super_admin`/`staff`/`hub_receiver`), `password` (bcrypt, `comparePassword()`), `status` (`Active`/`Deactivated`), `createdDate` |
-| `Seller` | `registrationId` (`YTO-SELL-YYYY-XXXXX`), `accountNumber`, `fullName`, `email`, `phone`, `idType`, `idNumber`, `status` (`ACTIVE`), `statusHistory[]` |
+| `Seller` | `registrationId` (compact `YTOS<YYYY><4-digit>`, e.g. `YTOS20260001` — legacy `YTO-SELL-…` values still counted/recognized), `accountNumber`, `fullName`, `storeName` (merchant shop name, synced from Android `User.storeName` via bridge sync-user), `email`, `phone`, `idType`, `idNumber`, `status` (`ACTIVE`), `statusHistory[]` |
 | `Rider` | `registrationId` (`YTO-RIDE-YYYY-XXXXX`), `accountNumber`, `riderName`, `email`, `phone`, `vehicleType`, `vehiclePlate`, `status`, `deliveries`, `rating`, `successRate`, `isOnDuty` (real duty toggle synced from Android `PUT auth/duty-status` via `/api/bridge/sync-duty-status`), `statusHistory[]` |
 | `Customer` | `customerId` (`YTO-CUST-YYYY-XXXXX`), `fullName`, `email` (unique), `phone`, `address`, `status`, `source` (`mobile-app`), `statusHistory[]` |
-| `Parcel` | `trackingNumber` (unique), `senderName`, `receiverName`, `senderPhone`/`receiverPhone` (bridge-synced contact phones, 2026-09-13 — declared on the schema because Mongoose strict mode silently stripped them before), `recipientEmail`, `item`, `weight`, `value`, `origin`, `destination`, `status`, `riderId`, `sellerId`, `podPhoto` (Base64 JPEG), `events[]`, `deliveryFee`, `bookedAt`, `pickedUpAt`, `deliveredAt`, `riderLat`/`riderLng` (rider GPS telemetry carried by status updates). |
+| `Parcel` | `trackingNumber` (unique), `senderName`, `receiverName`, `senderPhone`/`receiverPhone`/`senderEmail` (bridge-synced contact info — declared on the schema because Mongoose strict mode silently strips undeclared fields), `recipientEmail`, `item`, `weight`, `value`, `origin`, `destination`, `status`, `riderId`, `sellerId`, `podPhoto` (Base64 JPEG), `events[]`, `deliveryFee`, `riderLat`/`riderLng` (last-known rider position, stamped by `receive-status` when the Android payload carries a GPS fix). |
 | `ParcelLocation` | `parcelId` (unique), `lat`, `lng`, `location`, `type` (`Warehouse`), `status`, `geofence` (`Inside`) |
 | `Issue` | `ticketId` (`TICK-2026-XXXXX`), `trackingNumber`, `category`, `description`, `evidenceImages[]`, `reporterName/Email/Phone/Role`, `status` (`Open`→`Under Investigation`→`Resolved`→`Closed`), `adminNotes`, `resolvedAt` |
 | `AdminNotification` | `title`, `body`, `type` (`ORDER`/`SECURITY`/`SYSTEM`), `targetUserId`, `targetRole`, `refId` (shipment id), `read` (bool), `createdAt` — app-originated notifications fanned in via `/api/bridge/sync-notification`, surfaced in the App Notifications panel + bell |
@@ -130,17 +130,18 @@ Bidirectional REST bridge with the Android backend (`yto_express_backend`). Ever
 
 | Route | Purpose |
 |---|---|
-| `POST /api/bridge/sync-user` | Mobile `User.js` → `Seller`/`Rider`/`Customer` by role; **Enterprise ID generation** `YTO-<PREFIX>-<YEAR>-<5-digit>` (sequence per collection per year); partial-update merge (only fields the client sent); SSE `user-synced` |
-| `POST /api/bridge/sync-parcel` | Mobile `Shipment.js` → `Parcel.js` (nested sender/recipient flattened; tolerates flat payloads); server-side weight validation (>0); persists contact phones (`senderPhone`/`receiverPhone` — flattened Android fields or nested `sender.phone`/`recipient.phone`); upsert by `trackingNumber`; SSE `parcel-synced` |
+| `POST /api/bridge/sync-user` | Mobile `User.js` → `Seller`/`Rider`/`Customer` by role; **Enterprise ID generation** compact `<PREFIX><YYYY><4-digit>` (e.g. `YTOS20260001`; legacy `YTO-SELL-…` sequences still counted); partial-update merge (only fields the client sent — incl. `storeName` for sellers); SSE `user-synced` |
+| `POST /api/bridge/sync-parcel` | Mobile `Shipment.js` → `Parcel.js` (nested sender/recipient flattened; tolerates flat payloads); server-side weight validation (>0); persists contact info (`senderPhone`/`receiverPhone`/`senderEmail`/`recipientEmail` — flattened Android fields or nested `sender.*`/`recipient.*`; Android's `sellerEmail` is the sender-email fallback and feeds seller enterprise-ID/QR resolution); upsert by `trackingNumber`; SSE `parcel-synced` |
 | `POST /api/bridge/sync-issue` | Mobile `Issue.js` → `Issue.js`; SSE `issue-synced`. Mobile `createdAt` is the source of truth for the stored submission time when present (web arrival time is fallback) |
 | `POST /api/bridge/sync-location` | Rider GPS telemetry → `ParcelLocation`; SSE `location-synced` |
-| `POST /api/bridge/receive-status` | Rider terminal transitions; SSE `parcel-synced` |
+| `POST /api/bridge/receive-status` | Rider status transitions from Android `BridgeClient.sendStatus` (`trackingNumber` primary, `trackingId` legacy alias — the original `trackingId`-only destructure 400'd every app status push until fixed 2026-09-13); stamps `podPhoto`, last-known `riderLat`/`riderLng`, appends a timeline `events[]` entry; SSE `parcel-synced` |
 | `POST /api/bridge/receive-issue-status` | Mobile-side ticket status; SSE `issue-status-updated` |
 | `POST /api/bridge/sync-duty-status` | Rider duty toggle from Android `PUT auth/duty-status`; upserts `isOnDuty` on the matching `Rider` (email/phone match); SSE `duty-status-synced` |
 | `POST /api/bridge/sync-notification` | App-originated notification (`ORDER`/`SECURITY`/`SYSTEM`, target user/role) → `AdminNotification`; SSE `notification-synced`. Per-user REAL notifications bridge (2026-09-13 mobile fix: a missing `await` on the mobile demo gate had silently skipped every bridge write); role-wide broadcasts (e.g. rider `New Incoming Task`) are demo-context and stay mobile-side — they now persist there with a null recipient instead of erroring (`Notification.recipient` made optional). |
-| `GET /api/bridge/health` | Bridge liveness |
+| `GET /api/bridge/poll-changes` | Delta feed mirroring the mobile backend's route of the same name (Android `BridgeClient.pollChanges()` previously 404'd here): `?since=<ISO>` → parcels/sellers/riders/customers updated after the timestamp, 100 docs per collection cap |
+| `GET /api/bridge/health` | Bridge liveness (route list includes `poll-changes`) |
 
-**Outbound** (`server/utils/BridgeClient.js`): `sendStatus(trackingNumber, status)`, `sendApproval(email, role, status)`, `syncParcel(parcelData)`, `pollChanges(since)`, `sendIssueStatus(ticketId, status, adminNotes)`, `healthCheck()` — HTTP(S) POST with retry (3 attempts, exponential backoff, 10s timeout) to `ANDROID_BACKEND_URL`.
+**Outbound** (`server/utils/BridgeClient.js`): `sendStatus(trackingNumber, status)`, `sendApproval(email, role, status, enterpriseId)`, `syncParcel(parcelData)`, `pollChanges(since)` (targets the mobile backend's `/api/bridge/poll-changes`), `sendIssueStatus(ticketId, status, adminNotes)`, `healthCheck()` — HTTP(S) POST with retry (3 attempts, exponential backoff, 10s timeout) to `ANDROID_BACKEND_URL`.
 
 ---
 
