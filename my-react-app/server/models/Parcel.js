@@ -14,6 +14,10 @@ const parcelSchema = new mongoose.Schema({
     riderId: { type: String, default: '' },
     sellerId: { type: String, default: '' },
     podPhoto: { type: String, default: '' },
+    // Contact phones (synced from mobile sender/recipient phones via bridge
+    // sync-parcel) so the admin From/To cards show complete contact info.
+    senderPhone: { type: String, default: '' },
+    receiverPhone: { type: String, default: '' },
     // Cross-platform bridge fields (synced from the mobile Shipment.js schema by
     // POST /api/bridge/sync-parcel). Mongoose strict mode strips undeclared fields
     // on save, which is why each of these must be declared on the schema.

@@ -389,6 +389,11 @@ router.post('/sync-parcel', async (req, res) => {
 
     const senderEmail = body.sender?.email || body.senderEmail || '';
     const recipientEmail = body.recipient?.email || body.recipientEmail || '';
+    // Contact phones arrive either flattened (Android BridgeClient.syncParcel:
+    // senderPhone / recipientPhone) or nested (sender.phone / recipient.phone);
+    // recipient maps to the receiverPhone column.
+    const senderPhone = (body.sender?.phone || body.senderPhone || '').toString().trim();
+    const receiverPhone = (body.recipient?.phone || body.recipientPhone || '').toString().trim();
 
     // Web-generated identity artifacts (see helpers above): canonical QR
     // payload + POD geofence spec. Persisted on the Parcel doc AND echoed in
@@ -402,6 +407,8 @@ router.post('/sync-parcel', async (req, res) => {
       trackingNumber,
       senderName,
       receiverName,
+      senderPhone,
+      receiverPhone,
       item: body.item,
       qrPayload,
       sellerEnterpriseId: sellerEnterpriseId || '',

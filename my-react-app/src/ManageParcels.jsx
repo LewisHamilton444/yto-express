@@ -140,8 +140,10 @@ function normalizeParcel(raw, riderNameById) {
   const parcel = {
     id: raw.trackingNumber || raw._id,
     _id: raw._id,
-    sender: { name: raw.senderName || 'Unknown', phone: '—', email: '—' },
-    receiver: { name: raw.receiverName || 'Unknown', phone: '—' },
+    // Contact phones now sync from the mobile sender/recipient via the bridge
+    // (senderPhone / receiverPhone on the Parcel schema).
+    sender: { name: raw.senderName || 'Unknown', phone: raw.senderPhone || '—', email: '—' },
+    receiver: { name: raw.receiverName || 'Unknown', phone: raw.receiverPhone || '—' },
     address: raw.destination || raw.origin || 'Unknown',
     city,
     weight: raw.weight || '—',
