@@ -5,6 +5,7 @@ import { PARCEL_STATUS_COLORS } from './components/ui/statusColors';
 import Modal from './components/ui/Modal';
 import Tooltip from './components/ui/Tooltip';
 import { AlertTriangle, Check, CheckCircle2, CircleDot, FileDown, FileText, X, XCircle } from 'lucide-react';
+import { normalizeParcelStatus } from './utils/parcelStatus';
 
 /**
  * ManageParcels.jsx
@@ -16,7 +17,7 @@ import { AlertTriangle, Check, CheckCircle2, CircleDot, FileDown, FileText, X, X
  *   1. GenerateParcelMovement.jsx           ("View Registered Parcels")
  *      → master table shape, status footer pills
  *   2. GenerateParcelConfirmationStatus.jsx ("Generate Parcel Confirmation Status")
- *      → parcel detail modal layout, live GPS/geofence MiniMap, signature flow
+ *      → parcel detail modal layout, bridge-synced rider GPS map, POD photo
  *   3. GenerateParcelStatusReport.jsx       ("General Parcel Status Report")
  *      → delivery timeline stepper, Export & Print panel
  *
@@ -40,21 +41,11 @@ import { AlertTriangle, Check, CheckCircle2, CircleDot, FileDown, FileText, X, X
 // two extra values were added to represent that real vocabulary faithfully.
 const STATUSES = ['Pending', 'Picked Up', 'In Transit', 'Out for Delivery', 'Delivered', 'Returned', 'Failed'];
 
-// Real parcel documents store status as lowercase-hyphenated
-// ('pending' | 'in-transit' | 'delivered' | 'returned' | 'failed' — see
-// ProcessParcelInformation.jsx). This maps that real vocabulary onto the
-// Title Case labels this page's badges/filters already use.
-const REAL_STATUS_MAP = {
-  'pending': 'Pending',
-  'in-transit': 'In Transit',
-  'delivered': 'Delivered',
-  'returned': 'Returned',
-  'failed': 'Failed',
-};
-function mapRealStatus(rawStatus) {
-  const key = String(rawStatus || '').trim().toLowerCase();
-  return REAL_STATUS_MAP[key] || 'Pending';
-}
+// Status normalization is centralized in utils/parcelStatus.js — it maps both
+// the legacy lowercase-hyphenated vocabulary AND the mobile backend's
+// Title-case vocabulary ('Out for Delivery', 'Picked Up', 'Returning', ...)
+// that arrive verbatim through the bridge. The old local 5-entry REAL_STATUS_MAP
+// silently coerced every mobile-synced status it didn't know into "Pending".
 
 // Exact palette from GenerateParcelStatusReport.jsx's SERVICE_CONFIG.
 const SERVICE_CONFIG = {
@@ -74,12 +65,9 @@ const EXPORT_FORMATS = [
   { key: 'csv', label: 'CSV Spreadsheet', desc: 'Excel-compatible' },
 ];
 
-// Approximate NCR-area coordinates, used only to place a pin on the
-// Live GPS map preview — mirrors MiniMap from GenerateParcelConfirmationStatus.jsx.
-// Covers both this file's own fallback dataset (the "City" keys) AND the real
-// origin/destination values ProcessParcelInformation.jsx's CITIES dropdown
-// actually writes to real parcels ('Makati', 'Pasig', 'Mandaluyong', etc. —
-// no "City" suffix there, and it includes places outside NCR entirely).
+// Approximate city-center coordinates, used only for the list-level mini-map
+// previews (small dots beside each parcel). The POD tab's MiniMap plots the
+// REAL bridge-synced rider fix with dynamic bounds instead of these.
 const PH_CITY_COORDS = {
   'Manila':            { lat: 14.5995, lng: 120.9842 },
   'Makati City':       { lat: 14.5547, lng: 121.0244 },
@@ -96,12 +84,9 @@ const PH_CITY_COORDS = {
   'Bulacan':           { lat: 14.7943, lng: 120.8799 },
   'Hagonoy':           { lat: 14.8340, lng: 120.7310 },
 };
-// Cebu, Davao, and "Other" are real dropdown options too, but this map
-// preview is NCR-only (see NCR_BOUNDS below) — those fall back to the NCR
-// center below rather than being silently placed on the wrong side of the
-// country.
+// Cebu, Davao, and "Other" are real dropdown options too — the preview
+// centers on NCR rather than silently placing them on the wrong island.
 const NCR_FALLBACK_CENTER = { lat: 14.6, lng: 121.0 };
-const NCR_BOUNDS = { minLat: 14.45, maxLat: 14.75, minLng: 120.90, maxLng: 121.15 };
 
 // ── Derived-data helpers ─────────────────────────────────────────────────────
 
@@ -154,7 +139,7 @@ function normalizeParcel(raw, riderNameById) {
     // Service tier: packageType is the bridge-synced mobile package.type
     // (Standard/Express); serviceType remains the legacy web-created field.
     service: mapServiceLabel(raw.packageType || raw.serviceType),
-    status: mapRealStatus(raw.status),
+    status: normalizeParcelStatus(raw.status),
     registeredDate: createdAt,
     riderId,
     assignedRider: riderId ? (riderNameById[riderId] || riderId) : '',
@@ -176,6 +161,15 @@ function normalizeParcel(raw, riderNameById) {
     lat: base.lat,
     lng: base.lng,
     podPhoto: raw.podPhoto || '',
+    // Real last-known rider GPS fix, stamped by POST /api/bridge/receive-status
+    // whenever the rider app sends coordinates with a status transition. When
+    // absent, the POD tab shows an honest "no fix synced" state instead of a
+    // jittered fake position (the random GPS/geofence generators were removed
+    // as part of the admin truth-pass). Note city-center lat/lng remain for
+    // the list-level map previews only; they are never shown as a live fix.
+    riderLat: Number.isFinite(Number(raw.riderLat)) && raw.riderLat !== null && raw.riderLat !== undefined && String(raw.riderLat) !== '' ? Number(raw.riderLat) : null,
+    riderLng: Number.isFinite(Number(raw.riderLng)) && raw.riderLng !== null && raw.riderLng !== undefined && String(raw.riderLng) !== '' ? Number(raw.riderLng) : null,
+    riderGpsAt: raw.updatedAt || raw.createdAt || null,
   };
 
   // Real per-scan history when the backend recorded any events. When it
@@ -184,7 +178,7 @@ function normalizeParcel(raw, riderNameById) {
   // never display invented intermediate scans (demo fixtures keep theirs).
   parcel.timeline = Array.isArray(raw.events) && raw.events.length > 0
     ? raw.events.map((ev) => ({
-        status: mapRealStatus(ev.status),
+        status: normalizeParcelStatus(ev.status),
         label: ev.event || 'Status update',
         location: ev.location || '—',
         timestamp: ev.time || '—',
@@ -268,17 +262,31 @@ function RiderBadge({ name }) {
   );
 }
 
-// ── Live GPS Mini-Map (adapted from GenerateParcelConfirmationStatus.jsx's
-// MiniMap — same animated-pin/geofence-ring SVG, NCR bounds instead of US) ──
+// ── Rider-fix Mini-Map (adapted from GenerateParcelConfirmationStatus.jsx's
+// MiniMap) — plots ONLY the real last-known rider fix synced through the
+// bridge. Random jitter/geofence simulation removed in the truth-pass: every
+// coordinate rendered here exists in the database.
 
-function MiniMap({ parcel, gps, geofence, allParcels }) {
+function MiniMap({ parcel, allParcels }) {
   const VW = 400, VH = 200;
-  const { minLat, maxLat, minLng, maxLng } = NCR_BOUNDS;
+  // Bounds expand (with padding) to contain both the rider fix and every
+  // other parcel's city-center position — unlike the fixed NCR box, this
+  // stays correct for app-synced destinations (Pulilan/Bulacan, Cebu, ...).
+  const pts = [
+    { lat: parcel.riderLat, lng: parcel.riderLng, label: parcel.trackingNumber },
+    ...allParcels.filter((p) => p.id !== parcel.id).map((p) => ({ lat: p.lat, lng: p.lng })),
+  ].filter((pt) => Number.isFinite(pt.lat) && Number.isFinite(pt.lng));
+  const lats = pts.map((pt) => pt.lat);
+  const lngs = pts.map((pt) => pt.lng);
+  const padLat = Math.max(0.04, (Math.max(...lats) - Math.min(...lats)) * 0.25);
+  const padLng = Math.max(0.04, (Math.max(...lngs) - Math.min(...lngs)) * 0.25);
+  const minLat = Math.min(...lats) - padLat, maxLat = Math.max(...lats) + padLat;
+  const minLng = Math.min(...lngs) - padLng, maxLng = Math.max(...lngs) + padLng;
   const project = (lat, lng) => ({
-    x: ((lng - minLng) / (maxLng - minLng)) * VW,
-    y: VH - ((lat - minLat) / (maxLat - minLat)) * VH,
+    x: ((lng - minLng) / (maxLng - minLng || 1)) * VW,
+    y: VH - ((lat - minLat) / (maxLat - minLat || 1)) * VH,
   });
-  const pin = project(gps.lat, gps.lng);
+  const pin = project(parcel.riderLat, parcel.riderLng);
   const gridLines = [];
   for (let i = 0; i <= 5; i++) {
     gridLines.push({ x1: 0, y1: (VH / 5) * i, x2: VW, y2: (VH / 5) * i });
@@ -289,16 +297,10 @@ function MiniMap({ parcel, gps, geofence, allParcels }) {
       <svg viewBox={`0 0 ${VW} ${VH}`} style={{ width: '100%', display: 'block' }}>
         <rect width={VW} height={VH} fill="#e8ecf5" />
         {gridLines.map((l, i) => <line key={i} x1={l.x1} y1={l.y1} x2={l.x2} y2={l.y2} stroke="rgba(57,9,85,0.08)" strokeWidth="1" />)}
-        {allParcels.filter((p) => p.id !== parcel.id).map((p) => {
+        {allParcels.filter((p) => p.id !== parcel.id && Number.isFinite(p.lat) && Number.isFinite(p.lng)).map((p) => {
           const pt = project(p.lat, p.lng);
           return <circle key={p.id} cx={pt.x} cy={pt.y} r="4" fill="rgba(57,9,85,0.2)" stroke="white" strokeWidth="1" />;
         })}
-        {geofence && (
-          <>
-            <circle cx={pin.x} cy={pin.y} r="32" fill="rgba(57,9,85,0.06)" stroke="rgba(57,9,85,0.25)" strokeWidth="1.5" strokeDasharray="5,3" />
-            <circle cx={pin.x} cy={pin.y} r="18" fill="rgba(57,9,85,0.08)" stroke="rgba(57,9,85,0.35)" strokeWidth="1" />
-          </>
-        )}
         <circle cx={pin.x} cy={pin.y} r="22" fill="none" stroke="rgba(57,9,85,0.35)" strokeWidth="1.5">
           <animate attributeName="r" values="14;30" dur="2s" repeatCount="indefinite" />
           <animate attributeName="opacity" values="0.7;0" dur="2s" repeatCount="indefinite" />
@@ -306,17 +308,19 @@ function MiniMap({ parcel, gps, geofence, allParcels }) {
         <ellipse cx={pin.x} cy={pin.y + 14} rx="7" ry="3" fill="rgba(0,0,0,0.18)" />
         <path d={`M${pin.x},${pin.y + 12} C${pin.x - 10},${pin.y + 2} ${pin.x - 10},${pin.y - 12} ${pin.x},${pin.y - 14} C${pin.x + 10},${pin.y - 12} ${pin.x + 10},${pin.y + 2} ${pin.x},${pin.y + 12}Z`} fill="#390955" stroke="white" strokeWidth="1.5" />
         <circle cx={pin.x} cy={pin.y - 5} r="3.5" fill="white" />
-        <rect x={pin.x - 56} y={pin.y + 16} width="112" height="20" rx="4" fill="rgba(57,9,85,0.88)" />
-        <text x={pin.x} y={pin.y + 29} textAnchor="middle" fill="white" fontSize="9" fontFamily="'Courier New', monospace" fontWeight="bold">
-          {gps.lat.toFixed(4)}° N, {gps.lng.toFixed(4)}° E
+        <rect x={Math.min(Math.max(pin.x - 56, 2), VW - 114)} y={pin.y + 16} width="112" height="20" rx="4" fill="rgba(57,9,85,0.88)" />
+        <text x={Math.min(Math.max(pin.x, 58), VW - 58)} y={pin.y + 29} textAnchor="middle" fill="white" fontSize="9" fontFamily="'Courier New', monospace" fontWeight="bold">
+          {parcel.riderLat.toFixed(4)}° N, {parcel.riderLng.toFixed(4)}° E
         </text>
       </svg>
-      <div style={{ position: 'absolute', top: 8, left: 8, background: geofence?.inside ? '#390955' : 'white', color: geofence?.inside ? 'white' : '#390955', border: '1.5px solid #390955', fontSize: 10, fontWeight: 700, padding: '3px 9px', borderRadius: 8 }}>
-        {geofence ? (geofence.inside ? <><Check size={11} aria-hidden="true" /> Inside Zone</> : <><X size={11} aria-hidden="true" /> Outside Zone</>) : <><CircleDot size={10} aria-hidden="true" /> Live GPS</>}
+      <div style={{ position: 'absolute', top: 8, left: 8, background: '#390955', color: 'white', border: '1.5px solid #390955', fontSize: 10, fontWeight: 700, padding: '3px 9px', borderRadius: 8 }}>
+        <><CircleDot size={10} aria-hidden="true" /> Last known rider fix</>
       </div>
-      <div style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(255,255,255,0.9)', fontSize: 10, color: '#666', padding: '3px 8px', borderRadius: 4, fontFamily: 'monospace' }}>
-        {gps.satellites} sats · ±{gps.accuracy}m
-      </div>
+      {parcel.riderGpsAt && (
+        <div style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(255,255,255,0.9)', fontSize: 10, color: '#666', padding: '3px 8px', borderRadius: 4, fontFamily: 'monospace' }}>
+          {new Date(parcel.riderGpsAt).toLocaleString()}
+        </div>
+      )}
     </div>
   );
 }
@@ -361,49 +365,17 @@ function ParcelModal({ parcel, onClose, allParcels }) {
   const [activeTab, setActiveTab] = useState('details');
   const [exportFmt, setExportFmt] = useState('pdf');
 
-  // GPS / confirmation state — auto-acquires on open, mirroring
-  // GenerateParcelConfirmationStatus.jsx's handleSelect() behavior.
-  const [confirmCode] = useState(() => `CONF-${parcel.id}-${Math.random().toString(36).substr(2, 8).toUpperCase()}`);
-  const [gps, setGps] = useState(null);
-  const [geofence, setGeofence] = useState(null);
-  const [mapLoading, setMapLoading] = useState(true);
-  const [signature, setSignature] = useState(null);
-
-  useEffect(() => {
-    const t = setTimeout(() => {
-      const jitter = () => (Math.random() - 0.5) * 0.01;
-      const lat = parseFloat((parcel.lat + jitter()).toFixed(6));
-      const lng = parseFloat((parcel.lng + jitter()).toFixed(6));
-      setGps({ lat, lng, accuracy: (Math.random() * 8 + 2).toFixed(1), satellites: Math.floor(Math.random() * 8 + 10) });
-      const inside = Math.random() > 0.35;
-      setGeofence({ inside, status: inside ? 'Inside Geofence' : 'Outside Geofence', zone: 'Delivery Zone A', radius: (Math.random() * 4 + 0.5).toFixed(2), distance: (Math.random() * 1.5 + 0.1).toFixed(2) });
-      setMapLoading(false);
-    }, 800);
-    return () => clearTimeout(t);
-  }, [parcel.id, parcel.lat, parcel.lng]);
+  // POD truth-pass: no fabricated GPS/geofence/signature state. The only
+  // position this tab can show is the parcel's REAL last-known rider fix
+  // (riderLat/riderLng, stamped by the mobile bridge on status transitions);
+  // when the rider never sent coordinates we render an honest empty state.
+  const hasRiderFix = parcel.riderLat !== null && parcel.riderLng !== null;
 
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
-
-  const handleRefreshGPS = () => {
-    setMapLoading(true);
-    setTimeout(() => {
-      const jitter = () => (Math.random() - 0.5) * 0.01;
-      const lat = parseFloat((parcel.lat + jitter()).toFixed(6));
-      const lng = parseFloat((parcel.lng + jitter()).toFixed(6));
-      setGps({ lat, lng, accuracy: (Math.random() * 8 + 2).toFixed(1), satellites: Math.floor(Math.random() * 8 + 10) });
-      const inside = Math.random() > 0.35;
-      setGeofence({ inside, status: inside ? 'Inside Geofence' : 'Outside Geofence', zone: 'Delivery Zone A', radius: (Math.random() * 4 + 0.5).toFixed(2), distance: (Math.random() * 1.5 + 0.1).toFixed(2) });
-      setMapLoading(false);
-    }, 600);
-  };
-
-  const handleGenerateSignature = () => {
-    setSignature({ code: `SIG-${Math.random().toString(36).substr(2, 12).toUpperCase()}`, time: new Date().toLocaleTimeString(), date: new Date().toLocaleDateString(), by: 'Delivery Agent', condition: 'Good Condition' });
-  };
 
   const reportDate = new Date().toLocaleString();
   const reportId = `RPT-${parcel.id}`;
@@ -558,113 +530,81 @@ function ParcelModal({ parcel, onClose, allParcels }) {
 
           {activeTab === 'pod' && (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-              {/* GPS & Geofence */}
+              {/* Rider GPS fix — real bridge-synced coordinates only */}
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 12 }}>
-                  <div style={{ fontSize: 10, fontWeight: 800, color: '#390955', textTransform: 'uppercase', letterSpacing: 0.7 }}>Live GPS &amp; Geofence</div>
-                  !mapLoading && gps && (
-                    <span style={{ fontSize: 10, fontWeight: 700, color: '#16a34a' }}>Live GPS fix</span>
-                  )}
+                  <div style={{ fontSize: 10, fontWeight: 800, color: '#390955', textTransform: 'uppercase', letterSpacing: 0.7 }}>Last Known Rider GPS</div>
                 </div>
-                {mapLoading ? (
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '40px 16px', background: '#faf8ff', border: '1.5px dashed #d4c8e8', borderRadius: 10, textAlign: 'center' }}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="#c4a8d8" strokeWidth="2" width="28" height="28"><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" strokeLinecap="round" stroke="#390955" /></svg>
-                    <p style={{ fontSize: 12, color: '#bbb', margin: 0 }}>Acquiring GPS signal…</p>
-                  </div>
-                ) : gps && (
+                {hasRiderFix ? (
                   <>
-                    <MiniMap parcel={parcel} gps={gps} geofence={geofence} allParcels={allParcels} />
+                    <MiniMap parcel={parcel} allParcels={allParcels} />
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 12 }}>
-                      {[['Latitude', `${gps.lat.toFixed(5)}° N`], ['Longitude', `${gps.lng.toFixed(5)}° E`], ['Accuracy', `±${gps.accuracy} m`], ['Satellites', `${gps.satellites} locked`]].map(([l, v]) => (
+                      {[['Latitude', `${parcel.riderLat.toFixed(5)}° N`], ['Longitude', `${parcel.riderLng.toFixed(5)}° E`]].map(([l, v]) => (
                         <div key={l} style={{ background: '#faf8ff', border: '1px solid #e8e0f5', borderRadius: 8, padding: '9px 11px' }}>
                           <div style={{ fontSize: 10, color: '#aaa', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4 }}>{l}</div>
                           <strong style={{ fontSize: 12, fontWeight: 800, color: '#390955', fontFamily: "'Courier New', monospace" }}>{v}</strong>
                         </div>
                       ))}
                     </div>
-                    {geofence && (
-                      <div style={{ background: geofence.inside ? '#f37021' : 'white', border: `1.5px solid ${geofence.inside ? '#f37021' : '#e8e0f5'}`, borderRadius: 9, padding: '11px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 }}>
-                        <div>
-                          <div style={{ fontSize: 12, fontWeight: 800, color: geofence.inside ? 'white' : '#390955' }}>{geofence.status}</div>
-                          <div style={{ fontSize: 10, color: geofence.inside ? 'rgba(255,255,255,0.7)' : '#aaa', marginTop: 2 }}>{geofence.zone} · r={geofence.radius}km · d={geofence.distance}km</div>
-                        </div>
-                        <span style={{ display: 'flex', color: geofence.inside ? 'white' : '#f37021' }}>{geofence.inside ? <CheckCircle2 size={26} aria-hidden="true" /> : <AlertTriangle size={26} aria-hidden="true" />}</span>
-                      </div>
-                    )}
-                    <button onClick={handleRefreshGPS} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, padding: '10px 16px', background: '#390955', color: 'white', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', width: '100%', fontFamily: 'inherit', marginTop: 12 }}>
-                      <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" width="13" height="13"><path d="M23 4v6h-6M1 20v-6h6" /><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" /></svg>
-                      Refresh GPS &amp; Geofence
-                    </button>
+                    <p style={{ fontSize: 11, color: '#9b82b2', margin: '10px 2px 0', lineHeight: 1.5 }}>
+                      Coordinates are the rider's last app-reported fix, synced through the mobile bridge. Live telemetry streams on the Parcel Map page.
+                    </p>
                   </>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '40px 16px', background: '#faf8ff', border: '1.5px dashed #d4c8e8', borderRadius: 10, textAlign: 'center' }}>
+                    <CircleDot size={26} strokeWidth={1.5} color="#c4a8d8" aria-hidden="true" />
+                    <p style={{ fontSize: 12, color: '#bbb', margin: 0 }}>No GPS fix synced yet</p>
+                    <p style={{ fontSize: 11, color: '#c4b8d8', margin: 0, lineHeight: 1.5 }}>Coordinates appear here once the rider's app reports a position for this parcel.</p>
+                  </div>
                 )}
               </div>
 
-              {/* Confirmation & Signature */}
+              {/* Proof of Delivery — real captured data only */}
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                  <div style={{ fontSize: 10, fontWeight: 800, color: '#390955', textTransform: 'uppercase', letterSpacing: 0.7 }}>Delivery Confirmation &amp; Signature</div>
-                  {signature && <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 8, background: '#f37021', color: 'white', display: 'inline-flex', alignItems: 'center', gap: 4 }}><Check size={12} aria-hidden="true" /> Confirmed</span>}
+                  <div style={{ fontSize: 10, fontWeight: 800, color: '#390955', textTransform: 'uppercase', letterSpacing: 0.7 }}>Proof of Delivery</div>
+                  {parcel.podPhoto && <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 8, background: '#16a34a', color: 'white', display: 'inline-flex', alignItems: 'center', gap: 4 }}><Check size={12} aria-hidden="true" /> Photo on file</span>}
                 </div>
-                <div style={{ fontSize: 11, color: '#aaa', marginBottom: 12 }}>{confirmCode}</div>
-                <button onClick={handleGenerateSignature} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, padding: 10, background: 'white', color: '#390955', border: '2px solid #390955', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', width: '100%', fontFamily: 'inherit', marginBottom: 16 }}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="#390955" strokeWidth="2" width="13" height="13"><polyline points="20 6 9 17 4 12" /></svg>
-                  {signature ? 'Re-generate Signature' : 'Generate Delivery Signature'}
-                </button>
 
-                {!signature ? (
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '40px 16px', background: '#faf8ff', border: '1.5px dashed #d4c8e8', borderRadius: 10, textAlign: 'center' }}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="#c4a8d8" strokeWidth="1.5" width="40" height="40"><polyline points="20 6 9 17 4 12" /></svg>
-                    <p style={{ fontSize: 12, color: '#bbb', margin: 0 }}>Click above to generate a delivery signature for <strong style={{ color: '#390955' }}>{parcel.id}</strong></p>
+                {parcel.podPhoto ? (
+                  <div style={{ background: '#faf8ff', border: '1.5px solid #e8e0f5', borderRadius: 12, padding: 14 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#390955', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
+                      POD Photo (captured in the app)
+                    </div>
+                    <div style={{ width: '100%', maxHeight: 260, borderRadius: 8, overflow: 'hidden', border: '1px solid #d1c4e9' }}>
+                      <img
+                        src={parcel.podPhoto}
+                        alt="Proof of Delivery"
+                        style={{ width: '100%', maxHeight: 260, objectFit: 'contain', background: '#111', display: 'block' }}
+                      />
+                    </div>
                   </div>
                 ) : (
-                  <>
-                    <div style={{ background: '#f37021', borderRadius: 12, padding: 18, color: 'white', display: 'flex', flexDirection: 'column', gap: 14 }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.6, opacity: 0.75 }}>Delivery Signature</div>
-                      <div style={{ fontSize: 13, fontWeight: 800, fontFamily: "'Courier New', monospace", letterSpacing: 1, background: 'rgba(255,255,255,0.15)', padding: '10px 13px', borderRadius: 7, wordBreak: 'break-all' }}>{signature.code}</div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                        {[['Delivered By', signature.by], ['Time', signature.time], ['Date', signature.date], ['Condition', signature.condition]].map(([l, v]) => (
-                          <div key={l}>
-                            <div style={{ fontSize: 10, opacity: 0.6, textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 2 }}>{l}</div>
-                            <strong style={{ fontSize: 12 }}>{v}</strong>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                    <div style={{ background: '#faf8ff', border: '1.5px solid #e8e0f5', borderRadius: 12, padding: 16, marginTop: 12 }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: '#390955', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 12, paddingBottom: 10, borderBottom: '1.5px solid #f0eaf8' }}>Delivery Summary</div>
-                      {[
-                        ['Tracking',       parcel.trackingNumber, true],
-                        ['Sender',         parcel.sender.name,    false],
-                        ['Receiver',       parcel.receiver.name,  false],
-                        ['Address',        parcel.address,        false],
-                        ['Assigned Rider', parcel.assignedRider || 'Unassigned', false],
-                        ['GPS',            gps ? `${gps.lat.toFixed(4)}°N, ${gps.lng.toFixed(4)}°E` : 'N/A', true],
-                        ['Geofence',       geofence?.status ?? 'N/A', false],
-                        ['Confirmation',   confirmCode,           true],
-                        ['Signature Code', signature.code,        true],
-                      ].map(([l, v, mono]) => (
-                        <div key={l} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '7px 0', fontSize: 12, color: '#666', borderBottom: '1px solid #f0eaf8', gap: 8 }}>
-                          <span style={{ flexShrink: 0 }}>{l}</span>
-                          <strong style={{ color: '#1a1a1a', textAlign: 'right', wordBreak: 'break-word', fontFamily: mono ? "'Courier New', monospace" : 'inherit', fontSize: 11, maxWidth: '60%' }}>{v}</strong>
-                        </div>
-                      ))}
-                    </div>
-                    {parcel.podPhoto && (
-                      <div style={{ background: '#faf8ff', border: '1.5px solid #e8e0f5', borderRadius: 12, padding: 14, marginTop: 12 }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: '#390955', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
-                          Proof of Delivery (POD Photo)
-                        </div>
-                        <div style={{ width: '100%', maxHeight: 220, borderRadius: 8, overflow: 'hidden', border: '1px solid #d1c4e9' }}>
-                          <img
-                            src={parcel.podPhoto}
-                            alt="Proof of Delivery"
-                            style={{ width: '100%', maxHeight: 220, objectFit: 'contain', background: '#111', display: 'block' }}
-                          />
-                        </div>
-                      </div>
-                    )}
-                  </>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '40px 16px', background: '#faf8ff', border: '1.5px dashed #d4c8e8', borderRadius: 10, textAlign: 'center' }}>
+                    <CheckCircle2 size={26} strokeWidth={1.5} color="#c4a8d8" aria-hidden="true" />
+                    <p style={{ fontSize: 12, color: '#bbb', margin: 0 }}>No proof-of-delivery photo yet</p>
+                    <p style={{ fontSize: 11, color: '#c4b8d8', margin: 0, lineHeight: 1.5 }}>The rider's camera capture uploads here when the delivery is confirmed in the app.</p>
+                  </div>
                 )}
+
+                <div style={{ background: '#faf8ff', border: '1.5px solid #e8e0f5', borderRadius: 12, padding: 16, marginTop: 12 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: '#390955', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 12, paddingBottom: 10, borderBottom: '1.5px solid #f0eaf8' }}>Delivery Summary</div>
+                  {[
+                    ['Tracking',       parcel.trackingNumber, true],
+                    ['Sender',         parcel.sender.name,    false],
+                    ['Receiver',       parcel.receiver.name,  false],
+                    ['Address',        parcel.address,        false],
+                    ['Assigned Rider', parcel.assignedRider || 'Unassigned', false],
+                    ['Rider GPS',      hasRiderFix ? `${parcel.riderLat.toFixed(4)}°N, ${parcel.riderLng.toFixed(4)}°E` : 'Not synced yet', true],
+                    ['POD Photo',      parcel.podPhoto ? 'Captured' : 'Not uploaded', false],
+                    ['Delivered On',   parcel.actualDelivery !== '—' ? parcel.actualDelivery : 'Not delivered yet', false],
+                  ].map(([l, v, mono]) => (
+                    <div key={l} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '7px 0', fontSize: 12, color: '#666', borderBottom: '1px solid #f0eaf8', gap: 8 }}>
+                      <span style={{ flexShrink: 0 }}>{l}</span>
+                      <strong style={{ color: '#1a1a1a', textAlign: 'right', wordBreak: 'break-word', fontFamily: mono ? "'Courier New', monospace" : 'inherit', fontSize: 11, maxWidth: '60%' }}>{v}</strong>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           )}
@@ -672,8 +612,6 @@ function ParcelModal({ parcel, onClose, allParcels }) {
     </Modal>
   );
 }
-
-// ── Toolbar (search + status filter + Export PDF/CSV) ──────────────────────
 
 // ── Toolbar (search + status filter + Export PDF/CSV) ──────────────────────
 

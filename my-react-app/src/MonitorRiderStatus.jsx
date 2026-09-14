@@ -197,9 +197,8 @@ export default function MonitorRiderStatus({ currentUser }) {
     return () => clearInterval(interval);
   }, [fetchRiders]);
 
-  const handleToggleGeofence = (id) => {
-    setGeofences(p => p.map(g => g.id === id ? { ...g, status: g.status === 'Active' ? 'Inactive' : 'Active' } : g));
-  };
+  // (handleToggleGeofence removed — it mutated a `geofences` state that never
+  // existed in this component; invoking it would have thrown at runtime.)
 
   const th = { padding: '13px 16px', textAlign: 'left', fontWeight: 700, color: 'white', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5, background: '#390955' };
   const td = { padding: '13px 16px', borderBottom: '1px solid #f0eaf8', color: '#1a1a1a', verticalAlign: 'middle' };

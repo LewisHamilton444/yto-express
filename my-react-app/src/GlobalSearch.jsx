@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { parcelsApi, ridersApi, sellersApi } from './services/api';
-import { Package, Bike, Store } from 'lucide-react';
+import { parcelsApi, ridersApi, sellersApi, accountsApi } from './services/api';
+import { Package, Bike, Store, ShieldCheck } from 'lucide-react';
 
 const s = {
   wrap:     { position: 'relative', width: 340 },
@@ -17,14 +17,20 @@ const s = {
 
 // Debounced, on-demand cross-entity search — searches by Parcel Tracking
 // Number, Rider ID, or Seller Name. Fetches lazily (only once you actually
-// type) rather than keeping a background poll running just for search.
+// type). A 60-second snapshot cache means typing across a session reuses the
+// last fetched corpus instead of refetching ALL parcels/riders/sellers/
+// accounts on every keystroke; the fetch errors now fall back to the last
+// good snapshot instead of silently blanking results.
+const SNAPSHOT_TTL_MS = 60_000;
+
 export default function GlobalSearch({ onNavigate }) {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
-  const [results, setResults] = useState({ parcels: [], riders: [], sellers: [] });
+  const [results, setResults] = useState({ parcels: [], riders: [], sellers: [], admins: [] });
   const [loading, setLoading] = useState(false);
   const wrapRef = useRef(null);
   const debounceRef = useRef(null);
+  const snapshotRef = useRef({ at: 0, data: null });
 
   useEffect(() => {
     const onClickOutside = (e) => { if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false); };
@@ -35,29 +41,51 @@ export default function GlobalSearch({ onNavigate }) {
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     const q = query.trim().toLowerCase();
-    if (q.length < 2) { setResults({ parcels: [], riders: [], sellers: [] }); return; }
+    if (q.length < 2) { setResults({ parcels: [], riders: [], sellers: [], admins: [] }); return; }
 
     debounceRef.current = setTimeout(async () => {
       setLoading(true);
       try {
-        const [pData, rData, sData] = await Promise.all([
-          parcelsApi.list(), ridersApi.list(), sellersApi.list(),
-        ]);
+        let corpus = snapshotRef.current.data;
+        if (!corpus || Date.now() - snapshotRef.current.at > SNAPSHOT_TTL_MS) {
+          const [pData, rData, sData, aData] = await Promise.all([
+            parcelsApi.list(), ridersApi.list(), sellersApi.list(), accountsApi.list(),
+          ]);
+          corpus = { parcels: pData, riders: rData, sellers: sData, admins: aData };
+          snapshotRef.current = { at: Date.now(), data: corpus };
+        }
 
-        const parcels = (Array.isArray(pData) ? pData : [])
+        const arr = (v) => (Array.isArray(v) ? v : []);
+        const parcels = arr(corpus.parcels)
           .filter(p => (p.trackingNumber || '').toLowerCase().includes(q))
           .slice(0, 5);
-        const riders = (Array.isArray(rData) ? rData : [])
+        const riders = arr(corpus.riders)
           .filter(r => (r.registrationId || '').toLowerCase().includes(q) || (r.riderName || '').toLowerCase().includes(q))
           .slice(0, 5);
-        const sellers = (Array.isArray(sData) ? sData : [])
+        const sellers = arr(corpus.sellers)
           .filter(sl => (sl.fullName || '').toLowerCase().includes(q))
           .slice(0, 5);
+        const admins = arr(corpus.admins)
+          .filter(ad => (ad.name || '').toLowerCase().includes(q) || (ad.email || '').toLowerCase().includes(q))
+          .slice(0, 5);
 
-        setResults({ parcels, riders, sellers });
+        setResults({ parcels, riders, sellers, admins });
       } catch (err) {
         console.error('Global search failed:', err);
-        setResults({ parcels: [], riders: [], sellers: [] });
+        // Serve the last good snapshot (stale but useful) instead of blanking.
+        const stale = snapshotRef.current.data;
+        if (stale) {
+          const arr = (v) => (Array.isArray(v) ? v : []);
+          const qq = q;
+          setResults({
+            parcels: arr(stale.parcels).filter(p => (p.trackingNumber || '').toLowerCase().includes(qq)).slice(0, 5),
+            riders:  arr(stale.riders).filter(r => (r.registrationId || '').toLowerCase().includes(qq) || (r.riderName || '').toLowerCase().includes(qq)).slice(0, 5),
+            sellers: arr(stale.sellers).filter(sl => (sl.fullName || '').toLowerCase().includes(qq)).slice(0, 5),
+            admins:  arr(stale.admins).filter(ad => (ad.name || '').toLowerCase().includes(qq) || (ad.email || '').toLowerCase().includes(qq)).slice(0, 5),
+          });
+        } else {
+          setResults({ parcels: [], riders: [], sellers: [], admins: [] });
+        }
       } finally {
         setLoading(false);
       }
@@ -66,7 +94,7 @@ export default function GlobalSearch({ onNavigate }) {
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, [query]);
 
-  const totalResults = results.parcels.length + results.riders.length + results.sellers.length;
+  const totalResults = results.parcels.length + results.riders.length + results.sellers.length + results.admins.length;
 
   const go = (pageKey) => { setOpen(false); setQuery(''); onNavigate?.(pageKey); };
 
@@ -76,7 +104,7 @@ export default function GlobalSearch({ onNavigate }) {
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#a890c0" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
         <input
           style={s.input}
-          placeholder="Search tracking #, Rider ID, or Seller name..."
+          placeholder="Search tracking #, Rider ID, Seller name, or Admin..."
           value={query}
           onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
           onFocus={() => setOpen(true)}
@@ -120,6 +148,17 @@ export default function GlobalSearch({ onNavigate }) {
                     <div key={sl._id} style={s.resultRow} onClick={() => go('seller-report')}>
                       <span style={s.resultTitle}><span style={s.resultTitleIcon}><Store size={14} aria-hidden="true" /></span> {sl.fullName}</span>
                       <span style={s.resultSub}>{sl.registrationId}</span>
+                    </div>
+                  ))}
+                </>
+              )}
+              {results.admins.length > 0 && (
+                <>
+                  <div style={s.groupLabel}>Admins</div>
+                  {results.admins.map(ad => (
+                    <div key={ad._id} style={s.resultRow} onClick={() => go('manage-accounts')}>
+                      <span style={s.resultTitle}><span style={s.resultTitleIcon}><ShieldCheck size={14} aria-hidden="true" /></span> {ad.name}</span>
+                      <span style={s.resultSub}>{ad.email} · {ad.role}</span>
                     </div>
                   ))}
                 </>

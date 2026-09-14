@@ -7,7 +7,7 @@ html, body, #root {
   height: 100%;
   margin: 0;
   overflow: hidden;
-  background-color: #f4f1f8;
+  background-color: var(--yto-bg-canvas);
 }
 
 .ad-wrapper {
@@ -19,7 +19,7 @@ html, body, #root {
 
 .ad-sidebar {
   width: 256px;
-  background: #390955;
+  background: var(--yto-brand-purple);
   color: white;
   display: flex;
   flex-direction: column;
@@ -175,8 +175,8 @@ html, body, #root {
   cursor: pointer;
   font-family: inherit;
 }
-.ad-rail-flyout-link:hover { background: #f5f0fc; color: #390955; }
-.ad-rail-flyout-link--active { background: #f37021; color: white; }
+.ad-rail-flyout-link:hover { background: #f5f0fc; color: var(--yto-brand-purple); }
+.ad-rail-flyout-link--active { background: var(--yto-brand-orange); color: white; }
 .ad-rail-flyout-link svg { flex-shrink: 0; }
 /* The flyout anchors to its parent button inside the collapsed rail. */
 .ad-wrapper.ad-sidebar--collapsed .ad-sidebar-dropdown { position: relative; }
@@ -204,7 +204,7 @@ html, body, #root {
   transition: background 0.15s ease, color 0.15s ease;
 }
 .ad-sidebar-collapse-btn svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2; }
-.ad-sidebar-collapse-btn:hover { background: #f37021; color: white; }
+.ad-sidebar-collapse-btn:hover { background: var(--yto-brand-orange); color: white; }
 .ad-sidebar-header { position: relative; padding: 24px; border-bottom: 1px solid rgba(255,255,255,0.15); }
 
 /* Mobile drawer hamburger — hidden on desktop, shown under 900px */
@@ -218,7 +218,7 @@ html, body, #root {
   height: 40px;
   border-radius: 10px;
   border: none;
-  background: #390955;
+  background: var(--yto-brand-purple);
   color: white;
   cursor: pointer;
   align-items: center;
@@ -281,19 +281,19 @@ html, body, #root {
   transition: background 0.15s ease;
 }
 .ad-sidebar-logo--toggle:hover { background: rgba(255,255,255,0.08); }
-.ad-sidebar-logo--toggle:focus-visible { outline: 2px solid #f37021; outline-offset: 2px; }
+.ad-sidebar-logo--toggle:focus-visible { outline: 2px solid var(--yto-brand-orange); outline-offset: 2px; }
 .ad-wrapper.ad-sidebar--collapsed .ad-sidebar-logo--toggle { justify-content: center; width: 100%; margin: 0; }
-.ad-sidebar-logo-circle { width: 44px; height: 44px; border-radius: 50%; border: 2px solid #f37021; background: white; display: flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0; }
+.ad-sidebar-logo-circle { width: 44px; height: 44px; border-radius: 50%; border: 2px solid var(--yto-brand-orange); background: white; display: flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0; }
 .ad-sidebar-logo-img { width: 100%; height: 100%; object-fit: cover; }
 .ad-sidebar-logo-text { font-size: 18px; font-weight: 900; font-style: italic; color: white; }
-.ad-sidebar-logo-text span { color: #f37021; }
+.ad-sidebar-logo-text span { color: var(--yto-brand-orange); }
 .ad-sidebar-nav { flex: 1; padding: 16px; display: flex; flex-direction: column; gap: 20px; }
 .ad-sidebar-nav-section { display: flex; flex-direction: column; gap: 6px; }
 .ad-sidebar-nav-section-label { padding-left: 8px; font-size: 11px; font-weight: 700; text-transform: uppercase; color: rgba(255,255,255,0.4); letter-spacing: 0.5px; }
 .ad-sidebar-nav-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
 .ad-sidebar-nav-item { display: flex; align-items: center; gap: 12px; padding: 11px 14px; border-radius: 8px; color: rgba(255,255,255,0.75); text-decoration: none; font-size: 14px; font-weight: 500; cursor: pointer; border: none; background: none; width: 100%; text-align: left; position: relative; }
 .ad-sidebar-nav-item:hover { background: rgba(255,255,255,0.08); color: white; }
-.ad-sidebar-nav-item--active { background: #f37021 !important; color: white !important; font-weight: 600; }
+.ad-sidebar-nav-item--active { background: var(--yto-brand-orange) !important; color: white !important; font-weight: 600; }
 .ad-sidebar-nav-parent { justify-content: space-between; }
 .ad-sidebar-nav-parent--active { background: rgba(255,255,255,0.08); color: white; }
 .ad-sidebar-nav-icon { width: 18px; height: 18px; stroke: currentColor; fill: none; flex-shrink: 0; }
@@ -305,7 +305,7 @@ html, body, #root {
 .ad-sidebar-submenu--open { max-height: 240px; }
 .ad-sidebar-submenu-link { display: flex; align-items: center; gap: 10px; padding: 8px 12px 8px 32px; border-radius: 6px; text-decoration: none; color: rgba(255,255,255,0.6); font-size: 13px; border: none; background: none; cursor: pointer; width: 100%; text-align: left; font-family: inherit; }
 .ad-sidebar-submenu-link:hover { color: white; background: rgba(255,255,255,0.05); }
-.ad-sidebar-submenu-link--active { background: #f37021 !important; color: white !important; font-weight: 600; }
+.ad-sidebar-submenu-link--active { background: var(--yto-brand-orange) !important; color: white !important; font-weight: 600; }
 
 .ad-main {
   margin-left: 256px;
@@ -313,7 +313,7 @@ html, body, #root {
   min-width: 0;
   height: 100vh;
   overflow-y: auto;
-  background-color: #f4f1f8;
+  background-color: var(--yto-bg-canvas);
   transition: margin-left 0.28s cubic-bezier(0.32, 0.72, 0, 1);
 }
 .ad-wrapper.ad-sidebar--collapsed .ad-main { margin-left: 72px; }
@@ -341,7 +341,7 @@ html, body, #root {
   margin: 0;
   font-size: 17px;
   font-weight: 800;
-  color: #390955;
+  color: var(--yto-brand-purple);
   letter-spacing: -0.3px;
 }
 .ed-toolbar-titles p {
@@ -354,21 +354,8 @@ html, body, #root {
   display: flex;
   gap: 12px;
 }
-.ed-select-container select {
-  padding: 8px 32px 8px 14px;
-  border-radius: 8px;
-  border: 1px solid #d5cbe4;
-  background: white;
-  color: #390955;
-  font-weight: 600;
-  font-size: 12.5px;
-  font-family: inherit;
-  cursor: pointer;
-  appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23390955' stroke-width='2.5'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: calc(100% - 14px) center;
-}
+/* .ed-select-container rules removed with the ghost dateRange control —
+   re-add alongside a functional date filter. */
 
 /* Asymmetric KPI band — one dominant anchor metric + compact inline tickers */
 .ed-anchor-row {
@@ -377,7 +364,7 @@ html, body, #root {
   gap: 12px;
 }
 .ed-anchor-metric {
-  background: #390955;
+  background: var(--yto-brand-purple);
   color: white;
   border-radius: 12px;
   padding: 14px 18px;
@@ -441,7 +428,7 @@ html, body, #root {
   margin-top: 3px;
   font-size: 19px;
   font-weight: 800;
-  color: #390955;
+  color: var(--yto-brand-purple);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -505,7 +492,7 @@ html, body, #root {
   margin: 0;
   font-size: 12.5px;
   font-weight: 800;
-  color: #390955;
+  color: var(--yto-brand-purple);
   text-transform: uppercase;
   letter-spacing: 0.4px;
 }
@@ -529,7 +516,7 @@ html, body, #root {
 .ed-live-dot {
   width: 6px;
   height: 6px;
-  background: #f37021;
+  background: var(--yto-brand-orange);
   border-radius: 50%;
 }
 
@@ -549,7 +536,7 @@ html, body, #root {
   margin-bottom: 23px;
   font-size: 10px;
   font-weight: 700;
-  color: #390955;
+  color: var(--yto-brand-purple);
   text-align: right;
 }
 .ed-bar-chart {
@@ -585,13 +572,13 @@ html, body, #root {
   width: 100%;
   border-radius: inherit;
 }
-.ed-bar-fill.standard { background: #390955; }
-.ed-bar-fill.peak { background: #f37021; }
+.ed-bar-fill.standard { background: var(--yto-brand-purple); }
+.ed-bar-fill.peak { background: var(--yto-brand-orange); }
 .ed-bar-day {
   margin-top: 8px;
   font-size: 12px;
   font-weight: 600;
-  color: #390955;
+  color: var(--yto-brand-purple);
 }
 
 /* Compact stat rows — label left / value right, 1px dividers */
@@ -626,7 +613,7 @@ html, body, #root {
 .ed-rail-stat strong {
   font-size: 13px;
   font-weight: 800;
-  color: #390955;
+  color: var(--yto-brand-purple);
   white-space: nowrap;
 }
 .ed-rail-stat span {
@@ -649,8 +636,8 @@ html, body, #root {
   align-items: center;
   margin-bottom: 8px;
 }
-.ed-mini-head h6 { margin: 0; font-size: 12px; font-weight: 700; color: #390955; }
-.ed-mini-head span { font-size: 11.5px; font-weight: 700; color: #390955; }
+.ed-mini-head h6 { margin: 0; font-size: 12px; font-weight: 700; color: var(--yto-brand-purple); }
+.ed-mini-head span { font-size: 11.5px; font-weight: 700; color: var(--yto-brand-purple); }
 .ed-mini-bars {
   display: flex;
   align-items: flex-end;
@@ -689,7 +676,7 @@ html, body, #root {
   transition: background 0.15s ease, border-color 0.15s ease;
 }
 .ed-action-btn.primary {
-  background: #390955;
+  background: var(--yto-brand-purple);
   color: white;
 }
 .ed-action-btn.primary:hover {
@@ -697,12 +684,12 @@ html, body, #root {
 }
 .ed-action-btn.secondary {
   background: white;
-  color: #390955;
+  color: var(--yto-brand-purple);
   border-color: #d5cbe4;
 }
 .ed-action-btn.secondary:hover {
   background: #f7f5fa;
-  border-color: #390955;
+  border-color: var(--yto-brand-purple);
 }
 .ed-action-btn:disabled {
   opacity: 0.45;
@@ -724,7 +711,7 @@ html, body, #root {
   height: 64px;
   border-radius: 50%;
   background: rgba(57, 9, 85, 0.08);
-  color: #390955;
+  color: var(--yto-brand-purple);
   display: flex;
   align-items: center;
   justify-content: center;

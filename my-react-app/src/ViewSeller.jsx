@@ -19,8 +19,11 @@ const SELLER_EXPORT_COLUMNS = [
   { key: 'status', label: 'Status' },
 ];
 
-const GenerateSellerReport = ({ sellers: externalSellers, onUpdateSellers, currentUser }) => {
-  const [sellers, setSellers] = useState(() => (externalSellers ?? []).map(normalizeSeller));
+const GenerateSellerReport = ({ currentUser }) => {
+  // Sellers come from the live GET /api/sellers fetch below — the old
+  // externalSellers/onUpdateSellers props fed a dashboard-held mock row
+  // (removed with the de-demo migration).
+  const [sellers, setSellers] = useState([]);
   const sellersRef = useRef(sellers);
   const [categoryFilter, setCategoryFilter] = useState('All');
 
@@ -45,7 +48,6 @@ const GenerateSellerReport = ({ sellers: externalSellers, onUpdateSellers, curre
   const applyUpdate = (next) => {
     sellersRef.current = next;
     setSellers(next);
-    onUpdateSellers?.(next);
   };
 
   const [searchTerm,    setSearchTerm]    = useState('');

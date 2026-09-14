@@ -1,0 +1,92 @@
+/* ============================================================
+   YTO Web Admin — design tokens (single source of truth)
+   ============================================================
+   The palette lived as copy-pasted hex literals across ~30 CSS
+   files and hundreds of inline style objects. This layer names
+   the canonical values; CSS files reference them via var().
+
+   JS-side: these same values also exist as hex in JSX inline
+   styles — those are NOT mechanically replaced (inline styles
+   can't resolve var() through every legacy path). New code and
+   migrated hotspots consume the tokens; the rest converges
+   file-by-file.
+
+   Imported from main.jsx BEFORE responsive-density.css so the
+   density layer keeps winning on shell widths.
+   ============================================================ */
+
+:root {
+  /* Brand */
+  --yto-brand-purple: #390955;
+  --yto-brand-purple-dark: #1a0a2e;
+  --yto-brand-orange: #f37021;
+
+  /* Surfaces */
+  --yto-bg-canvas: #f4f1f8;
+  --yto-bg-page: #f9f7ff;
+  --yto-surface: #ffffff;
+  --yto-surface-soft: #faf8ff;
+
+  /* Borders (the lavender family, deduped) */
+  --yto-border: #e8e0f0;
+  --yto-border-soft: #ede4f5;
+  --yto-border-strong: #e0d5f0;
+
+  /* Text */
+  --yto-text: #1a1a1a;
+  --yto-text-secondary: #666666;
+  --yto-text-muted: #888888;
+  --yto-text-faint: #aaaaaa;
+  --yto-text-brand-muted: #9b82b2;   /* one lavender instead of three */
+  --yto-text-brand-faint: #a890c0;
+
+  /* Feedback */
+  --yto-success: #16a34a;
+  --yto-success-bg: rgba(34, 197, 94, 0.1);
+  --yto-warning: #d97706;
+  --yto-warning-bg: rgba(245, 158, 11, 0.1);
+  --yto-danger: #dc2626;
+  --yto-danger-bg: rgba(239, 68, 68, 0.1);
+
+  /* Typography scale — 12px is the floor for primary reading text.
+     The old 10px/11px uppercase labels render here as 11px/12px via
+     the JSX typography-floor rules (see the overrides at bottom). */
+  --yto-font-body: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --yto-font-mono: 'DM Mono', 'Courier New', monospace;
+
+  --yto-text-xs: 11px;
+  --yto-text-sm: 12px;
+  --yto-text-base: 13px;
+  --yto-text-md: 14px;
+  --yto-text-lg: 17px;
+  --yto-text-xl: 26px;
+
+  /* Shape */
+  --yto-radius-sm: 6px;
+  --yto-radius: 8px;
+  --yto-radius-lg: 10px;
+  --yto-radius-xl: 12px;
+
+  /* Elevation */
+  --yto-shadow-sm: 0 1px 3px rgba(57, 9, 85, 0.08);
+  --yto-shadow-md: 0 12px 32px rgba(57, 9, 85, 0.18);
+  --yto-shadow-lg: 0 32px 80px rgba(57, 9, 85, 0.25);
+
+  /* Focus */
+  --yto-focus-ring: 0 0 0 3px rgba(57, 9, 85, 0.12);
+}
+
+/* ── Typography floor (Part 1: inline-styled JSX) ─────────────
+   Elevation for all-day admin readability: sub-11px text becomes
+   11px; 11px body text becomes 12px. React serializes inline
+   `style={{ fontSize: 10 }}` to the DOM attribute `font-size: 10px`,
+   so the attribute selectors match the CSS spelling. These rules
+   do NOT touch font-weight/uppercase treatment. */
+[data-yto-typography-floor] [style*="font-size: 10"],
+[data-yto-typography-floor] [style*="font-size:10"] {
+  font-size: 11px !important;
+}
+[data-yto-typography-floor] [style*="font-size: 11"],
+[data-yto-typography-floor] [style*="font-size:11"] {
+  font-size: 12px !important;
+}

@@ -30,9 +30,10 @@ import ActivityLog                       from "./ActivityLog";
 import AppNotifications                  from "./AppNotifications";
 import ManageIssues                      from "./ManageIssues";
 import ConnectionHistoryChart             from "./ConnectionHistoryChart";
-import PeakAlertBanner                   from "./PeakAlertBanner";
-import GlobalHeader                      from "./GlobalHeader";
+import PeakAlertBanner                   from "./PeakAlertBanner";import GlobalHeader from "./GlobalHeader";
+import TableSkeleton from "./components/ui/TableSkeleton";
 import { initialPendingSellers, initialPendingRiders } from "./verification/registrationCredentials";
+import { isDeliveredStatus, isReturnFamilyStatus, isInTransitFamilyStatus } from "./utils/parcelStatus";
 
 // ── Dashboard parcel-report exports (CSV + printable PDF) ───────────────
 const DASH_PARCEL_COLUMNS = [
@@ -241,7 +242,12 @@ icons['tracking-info'] = (
 
 const getIcon = (key) => icons[key] || icons.sub;
 
-const isReturnStatus = (status) => /return/i.test(status || '');
+// Status-family predicates moved to utils/parcelStatus.js — the local
+// isReturnStatus was kept case-sensitive-adjacent (/return/i is fine) but
+// delivered/transit checks elsewhere compared exact Title-case strings
+// against lowercase DB values, undercounting whenever the /dashboard/stats
+// aggregate was unreachable and the client-side fallback kicked in.
+const isReturnStatus = isReturnFamilyStatus;
 const toDayKey = (isoString) => (isoString ? isoString.slice(0, 10) : null);
 
 // Last 7 calendar days (oldest first), each bucket built from real parcel timestamps.
@@ -255,7 +261,7 @@ const buildLast7Days = (parcels) => {
   return days.map(d => {
     const dayKey = d.toISOString().slice(0, 10);
     const created  = parcels.filter(p => toDayKey(p.createdAt) === dayKey).length;
-    const delivered = parcels.filter(p => p.status === 'Delivered' && toDayKey(p.updatedAt) === dayKey).length;
+    const delivered = parcels.filter(p => isDeliveredStatus(p.status) && toDayKey(p.updatedAt) === dayKey).length;
     const returned  = parcels.filter(p => isReturnStatus(p.status) && toDayKey(p.updatedAt) === dayKey).length;
     return { label: d.toLocaleDateString('en-US', { weekday: 'short' }), dayKey, created, delivered, returned };
   });
@@ -294,7 +300,10 @@ const DashboardEmptyState = (props) => {
 };
 
 export default function AnalyticsDashboard({ onLogout, currentUser }) {
-  const [dateRange, setDateRange]           = useState('7days');
+  // NOTE: the old dateRange select (Today/7/30) was removed — its state was
+  // never read by any computation, so the control changed nothing on screen
+  // (ghost UI). If a real date filter is wanted later, wire it into
+  // buildLast7Days/buildLastNWeeks first, then reintroduce the select.
   const [volumeView, setVolumeView]         = useState('daily');
   const [activeMenuItem, setActiveMenuItem] = useState('dashboard');
   const [openSection, setOpenSection]       = useState(null);
@@ -303,7 +312,6 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     try { return localStorage.getItem('yto_sidebar_collapsed') === '1'; } catch { return false; }
   });
-  const [sidebarHover] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   // Which parent group's children are shown as a flyout next to the icon rail
   // (collapsed mode only). Closed on mouse-leave or navigation.
@@ -322,12 +330,12 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
   // Collapsed mode is a pure icon rail: hovering a top-level item shows a
   // small tooltip; parent groups (like GPS-Based Parcel Tracking) show their
   // children in an instant flyout panel so no hover-pause is needed.
-  const sidebarExpanded = !sidebarCollapsed || sidebarHover;
+  const sidebarExpanded = !sidebarCollapsed;
   const closeRailFlyout = () => setRailFlyout(null);
 
-  const [sharedSellers, setSharedSellers] = useState([
-    { id: 1, companyName: 'Fresh Express Store', displayName: 'Fresh Express Store', registrationId: 'SH-20220101-12345', status: 'Active', sellerType: 'Business', email: 'info@freshexpress.com', phone: '13823456789', totalParcels: 0 }
-  ]);
+  // Seller Directory fetches live /api/sellers itself (since the de-demo
+  // migration); the old hardcoded 'Fresh Express Store' seed row here only
+  // existed to pre-fill ViewSeller's initial state and was dropped.
 
   // Lifted up here (instead of living inside ProcessSellerInformation/
   // ProcessRiderInformation) so the pending-verification queue survives
@@ -428,7 +436,7 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
   const hasNum = (v) => typeof v === 'number' && Number.isFinite(v);
 
   const totalParcels    = hasNum(dashboardStats?.totalParcels) ? dashboardStats.totalParcels : parcels.length;
-  const deliveredCount  = hasNum(dashboardStats?.deliveredCount) ? dashboardStats.deliveredCount : parcels.filter(p => p.status === 'Delivered').length;
+  const deliveredCount  = hasNum(dashboardStats?.deliveredCount) ? dashboardStats.deliveredCount : parcels.filter(p => isDeliveredStatus(p.status)).length;
   const returnedCount   = parcels.filter(p => isReturnStatus(p.status)).length;
   const deliverySuccessPct = hasNum(dashboardStats?.deliverySuccessPct)
     ? dashboardStats.deliverySuccessPct.toFixed(1)
@@ -462,8 +470,8 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
   // fabricate a trend for them.
   const thisWeekParcels = parcels.filter(p => p.createdAt && new Date(p.createdAt) >= startThisWeek);
   const prevWeekParcels = parcels.filter(p => p.createdAt && new Date(p.createdAt) >= startPrevWeek && new Date(p.createdAt) <= endPrevWeek);
-  const thisWeekSuccessPct = thisWeekParcels.length ? (thisWeekParcels.filter(p => p.status === 'Delivered').length / thisWeekParcels.length) * 100 : null;
-  const prevWeekSuccessPct = prevWeekParcels.length ? (prevWeekParcels.filter(p => p.status === 'Delivered').length / prevWeekParcels.length) * 100 : null;
+  const thisWeekSuccessPct = thisWeekParcels.length ? (thisWeekParcels.filter(p => isDeliveredStatus(p.status)).length / thisWeekParcels.length) * 100 : null;
+  const prevWeekSuccessPct = prevWeekParcels.length ? (prevWeekParcels.filter(p => isDeliveredStatus(p.status)).length / prevWeekParcels.length) * 100 : null;
   const successTrendPts = (thisWeekSuccessPct !== null && prevWeekSuccessPct !== null)
     ? Number((thisWeekSuccessPct - prevWeekSuccessPct).toFixed(1))
     : null;
@@ -475,14 +483,14 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
   const peakRider     = topRiders[0]?.riderName || 'N/A';
 
   const offlineRidersCount = riders.length - activeRidersCount;
-  const inTransitCount = parcels.filter(p => String(p.status || '').toLowerCase().includes('transit')).length;
+  const inTransitCount = parcels.filter(p => isInTransitFamilyStatus(p.status)).length;
   const pendingVerificationsCount = pendingSellers.length + pendingRiders.length;
 
   // Delivery-fee revenue (2026-09-11 parity): the mobile app's booking fee
   // now bridges onto every Parcel as deliveryFee — sum it over completed
   // deliveries, mirroring the app's Transactions screen. Hidden entirely
   // when no fee data has synced yet (honest empty state, not a zero lie).
-  const completedFeeParcels = parcels.filter(p => p.status === 'Delivered' && typeof p.deliveryFee === 'number' && p.deliveryFee > 0);
+  const completedFeeParcels = parcels.filter(p => isDeliveredStatus(p.status) && typeof p.deliveryFee === 'number' && p.deliveryFee > 0);
   const collectedFees = completedFeeParcels.reduce((sum, p) => sum + p.deliveryFee, 0);
 
   // Four primary metric cards — replaces the old 8-card KPI grid.
@@ -529,7 +537,7 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
             onNavigateToSettings={goToSettings}
           />
         );
-      case 'seller-report':       return <ViewSeller sellers={sharedSellers} onUpdateSellers={setSharedSellers} currentUser={currentUser} />;
+      case 'seller-report':       return <ViewSeller currentUser={currentUser} />;
       case 'manage-parcels':      return <ManageParcels currentUser={currentUser} />;
       case 'customer-list':       return <CustomerList currentUser={currentUser} />;
       case 'app-notifications':  return <AppNotifications currentUser={currentUser} />;
@@ -558,7 +566,7 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
   };
 
   return (
-    <div className={`ad-wrapper ${sidebarCollapsed ? 'ad-sidebar--collapsed' : ''}`}>
+    <div data-yto-typography-floor className={`ad-wrapper ${sidebarCollapsed ? 'ad-sidebar--collapsed' : ''}`}>
       {/* Mobile backdrop — closes the drawer when tapping outside it */}
       {mobileNavOpen && <div className="ad-mobile-backdrop" onClick={() => setMobileNavOpen(false)} aria-hidden="true" />}
       <button className="ad-nav-hamburger" onClick={() => setMobileNavOpen(true)} aria-label="Open navigation menu">
@@ -586,7 +594,7 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
             title={sidebarCollapsed ? 'Expand sidebar to full menu' : 'Collapse sidebar to icon rail'}
           >
             <span className="ad-sidebar-logo-circle" aria-hidden="true">
-              <img src={yto_logo} alt="" className="ad-sidebar-logo-img" onError={(e) => { e.target.src = 'https://via.placeholder.com/150?text=YTO'; }} />
+              <img src={yto_logo} alt="" className="ad-sidebar-logo-img" onError={(e) => { e.target.style.display = 'none'; }} />
             </span>
             <span className="ad-sidebar-nav-text ad-sidebar-logo-text">YTO <span>EXPRESS</span></span>
           </button>
@@ -695,20 +703,11 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
                   </span>
                 </div>
                 </Tooltip>
-                <div className="ed-select-container">
-                  <select value={dateRange} onChange={e => setDateRange(e.target.value)}>
-                    <option value="today">Today</option>
-                    <option value="7days">Last 7 Days</option>
-                    <option value="30days">Last 30 Days</option>
-                  </select>
-                </div>
               </div>
             </header>
 
             {dashboardLoading ? (
-              <div style={{ padding: '60px 0', textAlign: 'center', color: '#a890c0', fontSize: '14px', fontWeight: 600 }}>
-                Loading live data…
-              </div>
+              <TableSkeleton rows={8} columns={5} />
             ) : (
               <>
                 {statsError && (
@@ -924,8 +923,7 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
               </>
             )}
           </div>
-        )}
-      </main>
+        )}      </main>
     </div>
   );
 }

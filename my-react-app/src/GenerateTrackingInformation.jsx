@@ -96,7 +96,7 @@ export default function GenerateTrackingInformation({ reports: externalReports, 
   }, []);
 
   const handleGenerate = () => {
-    if (!selectedParcel) { alert('Please select a parcel tracking number.'); return; }
+    if (!selectedParcel) { toast('Please select a parcel tracking number.', 'error'); return; }
     setGenerating(true);
     setTimeout(() => {
       const parcelInfo = parcels.find(p => p.trackingNumber === selectedParcel);

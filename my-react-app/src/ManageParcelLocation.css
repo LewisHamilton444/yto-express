@@ -29,7 +29,7 @@
 .process-parcel-location-h1 {
   font-size: 24px;
   font-weight: 800;
-  color: #390955;
+  color: var(--yto-brand-purple);
   letter-spacing: -0.5px;
   margin: 0;
 }
@@ -55,7 +55,7 @@
   font-weight: 500;
 }
 .ppl-breadcrumb-item--active {
-  color: #390955;
+  color: var(--yto-brand-purple);
   font-weight: 700;
 }
 .ppl-breadcrumb-sep {
@@ -105,11 +105,11 @@
   transition: all 0.2s ease;
 }
 .process-parcel-location-tab-btn:hover {
-  color: #390955;
+  color: var(--yto-brand-purple);
   background: #f7f5fa;
 }
 .process-parcel-location-tab-btn--active {
-  background: #390955 !important;
+  background: var(--yto-brand-purple) !important;
   color: white !important;
   box-shadow: 0 4px 12px rgba(57, 9, 85, 0.15);
 }
@@ -129,7 +129,7 @@
 .process-parcel-location-section-title {
   font-size: 18px;
   font-weight: 800;
-  color: #390955;
+  color: var(--yto-brand-purple);
   margin: 0 0 20px 0;
   letter-spacing: -0.3px;
 }
@@ -185,7 +185,7 @@
   background: white;
   font-size: 13px;
   font-weight: 500;
-  color: #390955;
+  color: var(--yto-brand-purple);
   transition: all 0.2s ease;
 }
 
@@ -198,7 +198,7 @@
   background: #f5effa;
   border: 1.5px dashed #a05bb0;
   font-size: 13px;
-  color: #390955;
+  color: var(--yto-brand-purple);
   font-weight: 600;
 }
 
@@ -225,7 +225,7 @@
 }
 
 .process-parcel-location-btn--primary {
-  background: #390955;
+  background: var(--yto-brand-purple);
   color: white;
 }
 .process-parcel-location-btn--primary:hover {
@@ -234,8 +234,8 @@
 
 .process-parcel-location-btn--secondary {
   background: white;
-  color: #390955;
-  border: 1.5px solid #390955;
+  color: var(--yto-brand-purple);
+  border: 1.5px solid var(--yto-brand-purple);
 }
 .process-parcel-location-btn--secondary:hover {
   background: #f6f2fa;
@@ -244,7 +244,7 @@
 .ed-badge-status-active {
   font-size: 11px;
   font-weight: 800;
-  color: #390955;
+  color: var(--yto-brand-purple);
   background: rgba(57, 9, 85, 0.08);
   padding: 6px 12px;
   border-radius: 6px;
@@ -290,7 +290,7 @@
 .process-parcel-location-modal-title {
   font-size: 18px;
   font-weight: 800;
-  color: #390955;
+  color: var(--yto-brand-purple);
   margin: 0 0 12px 0;
 }
 
@@ -322,8 +322,8 @@
   font-size: 12px;
   font-weight: 700;
   background: white;
-  color: #390955;
-  border: 1px solid #390955;
+  color: var(--yto-brand-purple);
+  border: 1px solid var(--yto-brand-purple);
   cursor: pointer;
   transition: all 0.2s;
 }
@@ -362,7 +362,7 @@
 }
 
 .ppl-action-card-btn--purple {
-  background: #390955;
+  background: var(--yto-brand-purple);
   color: white;
 }
 .ppl-action-card-btn--purple:hover {
@@ -375,7 +375,7 @@
 }
 .ppl-action-card-btn--outline:hover {
   background: #fcfbfe;
-  border-color: #390955;
+  border-color: var(--yto-brand-purple);
 }
 
 .ppl-action-icon-box {
@@ -498,7 +498,7 @@
 }
 
 .ppl-station-tooltip--active {
-  background: #390955;
+  background: var(--yto-brand-purple);
   border: 1px solid #a05bb0;
 }
 
@@ -511,7 +511,7 @@
 }
 
 .ppl-station-dot--pulse {
-  background: #390955;
+  background: var(--yto-brand-purple);
   animation: pulse 2s infinite;
 }
 
@@ -527,7 +527,7 @@
 }
 
 .ppl-rider-marker-bubble {
-  background: #390955;
+  background: var(--yto-brand-purple);
   color: white;
   width: 26px;
   height: 26px;
@@ -541,8 +541,8 @@
 
 .ppl-rider-telemetry-tag {
   background: rgba(255, 255, 255, 0.95);
-  border: 1px solid #390955;
-  color: #390955;
+  border: 1px solid var(--yto-brand-purple);
+  color: var(--yto-brand-purple);
   font-size: 9px;
   font-weight: 800;
   padding: 1px 5px;

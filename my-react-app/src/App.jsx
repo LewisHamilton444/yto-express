@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { PAGE_MAP } from './pageMap';
 import { setAuthToken, getAuthToken } from './services/api';
 import { ToastProvider } from './components/ui/ToastContext';
 import ErrorBoundary from './components/ui/ErrorBoundary';
@@ -29,27 +30,7 @@ import ManageAccounts from "./ManageAccounts";
 import HubParcelReceiving from "./HubParcelReceiving";
 import ManageIssues from "./ManageIssues";
 
-const PAGE_MAP = {
-  'dashboard':           AnalyticsDashboard,
-  'process-seller':      ProcessSellerInformation,
-  'seller-report':       ViewSeller,
-  'process-parcel':      ProcessParcelInformation,
-  'manage-parcels':      ManageParcels,
-  'process-rider':       ProcessRiderInformation,
-  'monitor-rider':       MonitorRiderStatus,
-  'rider-report':        GenerateRiderDataReport,
-  'customer-list':       CustomerList,
-  'activity-log':        ActivityLog,
-  'app-notifications':   AppNotifications,
-  'manage-accounts':     ManageAccounts,
-  'hub-parcels':         HubParcelReceiving,
-  'manage-issues':       ManageIssues,
-  'parcel-location':     ManageParcelLocation,
-  'geofence':            MonitorParcel,
-  'tracking-info':       GenerateTrackingInformation,
-  'settings':            Settings,
-  'logout':              Logout,
-};
+
 
 function App() {
   const [currentUser, setCurrentUser] = useState(() => {
@@ -65,21 +46,38 @@ function App() {
     }
     return null;
   });
-  const [activePage, setActivePage] = useState('dashboard');
+  // Deep-linkable active page — the current key lives in the URL hash
+  // (#/manage-parcels), so a refresh or shared link restores the view
+  // instead of always landing on the dashboard. Unknown/absent -> dashboard.
+  const [activePage, setActivePage] = useState(() => {
+    const key = (window.location.hash || '').replace(/^#\/?/, '');
+    return PAGE_MAP[key] ? key : 'dashboard';
+  });
+
+  useEffect(() => {
+    const onHashChange = () => {
+      const key = (window.location.hash || '').replace(/^#\/?/, '');
+      setActivePage(PAGE_MAP[key] ? key : 'dashboard');
+    };
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
   // Bumped by the error boundary's "Retry" button to force a fresh remount
   // of the current page (the boundary key changes -> React throws the old
   // tree away and re-runs the page from scratch).
   const [retryNonce, setRetryNonce] = useState(0);
 
-  // Handle session expiration from apiFetch interceptor
-  useState(() => {
+  // Handle session expiration from apiFetch interceptor (proper useEffect —
+  // the old `useState(() => …)` registered the listener during render and its
+  // cleanup was silently discarded).
+  useEffect(() => {
     const onAuthExpired = () => {
       setCurrentUser(null);
       setActivePage('dashboard');
     };
     window.addEventListener('yto:auth_expired', onAuthExpired);
     return () => window.removeEventListener('yto:auth_expired', onAuthExpired);
-  });
+  }, []);
 
   // Not logged in -> show login page
   if (!currentUser) {
@@ -92,6 +90,12 @@ function App() {
       />
     );
   }
+
+  useEffect(() => {
+    if ((window.location.hash || '').replace(/^#\/?/, '') !== activePage) {
+      window.location.hash = `#/${activePage}`;
+    }
+  }, [activePage]);
 
   const PageComponent = PAGE_MAP[activePage] || AnalyticsDashboard;
 
