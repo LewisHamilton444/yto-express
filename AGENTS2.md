@@ -30,8 +30,10 @@
 ## 2. Frontend Architecture
 
 ### Entry & routing
-- `src/main.jsx` — React DOM entry; imports `index.css` + `tailwind.css`.
-- `src/App.jsx` — auth-state router. Restores `currentUser` from the JWT (id/email/role only — **no `isDemo` claim since the 2026-09-13 de-demo migration**); listens for `yto:auth_expired`; renders `LoginPage` when logged out; otherwise routes via `PAGE_MAP` and passes `activePage`/`setActivePage`/`currentUser`/`onLogout`.
+- `src/main.jsx` — React DOM entry; imports `index.css` + `tailwind.css` + `design-tokens.css`.
+- `src/App.jsx` — auth-state router. Restores `currentUser` from JWT (`id`, `email`, `role`); listens for `yto:auth_expired` (a proper `useEffect`, not render-time registration); renders `LoginPage` when logged out; otherwise routes via `PAGE_MAP` and passes `activePage`/`setActivePage`/`currentUser`/`onLogout`.
+- **Hash routing (2026-09-14):** the active page key lives in the URL hash (`#/manage-parcels`) — refresh and shared links restore the view instead of always landing on the dashboard. `PAGE_MAP` itself is exported from `src/pageMap.js` (single source of truth for the router, sidebar, and deep-link validation), no longer an inline const in `App.jsx`.
+- **Design tokens (2026-09-14):** `src/design-tokens.css` defines the CSS-variable layer (`--yto-brand-purple`, `--yto-brand-orange`, surfaces, borders, text, type scale, radius, shadows, focus ring). CSS files consume `var()`; inline JSX styles keep hex until migrated file-by-file. It also carries the **typography floor** — inline-styled text below 11px renders at 11px (11px → 12px), scoped via `data-yto-typography-floor` on the app shell in `AnalyticsDashboard.jsx`.
 
 ### `PAGE_MAP` (19 views)
 `dashboard` → AnalyticsDashboard · `process-seller` → ProcessSellerInformation · `seller-report` → ViewSeller · `process-parcel` → ProcessParcelInformation · `manage-parcels` → ManageParcels · `process-rider` → ProcessRiderInformation · `monitor-rider` → MonitorRiderStatus · `rider-report` → GenerateRiderDataReport · `customer-list` → CustomerList · `activity-log` → ActivityLog · `manage-accounts` → ManageAccounts · `hub-parcels` → HubParcelReceiving · `manage-issues` → ManageIssues · `parcel-location` → ManageParcelLocation · `geofence` → MonitorParcel · `tracking-info` → GenerateTrackingInformation · `settings` → Settings · `app-notifications` → AppNotifications · `logout` → Logout
@@ -44,7 +46,10 @@ The sidebar in `AnalyticsDashboard.jsx` is **section-grouped** (`getMenuSections
 - Breadcrumbs in `PageHeader` consumers must mirror the section names: `['Dashboard', 'People', 'Customer List']`, `['Dashboard', 'Support', 'Issues']`, `['Dashboard', 'Support', 'App Notifications']`, `['Dashboard', 'Admin', 'Activity Log']`.
 
 ### Design system (`src/components/ui/`)
-`Badge`, `Modal`, `AlertBanner`, `EmptyState`, `ListSkeleton`, `TableSkeleton`, `StatCard`, `PageHeader`, `CardSectionHeader`, `CardFooter`, `StatusBadge`, `ErrorBoundary` (wraps every routed page — a page crash shows a Retry/Back-to-dashboard card instead of blanking the whole app), `Tooltip` (+ `Tooltip.css`), `ToastContext` (global toast provider — wraps the app in `App.jsx`, replaces per-screen toast stacks), `vehicleIcons` (`VehicleIcon` lucide component + `vehicleGlyphSvg` SVG data-URI + `vehicleTypeLabel` for Leaflet markers), `statusColors.js` (canonical palettes: `PARCEL_STATUS_COLORS`, `SELLER_STATUS_COLORS`, `RIDER_STATUS_COLORS`, `RIDER_STATUS_BADGE`, `STATUS_HINTS` — the `ACCOUNT_CATEGORY_TONE`/`ACCOUNT_CATEGORY_LABEL` demo-badge exports were removed in the 2026-09-13 de-demo migration).
+`Badge`, `Modal`, `AlertBanner`, `EmptyState`, `ListSkeleton`, `TableSkeleton`, `StatCard`, `PageHeader`, `CardSectionHeader`, `CardFooter`, `StatusBadge`, `ErrorBoundary` (wraps every routed page with Retry/Back UI), `Tooltip` (+ `Tooltip.css`), `ToastContext` (global toast provider in `App.jsx`), `vehicleIcons` (`VehicleIcon` lucide component + `vehicleGlyphSvg` SVG data-URI + `vehicleTypeLabel`), `statusColors.js` (canonical palettes: `PARCEL_STATUS_COLORS`, `SELLER_STATUS_COLORS`, `RIDER_STATUS_COLORS`, `RIDER_STATUS_BADGE`, `STATUS_HINTS`).
+
+### Parcel-status normalization (`src/utils/parcelStatus.js`, 2026-09-14)
+Single source of truth for mapping bridge-synced statuses to display labels: `normalizeParcelStatus()` handles the mobile backend's Title-case vocabulary **and** the legacy lowercase-hyphenated web form, case-insensitively; `isDeliveredStatus` / `isReturnFamilyStatus` / `isInTransitFamilyStatus` power counts and filters. Before this module, `ManageParcels`' 5-entry `REAL_STATUS_MAP` silently coerced mobile statuses it didn't know (`Out for Delivery`, `Picked Up`, `Returning`…) into "Pending", and the dashboard's client-side fallback compared exact Title-case strings against lowercase DB values. Every surface that renders a parcel status must consume this module — never re-derive local maps. The old dashboard `dateRange` select (state never read) was removed in the same pass.
 
 **Icon rule** — no emoji/text glyphs as icons in UI strings; all use lucide-react SVGs (`aria-hidden`, icon-only buttons carry `aria-label`).
 
@@ -56,8 +61,9 @@ The sidebar in `AnalyticsDashboard.jsx` is **section-grouped** (`getMenuSections
 
 ### Services
 - `src/services/api.js` — centralized client: `API_ROOT = import.meta.env.VITE_API_URL || 'https://yto-express-backend.onrender.com'`; `apiFetch(path, opts)` attaches `Authorization: Bearer`; on 401 with token-expiry errors clears the token and dispatches `yto:auth_expired`. **Token key: `yto_token`** — `remember=true` → `localStorage`, `remember=false` → `sessionStorage` (session storage wins on read). `adminLogin(email, password, remember)`; `notificationsApi.sendEmail`; collection helpers (`sellersApi`, `ridersApi`, `parcelsApi`, `parcelLocationsApi`, `accountsApi`, `dashboardApi`).
-- `src/services/localApi.js` — same API shape but defaults to `http://localhost:3001`; used by the newer views (`ManageIssues`, `CustomerList`, `ActivityLog`) whose routes are not yet deployed to production.
-- `src/services/useSSE.js` — real-time hook (see §5). Exposed `mode` is `'sse' | 'polling'` in practice — the `'offline'` value exists in the state union/comments but is never set (polling retries indefinitely; the header's Offline pill renders via its `modeConfig` fallback).
+- `src/services/localApi.js` — **removed** (2026-09-14): all views use `services/api.js` exclusively.
+- `src/services/useSSE.js` — real-time hook (see §5). Exposed `mode` is `'sse' | 'polling'` in practice; offline pill renders via `modeConfig` fallback.
+- `src/GlobalSearch.jsx` — cross-entity search with a **60-second snapshot cache**: the parcels/riders/sellers/accounts corpus is fetched once per TTL window (not on every keystroke) and a failed refresh serves the last good snapshot instead of blanking results.
 
 ### Auth screens
 - `LoginPage.jsx` / `LoginPage.css` — enterprise login, remember-me checkbox (session vs persistent token), server health pill, role tags. `Logout.jsx` / `Logout.css` — secure session termination.
@@ -70,9 +76,9 @@ The sidebar in `AnalyticsDashboard.jsx` is **section-grouped** (`getMenuSections
 - DNS pinned to `8.8.8.8`/`8.8.4.4` at boot.
 
 ### JWT & auth middleware
-- `authenticateToken` middleware: Bearer token → `req.user = { id, email, role, ... }` (no `isDemo` claim, no `req.category` — the REAL/DEMO realm partition was removed 2026-09-13); 401 on missing/expired, 403 on invalid. **JWT_SECRET is required at startup (2026-09-09):** the server exits with `[Startup Error]` if `JWT_SECRET` is unset — the hardcoded `'ytoexpressappandwebcapstoneproject'` fallback was removed from both `authenticateToken` and `/api/accounts/login`. Ensure the env var exists in Render before deploying this change.
-- **Single-realm platform (2026-09-13 de-demo migration):** there is no demo classification, no `accountCategory` field, and no category query filter anywhere in the stack. All queries return the single REAL dataset; 0 records = honest clean empty state.
-- **Admin bootstrap** (`ensureAdminAccounts()`, runs when `ENABLE_ADMIN_BOOTSTRAP=1`; in production also requires `ALLOW_ADMIN_BOOTSTRAP_IN_PROD=1`): insert-only upserts of the three canonical admin accounts — **`superadmin@ytoexpress.com` / `staff@ytoexpress.com` / `hub@ytoexpress.com`** — with bcrypt-hashed passwords from **`ADMIN_PASSWORD_SUPERADMIN/_STAFF/_HUB`** (legacy `DEMO_ADMIN_PASSWORD_*` env names still accepted as a fallback so existing deployments keep working; if neither is set, a one-time generated password is logged). Never overwrites existing accounts.
+- `authenticateToken` middleware: Bearer token → `req.user = { id, email, role }`; 401 on missing/expired, 403 on invalid. `JWT_SECRET` is strictly required at startup (server exits with `[Startup Error]` if unset).
+- **Single-realm platform**: Real dataset only; no demo partition or category query filters (see §7).
+- **Admin bootstrap** (`ensureAdminAccounts()`): Runs when `ENABLE_ADMIN_BOOTSTRAP=1` (requires `ALLOW_ADMIN_BOOTSTRAP_IN_PROD=1` in production). Insert-only upsert of 3 canonical admins (`superadmin@ytoexpress.com`, `staff@ytoexpress.com`, `hub@ytoexpress.com`) with bcrypt-hashed passwords from `ADMIN_PASSWORD_*` env. Never overwrites existing accounts.
 
 ### Route table
 | Endpoint | Methods | Notes |
@@ -83,11 +89,11 @@ The sidebar in `AnalyticsDashboard.jsx` is **section-grouped** (`getMenuSections
 | `/api/events/threshold` | PUT | Peak-alert threshold (auth) |
 | `/api/bridge/*` | POST | See §6 |
 | `/api/sellers`, `/api/riders` | GET/POST | Also PUT/DELETE (`sendApproval` on status change) |
-| `/api/customers` | GET | **GET-only** — customers are created exclusively via the bridge (`POST /api/bridge/sync-user`), never via a POST here. |
+| `/api/customers` | GET | **GET-only** — customers are created exclusively via bridge (`POST /api/bridge/sync-user`), never via POST here |
 | `/api/customers/stats`, `/api/customers/:id/orders` | GET | Customer aggregates + order history by `customerId` |
 | `/api/activity-log` | GET | Audit trail from registration/statusHistory across roles; `limit` ≤ 200, `role` filter |
 | `/api/app-notifications` (GET) + `/api/app-notifications/:id/read` (PATCH) | GET/PATCH | App-originated notifications (`AdminNotification` collection); `limit` ≤ 200, `type`/`read` filters; PATCH marks one read (auth) |
-| `/api/parcels`, `/api/parcel-locations` | GET/POST/PUT/DELETE | Parcel **POST bridges the admin-created parcel to the mobile backend** (2026-09-13: `BridgeClient.syncParcel` → `receive-parcel`, fire-and-forget) — the Web Seller `sellerId` is resolved to its email Web-side and only the email is sent (the mobile side resolves its own User; a Web `_id` is never sent as `sellerId`); no resolvable seller → skipped with a logged reason (mobile Shipment requires one, and the old mis-attribution fallback is gone); status/`packageType` are Title-cased for the mobile enum; parcel status PUT pushes `BridgeClient.sendStatus` + SSE `parcel-updated` |
+| `/api/parcels`, `/api/parcel-locations` | GET/POST/PUT/DELETE | Parcel CRUD; POST bridges parcel to mobile backend via `BridgeClient.syncParcel`; PUT updates status, pushes `BridgeClient.sendStatus` + SSE `parcel-updated` (see §6) |
 | `/api/dashboard/stats` | GET | KPIs: parcels, delivered %, riders, active riders, avg rating, total deliveries, sellers |
 | `/api/accounts` | GET/POST | Admin accounts |
 | `/api/accounts/:id` | PUT | bcrypt-hashes new passwords on change |
@@ -145,15 +151,12 @@ Bidirectional REST bridge with the Android backend (`yto_express_backend`). Ever
 
 ---
 
-## 7. Single-Realm Platform (post de-demo migration, 2026-09-13)
+### 7. Single-Realm Platform
 
-The Web Admin is **REAL-only**. The former REAL/DEMO realm partition — the `isDemo` JWT claim, `accountCategory` fields on all six models, `getCategoryFilter`, `demoUtils.js`, the header realm pill, DEMO/REAL badges and filters, and every mock/fallback dataset (`FALLBACK_PARCELS`, `MOCK_ACCOUNTS`, `mockSellers`, `mockRiders`, `luzonMockData.js`, sample geofence zones, simulated battery/presence in Duty Monitor, simulated-drift Refresh in Parcel Map) — was **removed entirely**.
-
-1. **Accounts**: the three Web admin logins are **`superadmin@ytoexpress.com` / `staff@ytoexpress.com` / `hub@ytoexpress.com`** (bcrypt, passwords from `ADMIN_PASSWORD_*` env; legacy `DEMO_ADMIN_PASSWORD_*` env names still accepted as fallback). Passwords unchanged; the old `@gmail.com` admin logins no longer exist. Customer/seller/rider accounts arrive via the mobile bridge and keep their real signup emails (e.g. `@gmail.com`) — only admin emails are domain-branded.
-2. **Clean empty states**: 0 records renders the clean empty-state graphic — no synthetic/mock injections anywhere in the client; a backend-unreachable state renders an honest error banner, never fake rows.
-3. **DB state after the migration**: active DB `test` (MONGO_URI pinned with `/test`); 3 REAL admins, 1 REAL UAT customer (`uat_customer@gmail.com`), all operational collections empty, and the dead empty `yto_express` + Atlas `sample_mflix` databases dropped. `clean_web_db.js` wipes all operational data with no preserved demo accounts.
-4. **Historical note (resolved)**: the 2026-09-03 plaintext-demo-password deployment skew and its rotate-during-deploy workaround are obsolete — the live backend is bcrypt-only; the demo-era seed/rotate/backfill scripts were deleted in this migration.
-
+The Web Admin is **REAL-only**. The former REAL/DEMO realm partition was removed completely:
+1. **Accounts**: Canonical admin logins are `superadmin@ytoexpress.com`, `staff@ytoexpress.com`, and `hub@ytoexpress.com` (see §3). Customer/seller/rider accounts arrive via the mobile bridge and retain their signup emails.
+2. **Clean empty states**: 0 records renders the clean empty-state view — zero synthetic or mock injections anywhere in the client. Unreachable backends display an error banner, never simulated data.
+3. **Database specification**: Pinned to Atlas DB `/test` (`server/.env` `MONGO_URI`); operational collections clean.
 
 ---
 
@@ -165,18 +168,18 @@ The Web Admin is **REAL-only**. The former REAL/DEMO realm partition — the `is
 4. **Input hygiene** — email `.toLowerCase().trim()`; phone `.replaceAll("[^0-9]","")`; no emojis in UI strings or logs; no hardcoded impersonating fallbacks (`"seller@gmail.com"`, `"YTO Rider"`, `"Store Warehouse"`).
 5. **Code quality** — retain docstrings/comments/schemas; responsive desktop + mobile layouts; clear error boundaries.
 6. **Auth** — bcrypt 10 rounds; JWT 24h; token key `yto_token`; 401 interceptor clears storage + emits `yto:auth_expired`.
+7. **Caveman protocol** — When activated (`caveman`), maintain 100% technical accuracy, zero conversational filler, exact paths, and preserve verification gates.
 
 ---
 
 ## 9. Scripts & Tooling (`server/`, `scripts/`)
 
-- `server/scripts/de_demo_migration.js` (2026-09-13, applied) — one-time migration: deleted all DEMO docs, promoted the 3 admins to REAL and renamed them to `@ytoexpress.com`, removed `accountCategory` from every document, and dropped the dead empty `yto_express` + `sample_mflix` databases. Deleted after the run.
-- `Server.js` boot — `ensureAdminAccounts()` (runs when `ENABLE_ADMIN_BOOTSTRAP=1`, plus `ALLOW_ADMIN_BOOTSTRAP_IN_PROD=1` in production) INSERT-only upserts the three canonical admins (`superadmin@ytoexpress.com` / `staff@ytoexpress.com` / `hub@ytoexpress.com`), bcrypt-hashed from `ADMIN_PASSWORD_*` env; legacy `DEMO_ADMIN_PASSWORD_*` names still accepted as fallback; never overwrites existing accounts.
-- `server/clean_web_db.js` — wipes ALL operational data (customers/sellers/riders/parcels/issues); no preserved accounts since the 2026-09-13 single-realm migration. **DB name pinned:** the `server/.env` `MONGO_URI` explicitly ends in `/test` — the data-bearing database on the Atlas cluster (`cluster0.qv8m83a`). **Render must be updated to match:** append `/test` to the `MONGO_URI` env var in the Render dashboard before its next deploy, or it will keep connecting via the implicit-default path. (The mobile backend uses a *different* cluster and explicitly names `/yto_express` in its `MONGODB_URI` — the two sides do not share a database.)
+- `Server.js` boot — `ensureAdminAccounts()` initializes canonical admins if enabled (see §3).
+- `server/clean_web_db.js` — Wipes operational data (customers/sellers/riders/parcels/issues). Pinned to Atlas database `/test`. Render `MONGO_URI` env var must end in `/test`.
 - `scripts/dev.cjs` — `npm run dev:all` launcher (frontend + server).
 - `package.json` scripts: `dev` (vite), `dev:server`, `dev:all`, `start` (dev.cjs), `build` (`vite build`), `lint`, `preview`.
-- `scripts/qa/` — `npm run qa:layout` runs the headless layout sweep: boots a seeded API + Vite dev server + headless Chrome, logs in with an offline test JWT (plain admin claims, no realm metadata), and asserts zero horizontal overflow / zero crashes / zero console errors across every sidebar page x viewport width (catches runtime-only crashes `vite build` cannot see).
-- Skills specs live in `my-react-app/skills/` (11 SKILL.md files: authentication, cross-device, geofence-delivery, map-location-picker, notifications, package-booking, profile-management, rider-delivery, seller-dashboard, shipment-tracking, yto-architecture-summary).
+- `scripts/qa/` — `npm run qa:layout` headless layout sweep across every sidebar page x viewport width.
+- Skills specs live in `my-react-app/skills/` (11 SKILL.md files) plus `.agents/skills/caveman/` (`commit/`, `compress/`, `review/`, `help/`).
 
 ---
 
@@ -186,6 +189,7 @@ The Web Admin is **REAL-only**. The former REAL/DEMO realm partition — the `is
 C:\Users\ADMIN\React_Projects\YTO Latest\
 ├─ REMEDIATION_HANDOFF.md            (N1/N2 security cutover runbook — see §11)
 ├─ AGENTS2.md                        (this document)
+├─ .agents/                          (universal agent spec: rules.md, skills/caveman/)
 ├─ my-react-app/
 │  ├─ package.json, vite.config.js, index.html
 │  ├─ src/
@@ -196,24 +200,21 @@ C:\Users\ADMIN\React_Projects\YTO Latest\
 │  │  │   ManageAccounts, HubParcelReceiving, ManageIssues, ManageParcelLocation,
 │  │  │   MonitorParcel, GenerateTrackingInformation, Settings, SettingsArchiveView,
 │  │  │   LoginPage, Logout, GlobalHeader, GlobalSearch, NotificationBell, ...)
-│  │  │   (legacy GenerateParcelMovement / GenerateParcelConfirmationStatus /
-│  │  │   GenerateParcelStatusReport screens were removed 2026-09-03 — superseded
-│  │  │   by ManageParcels; do not re-import)
 │  │  ├─ components/ui/              (Badge, Modal, EmptyState, skeletons, statusColors.js, ...)
 │  │  ├─ services/                   (api.js, localApi.js, useSSE.js)
 │  │  ├─ verification/               (PendingVerificationsTable, ReviewModal, SendSMSModal, ...)
 │  │  └─ (utils: exportUtils, leafletLoader, luzonCityCoords, hubGeofenceData, useRouteAnimation)
-│  │  ├─ (top-level src utilities also include AdminProfileDropdown, ConnectionHistoryChart,
+│  │  ├─ (top-level src utilities: AdminProfileDropdown, ConnectionHistoryChart,
 │  │  │   LiveRiderMap, NotificationBell, PaginationControls, ParcelProgressTimeline,
-│  │  │   PeakAlertBanner, sellerRiderData.js; legacy Generate* screens removed 2026-09-03)
+│  │  │   PeakAlertBanner, sellerRiderData.js)
 │  │  ├─ server/
 │  │  │  ├─ Server.js, bridgeRoutes.js, clean_web_db.js
-│  │  │  ├─ models/                     (Account, Seller, Rider, Customer, Parcel, ParcelLocation, Issue, AdminNotification)
-│  │  │  ├─ utils/                      (BridgeClient.js, sseBroadcaster.js)
-│  │  │  └─ .env                        (MONGO_URI, JWT_SECRET, ADMIN_PASSWORD_*, TWILIO_*, SEMAPHORE_*, EMAIL_*, ANDROID_BACKEND_URL, BRIDGE_API_KEY, SSE_PEAK_THRESHOLD)
-│  ├─ scripts/dev.cjs
-│  ├─ public/                        (assets, vite.svg; stray junk node_modules under public/server — safe to ignore)
-│  └─ skills/                        (11 SKILL.md files)
+│  │  │  ├─ models/                  (Account, Seller, Rider, Customer, Parcel, ParcelLocation, Issue, AdminNotification)
+│  │  │  ├─ utils/                   (BridgeClient.js, sseBroadcaster.js)
+│  │  │  └─ .env                     (MONGO_URI, JWT_SECRET, ADMIN_PASSWORD_*, TWILIO_*, SEMAPHORE_*, EMAIL_*, ANDROID_BACKEND_URL, BRIDGE_API_KEY, SSE_PEAK_THRESHOLD)
+│  │  ├─ scripts/dev.cjs
+│  │  ├─ public/                     (assets, vite.svg)
+│  │  └─ skills/                     (11 SKILL.md files)
 └─ __MACOSX/                         (junk from archive extraction — ignore)
 ```
 
@@ -250,15 +251,13 @@ Anyone who cloned or forked the repo before the force-push keeps the secrets. Ro
 | `SEMAPHORE_API_KEY`, `SEMAPHORE_SENDER_NAME` | Semaphore SMS |
 | `EMAIL_USER`, `EMAIL_APP_PASSWORD` | Gmail app password |
 | `JWT_SECRET`, `BRIDGE_API_KEY`, `ANDROID_BRIDGE_API_KEY` | Internal — regenerate with any strong string |
-```
 
 ---
 
-### Remediation status — 2026-09-04 (N1 + N2 emergency batch) — SUPERSEDED BY THE 2026-09-13 DE-DEMO MIGRATION
+### Active Remediation Status
 
-- The demo-era items below (`ENABLE_DEMO_BOOTSTRAP`, `DEMO_ADMIN_PASSWORD_*`, demo seed/rotate scripts, plaintext-demo-password deployment skew) are **obsolete** — the realm partition and demo accounts were removed entirely (see §7). The bootstrap is now `ENABLE_ADMIN_BOOTSTRAP=1` with passwords from `ADMIN_PASSWORD_*` env (legacy `DEMO_ADMIN_PASSWORD_*` names still accepted as a fallback, so pending Render env renames are non-breaking).
-- **Local `.env` secrets rotated:** `JWT_SECRET` (new 64-char value), `BRIDGE_API_KEY` + `ANDROID_BRIDGE_API_KEY` (new shared value, synced to the mobile backend `WEB_BRIDGE_API_KEY`).
-- **Still pending (manual):** Atlas DB user password rotation (then update `MONGO_URI` in `.env` + Render), Gmail app password rotation, Render env var updates (`ADMIN_PASSWORD_*` recommended), commit/push/deploy, then the full verification matrix.
+- **Local `.env` secrets rotated:** `JWT_SECRET` (64-char string), `BRIDGE_API_KEY` + `ANDROID_BRIDGE_API_KEY` (shared value synced to mobile backend `WEB_BRIDGE_API_KEY`).
+- **Manual operational items:** Atlas DB user password rotation (sync `MONGO_URI` in `.env` + Render), Gmail app password rotation, Render env var updates (`ADMIN_PASSWORD_*`), commit/push/deploy, and verification matrix.
 
 ---
 

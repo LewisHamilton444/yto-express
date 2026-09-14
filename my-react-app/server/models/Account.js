@@ -9,6 +9,15 @@ const AccountSchema = new mongoose.Schema({
   password:    { type: String, required: true },
   status:      { type: String, enum: ['Active', 'Deactivated'], default: 'Active' },
   createdDate: { type: String, default: () => new Date().toISOString().split('T')[0] },
+  statusHistory: {
+    type: [{
+      type:      { type: String, enum: ['registration', 'status_change'], default: 'status_change' },
+      status:    { type: String, default: 'Active' },
+      reason:    { type: String, default: '' },
+      changedAt: { type: Date, default: Date.now },
+    }],
+    default: [],
+  },
 });
 
 // Hash password before save if modified

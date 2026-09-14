@@ -1,9 +1,25 @@
 
-// ── Logistics hub / sorting center mock data ────────────────────────────────
+// ── Logistics hub / sorting center data ─────────────────────────────────────
 // activeParcelsCount and assignedRidersCount are NOT stored here — they're
 // computed live from the real riders/parcels feeds (see LiveRiderMap),
 // the same way normalizeSeller/normalizeRider replaced disconnected mock
 // counts elsewhere in this app.
+//
+// COVERAGE ALIGNMENT (2026-09-13): the Android app's service area is
+// Bulacan Province ONLY (see app ETACalculatorUtils: "Geographic Scope:
+// Bulacan Province Only"). The single hub listed below IS the app's real
+// operations hub — YTO Pulilan Main Sorting Hub — at the warehouse address
+// "Warehouse 8-17, Pulilan Enterprises Center, Block 3, Pulilan Regional
+// Road, Dampol II-B, Pulilan, Bulacan" at the OSM-verified Dampol 2nd B
+// location (14.9027° N, 120.8073° E), which matches the app's updated
+// PULILAN_MAIN_HUB. Corrections applied 2026-09-13:
+//   1. HUB-002 coordinates 14.8967, 120.8528 -> 14.9027, 120.8073
+//      (14.8967/120.8528 is NOT inside Dampol II-B; OSM places the
+//      barangay polygon at bbox 14.9012-14.9244, 120.8003-120.8107 and
+//      the NLEX Pulilan interchange at 14.9103, 120.8152).
+//   2. HUB-001 (Quezon City) and HUB-003 (South Luzon - Laguna) were
+//      REMOVED — non-Bulacan hubs contradicted the Bulacan-only app
+//      service area. The hub list is now Bulacan-only.
 
 export const HUB_STATUS = {
   OPERATIONAL: 'Operational',
@@ -11,33 +27,17 @@ export const HUB_STATUS = {
   OFFLINE: 'Offline',
 };
 
-// YTO Express operates strictly within Luzon (Metro Manila, Central Luzon,
-// South Luzon, Northern Luzon) — Visayas/Mindanao are out of scope, so every
-// hub here must resolve to real Luzon coordinates.
 export const LOGISTICS_HUBS = [
   {
-    hubId: 'HUB-001',
-    hubName: 'Quezon City Main Hub',
-    region: 'Metro Manila',
-    coordinates: { lat: 14.6760, lng: 121.0437 },
-    geofenceRadius: 2,
-    status: HUB_STATUS.OPERATIONAL,
-  },
-  {
     hubId: 'HUB-002',
-    hubName: 'Central Luzon Hub - Bulacan/Pampanga',
-    region: 'Central Luzon',
-    coordinates: { lat: 15.0289, lng: 120.6900 },
+    hubName: 'YTO Pulilan Main Sorting Hub',
+    region: 'Central Luzon — Bulacan',
+    // Exact warehouse coordinates (matches the app's PULILAN_MAIN_HUB —
+    // OSM-verified Dampol 2nd B, Pulilan, near the NLEX Pulilan interchange).
+    address: 'Warehouse 8-17, Pulilan Enterprises Center, Block 3, Pulilan Regional Road, Dampol II-B, Pulilan, Bulacan',
+    coordinates: { lat: 14.9027, lng: 120.8073 },
     geofenceRadius: 2.5,
     status: HUB_STATUS.HIGH_CAPACITY,
-  },
-  {
-    hubId: 'HUB-003',
-    hubName: 'South Luzon Hub - Laguna',
-    region: 'South Luzon',
-    coordinates: { lat: 14.2117, lng: 121.1653 },
-    geofenceRadius: 2.5,
-    status: HUB_STATUS.OPERATIONAL,
   },
 ];
 

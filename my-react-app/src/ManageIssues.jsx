@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { apiFetch } from './services/localApi';
+import { apiFetch } from './services/api';
 import useSSE from './services/useSSE';
 import Modal from './components/ui/Modal';
 import Badge from './components/ui/Badge';

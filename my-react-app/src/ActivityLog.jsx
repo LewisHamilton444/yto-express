@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { apiFetch } from './services/localApi';
+import { apiFetch } from './services/api';
 import Badge from './components/ui/Badge';
 import PageHeader from './components/ui/PageHeader';
 import CardSectionHeader from './components/ui/CardSectionHeader';
@@ -7,15 +7,16 @@ import CardFooter from './components/ui/CardFooter';
 import ListSkeleton from './components/ui/ListSkeleton';
 import {
   History, CalendarRange, X,
-  UserPlus, RefreshCcw, Package, Bike, Store,
+  UserPlus, RefreshCcw, Package, Bike, Store, ShieldCheck,
 } from 'lucide-react';
 
-const ROLE_TONE = { customer: 'blue', seller: 'amber', rider: 'green' };
-const ROLE_ICON = { customer: Package, seller: Store, rider: Bike };
+const ROLE_TONE = { customer: 'blue', seller: 'amber', rider: 'green', admin: 'violet' };
+const ROLE_ICON = { customer: Package, seller: Store, rider: Bike, admin: ShieldCheck };
 const ROLE_ACCENT = {
   customer: { ring: 'ring-blue-500/25', bg: 'bg-blue-50', dot: 'text-blue-600', accent: '#3b82f6' },
   seller:   { ring: 'ring-amber-500/25', bg: 'bg-amber-50', dot: 'text-amber-600', accent: '#f59e0b' },
   rider:    { ring: 'ring-emerald-500/25', bg: 'bg-emerald-50', dot: 'text-emerald-600', accent: '#22c55e' },
+  admin:    { ring: 'ring-violet-500/25', bg: 'bg-violet-50', dot: 'text-violet-700', accent: '#7c3aed' },
 };
 
 const TYPE_ICON = { registration: UserPlus, status_change: RefreshCcw };
@@ -129,6 +130,7 @@ const ActivityLog = ({ currentUser }) => {
               <option value="customer">Customers</option>
               <option value="seller">Sellers</option>
               <option value="rider">Riders</option>
+              <option value="admin">Admins</option>
             </select>
             <select
               value={typeFilter}

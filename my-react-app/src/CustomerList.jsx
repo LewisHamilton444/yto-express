@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { apiFetch } from './services/localApi';
+import { apiFetch } from './services/api';
 import PaginationControls from './PaginationControls';
 import { exportToCSV } from './exportUtils';
 import Modal from './components/ui/Modal';

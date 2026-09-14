@@ -400,7 +400,7 @@ export default function LiveRiderMap() {
     setSelectedRider(id === 'all' ? null : id);
   };
 
-  const topAlert = null; // synthetic alert derivation removed with the REAL-only migration
+  // (synthetic alert derivation removed with the REAL-only migration)
 
   const card = { background: 'white', borderRadius: 12, border: '1px solid rgba(57,9,85,0.09)', boxShadow: '0 2px 16px rgba(57,9,85,0.06)', overflow: 'hidden' };
   const statRow = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 0', borderBottom: '1px solid #f5f0ff', fontSize: 13 };
@@ -413,7 +413,7 @@ export default function LiveRiderMap() {
           <div style={{ width: 30, height: 30, borderRadius: 8, background: '#390955', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Map size={15} color="white" aria-hidden="true" /></div>
           <div>
             <div style={{ fontSize: 14, fontWeight: 800, color: '#1a0a2e' }}>Live Rider Map</div>
-            <div style={{ fontSize: 11, color: '#9b82b2' }}>{LOGISTICS_HUBS.length} hubs · {riders.length} riders in motion · Luzon-only coverage</div>
+            <div style={{ fontSize: 11, color: '#9b82b2' }}>{LOGISTICS_HUBS.length} hubs · {riders.length} riders in motion · App service area: Bulacan Province</div>
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

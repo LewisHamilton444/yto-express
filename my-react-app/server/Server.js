@@ -349,6 +349,38 @@ app.get('/api/activity-log', authenticateToken, async (req, res) => {
             });
         }
 
+        // Admin feed (2026-09-13): account registration / update / activate /
+        // deactivate events from Account.statusHistory, so the Activity Log
+        // renders real admin account data like it does for customers/sellers/riders.
+        if (!roleFilter || roleFilter === 'admin') {
+            const accounts = await Account.find({});
+            accounts.forEach(a => {
+                if (a.statusHistory && a.statusHistory.length > 0) {
+                    a.statusHistory.forEach(sh => {
+                        events.push({
+                            role: 'admin',
+                            actorName: a.name,
+                            actorId: String(a._id),
+                            type: sh.type || 'status_change',
+                            status: sh.status || a.status || 'Active',
+                            description: sh.reason || (sh.type === 'registration' ? `${a.name} registered as an admin` : `${a.name} account updated`),
+                            timestamp: sh.changedAt,
+                        });
+                    });
+                } else {
+                    events.push({
+                        role: 'admin',
+                        actorName: a.name,
+                        actorId: String(a._id),
+                        type: 'registration',
+                        status: a.status || 'Active',
+                        description: `${a.name} registered as an admin`,
+                        timestamp: a.createdAt || a.createdDate,
+                    });
+                }
+            });
+        }
+
         events.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
         res.json(events.slice(0, limit));
     } catch (error) {
@@ -563,6 +595,12 @@ app.post('/api/accounts', authenticateToken, async (req, res) => {
             ...req.body,
             email,
         });
+        newAccount.statusHistory = [{
+            type: 'registration',
+            status: 'Active',
+            reason: `${req.body.name || 'Admin'} registered as ${req.body.role || 'staff'}`,
+            changedAt: new Date(),
+        }];
         await newAccount.save();
         const result = newAccount.toObject();
         delete result.password;
@@ -584,12 +622,21 @@ app.put('/api/accounts/:id', authenticateToken, async (req, res) => {
         } else {
             delete updateData.password;
         }
-        const updated = await Account.findByIdAndUpdate(
-            req.params.id,
-            { $set: updateData },
-            { new: true, runValidators: false }
-        ).select('-password');
-        res.json(updated);
+        delete updateData.statusHistory;
+        const account = await Account.findById(req.params.id);
+        if (!account) return res.status(404).json({ error: 'Account not found' });
+        Object.assign(account, updateData);
+        account.statusHistory = account.statusHistory || [];
+        account.statusHistory.push({
+            type: 'status_change',
+            status: account.status || 'Active',
+            reason: 'Account details updated',
+            changedAt: new Date(),
+        });
+        await account.save();
+        const result = account.toObject();
+        delete result.password;
+        res.json(result);
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
@@ -603,6 +650,13 @@ app.patch('/api/accounts/:id/status', authenticateToken, async (req, res) => {
             return res.status(403).json({ error: 'Super Admin account cannot be deactivated.' });
         }
         account.status = account.status === 'Active' ? 'Deactivated' : 'Active';
+        account.statusHistory = account.statusHistory || [];
+        account.statusHistory.push({
+            type: 'status_change',
+            status: account.status,
+            reason: account.status === 'Active' ? 'Account reactivated' : 'Account deactivated',
+            changedAt: new Date(),
+        });
         await account.save();
         const result = account.toObject();
         delete result.password;
