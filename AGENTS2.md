@@ -24,6 +24,7 @@
 - **Production backend**: `https://yto-express-backend.onrender.com` (or `VITE_API_URL`) — verified against `src/services/api.js` and `src/services/useSSE.js` defaults (2026-09-09). The older `https://yto-express.onrender.com` host name appears only in legacy comments.
 - **Local dev backend**: `http://localhost:3001` (port **3001**, not 5001)
 - Workspace: `C:\Users\ADMIN\React_Projects\YTO Latest\` — the Android side (`AGENTS.md`) references this project; do not confuse it with the stale internal mirror at `...\AndroidStudioProjects\YTO_Express_App\React_Projects\YTO Latest`.
+- **Plain, non-technical terminology (GENERAL RULE)**: All user-facing text across the entire Web Admin platform — including dialogs, modals, alerts, toast notifications, table empty states, form validation errors, labels, tooltips, and action prompts — MUST strictly use clear, everyday, non-technical words. Never expose developer, system, network, or database jargon (e.g. avoid "configure", "credentials", "parameters", "null", "undefined", "payload", "socket", "token", "API", "endpoint", "database", "500", "backend", "exception", "failed to parse", "UUID", "syncing"). Use natural, user-friendly language (e.g., "details" / "information" instead of "credentials" / "parameters"; "add" / "enter" / "set up" instead of "configure"; "unable to load, please try again" instead of "API fetch error").
 
 ---
 
@@ -58,6 +59,7 @@ Single source of truth for mapping bridge-synced statuses to display labels: `no
 - On conflict, `skills/no-slop-ui/YTO_ADAPTATIONS.md` outranks the skill defaults.
 - After UI changes, run `skills/no-slop-ui/examples/review-checklist.md`.
 - `skills/avoid-ai-design/` is the audit/rewrite skill (upstream: funboy322/avoid-ai-design): use it when asked to audit existing UI for AI-design tells, de-slop a screen, or as the post-build audit of generated frontend. It complements `no-slop-ui` (which stays the build-time guardrail); in rewrite mode it stops at this project's brand tokens and conventions — see `skills/avoid-ai-design/YTO_ADAPTATIONS.md`.
+- **Non-technical UI copy**: All user-facing copy in modals, forms, toast notifications, badges, empty states, and tables must use plain, non-technical words. Avoid engineering, database, and API terminology.
 
 ### Services
 - `src/services/api.js` — centralized client: `API_ROOT = import.meta.env.VITE_API_URL || 'https://yto-express-backend.onrender.com'`; `apiFetch(path, opts)` attaches `Authorization: Bearer`; on 401 with token-expiry errors clears the token and dispatches `yto:auth_expired`. **Token key: `yto_token`** — `remember=true` → `localStorage`, `remember=false` → `sessionStorage` (session storage wins on read). `adminLogin(email, password, remember)`; `notificationsApi.sendEmail`; collection helpers (`sellersApi`, `ridersApi`, `parcelsApi`, `parcelLocationsApi`, `accountsApi`, `dashboardApi`).
@@ -132,7 +134,7 @@ Single source of truth for mapping bridge-synced statuses to display labels: `no
 
 ## 6. Cross-Platform Bridge Protocol (`server/bridgeRoutes.js`)
 
-Bidirectional REST bridge with the Android backend (`yto_express_backend`). Every route validates its payload, never lets an exception escape (all try/caught + `logBridgeError`), answers `{ success, message, data }` / `{ success: false, error, details }`, and broadcasts SSE to admin clients. Optional shared-secret gate via `BRIDGE_API_KEY` (off by default).
+Bidirectional REST bridge with the Android backend (`yto_express_backend`). Every route validates its payload, never lets an exception escape (all try/caught + `logBridgeError`), answers `{ success, message, data }` / `{ success: false, error, details }`, and broadcasts SSE to admin clients. Shared-secret gate via `BRIDGE_API_KEY` that **fails closed**: when the key is unset every bridge route answers `503` (`Bridge API key not configured. All bridge access denied.`) rather than continuing — a deploy that forgets the key must never accept unauthenticated writes to users, parcels, issues and notifications. Mirrors the mobile backend's own fail-closed guard; `BRIDGE_API_KEY` here and `WEB_BRIDGE_API_KEY` on the mobile side must hold the same value.
 
 | Route | Purpose |
 |---|---|
@@ -176,8 +178,8 @@ The Web Admin is **REAL-only**. The former REAL/DEMO realm partition was removed
 
 - `Server.js` boot — `ensureAdminAccounts()` initializes canonical admins if enabled (see §3).
 - `server/clean_web_db.js` — Wipes operational data (customers/sellers/riders/parcels/issues). Pinned to Atlas database `/test`. Render `MONGO_URI` env var must end in `/test`.
-- `scripts/dev.cjs` — `npm run dev:all` launcher (frontend + server).
-- `package.json` scripts: `dev` (vite), `dev:server`, `dev:all`, `start` (dev.cjs), `build` (`vite build`), `lint`, `preview`.
+- `scripts/dev.cjs` — combined launcher (frontend + server). **`npm run dev` is the standard single command** for the full stack (API @ 3001 + Vite @ 5173, Ctrl+C kills both); granular options: `npm run dev:web` (frontend only), `npm run dev:server` (backend only); `dev:all` retained as alias.
+- `package.json` scripts: `dev` (full stack via dev.cjs), `dev:web` (vite), `dev:server`, `dev:all`, `start` (dev.cjs), `build` (`vite build`), `lint`, `preview`.
 - `scripts/qa/` — `npm run qa:layout` headless layout sweep across every sidebar page x viewport width.
 - Skills specs live in `my-react-app/skills/` (11 SKILL.md files) plus `.agents/skills/caveman/` (`commit/`, `compress/`, `review/`, `help/`).
 

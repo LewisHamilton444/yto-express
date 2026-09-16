@@ -27,15 +27,23 @@ const ParcelLocation = require('./models/ParcelLocation');
 const Issue          = require('./models/Issue');
 const AdminNotification = require('./models/AdminNotification');
 
-// ── Optional shared-secret gate ─────────────────────────────────────────
-// These routes accept writes from another backend, not from the admin UI,
-// so — unlike the rest of Server.js — they support being locked down with a
-// shared secret. Off by default (no BRIDGE_API_KEY set) so this doesn't
-// break anything before the mobile team is ready to configure it; set
-// BRIDGE_API_KEY in .env on both sides once the bridge goes live.
+// ── Shared-secret gate (fail CLOSED) ────────────────────────────────────
+// These routes accept writes from another backend, not from the admin UI, so
+// every one of them is locked behind a shared secret that BOTH sides set in
+// their .env (BRIDGE_API_KEY on this side, WEB_BRIDGE_API_KEY on the mobile
+// side — same value).
+//
+// When the key is missing this now answers 503 and denies every bridge call
+// instead of calling next(). Continuing without a key would mean a deploy
+// that forgot to set it silently accepted unauthenticated writes to users,
+// parcels, issues and notifications. The mobile backend already fails closed
+// the same way, so a half-configured pair now fails loudly at the health
+// check rather than quietly trusting requests.
 router.use((req, res, next) => {
   const expected = process.env.BRIDGE_API_KEY;
-  if (!expected) return next();
+  if (!expected) {
+    return res.status(503).json({ success: false, error: 'Bridge API key not configured. All bridge access denied.' });
+  }
   if (req.get('x-bridge-api-key') === expected) return next();
   return res.status(401).json({ success: false, error: 'Missing or invalid bridge API key.' });
 });
