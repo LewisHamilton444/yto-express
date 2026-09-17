@@ -1,36 +1,11 @@
 import { useEffect, useState } from 'react';
-import { PAGE_MAP } from './pageMap';
 import { setAuthToken, getAuthToken } from './services/api';
 import { ToastProvider } from './components/ui/ToastContext';
 import ErrorBoundary from './components/ui/ErrorBoundary';
+import { PAGE_MAP } from './pageMap';
 
 import LoginPage from './LoginPage';
 import AnalyticsDashboard from "./AnalyticsDashboard"
-
-import ProcessSellerInformation    from "./ProcessSellerInformation";
-import ViewSeller                  from "./ViewSeller";
-
-import ProcessParcelInformation    from "./ProcessParcelInformation";
-import ManageParcels               from "./ManageParcels";
-
-import ProcessRiderInformation     from "./ProcessRiderInformation";
-import MonitorRiderStatus          from "./MonitorRiderStatus";
-import GenerateRiderDataReport     from "./GenerateRiderDataReport";
-
-import ManageParcelLocation        from "./ManageParcelLocation";
-import MonitorParcel               from "./MonitorParcel";
-import GenerateTrackingInformation from "./GenerateTrackingInformation";
-
-import Settings from "./Settings";
-import Logout   from "./Logout";
-import CustomerList from "./CustomerList";
-import ActivityLog from "./ActivityLog";
-import AppNotifications from "./AppNotifications";
-import ManageAccounts from "./ManageAccounts";
-import HubParcelReceiving from "./HubParcelReceiving";
-import ManageIssues from "./ManageIssues";
-
-
 
 function App() {
   const [currentUser, setCurrentUser] = useState(() => {
@@ -97,8 +72,6 @@ function App() {
     );
   }
 
-  const PageComponent = PAGE_MAP[activePage] || AnalyticsDashboard;
-
   return (
     <div style={{ flex: 1 }}>
       <ToastProvider>
@@ -107,15 +80,18 @@ function App() {
           onReset={() => setRetryNonce(n => n + 1)}
           onHome={() => { setActivePage('dashboard'); setRetryNonce(n => n + 1); }}
         >
-          <PageComponent
-            activePage={activePage}
-            setActivePage={setActivePage}
+          {/* AnalyticsDashboard is the persistent application shell: sidebar,
+              global header, and the page area for every route — including the
+              dashboard itself. Deep links always render inside the shell. */}
+          <AnalyticsDashboard
             currentUser={currentUser}
             onLogout={() => {
               setAuthToken(null);
               setCurrentUser(null);
               setActivePage('dashboard');
             }}
+            activePage={activePage}
+            setActivePage={setActivePage}
           />
         </ErrorBoundary>
       </ToastProvider>

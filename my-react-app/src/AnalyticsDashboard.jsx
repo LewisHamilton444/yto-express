@@ -13,23 +13,10 @@ import './AnalyticsDashboard.css';
 import Tooltip from './components/ui/Tooltip';
 import yto_logo from './yto_express_logo.png';
 
-import ProcessSellerInformation         from "./ProcessSellerInformation";
-import ViewSeller                        from "./ViewSeller";
-import ManageParcels                     from "./ManageParcels";
-import ProcessRiderInformation           from "./ProcessRiderInformation";
-import MonitorRiderStatus                from "./MonitorRiderStatus";
-import GenerateRiderDataReport           from "./GenerateRiderDataReport";
-import ManageParcelLocation              from "./ManageParcelLocation";
-import MonitorParcel                     from "./MonitorParcel";
-import GenerateTrackingInformation       from "./GenerateTrackingInformation";
-import Settings                          from "./Settings";
-import Logout                            from "./Logout";
-import ManageAccounts                    from "./ManageAccounts";
-import HubParcelReceiving                from "./HubParcelReceiving";
-import CustomerList                      from "./CustomerList";
-import ActivityLog                       from "./ActivityLog";
-import AppNotifications                  from "./AppNotifications";
-import ManageIssues                      from "./ManageIssues";
+// Page components come from the single registry in pageMap.js — the same map
+// App.jsx uses for hash validation — so there is exactly one key -> component
+// source of truth for the whole portal.
+import { PAGE_MAP } from './pageMap';
 import ConnectionHistoryChart             from "./ConnectionHistoryChart";
 import PeakAlertBanner                   from "./PeakAlertBanner";import GlobalHeader from "./GlobalHeader";
 import TableSkeleton from "./components/ui/TableSkeleton";
@@ -351,13 +338,18 @@ const DashboardEmptyState = (props) => {
   );
 };
 
-export default function AnalyticsDashboard({ onLogout, currentUser }) {
+export default function AnalyticsDashboard({ onLogout, currentUser, activePage = 'dashboard', setActivePage }) {
   // NOTE: the old dateRange select (Today/7/30) was removed — its state was
   // never read by any computation, so the control changed nothing on screen
   // (ghost UI). If a real date filter is wanted later, wire it into
   // buildLast7Days/buildLastNWeeks first, then reintroduce the select.
   const [volumeView, setVolumeView]         = useState('daily');
-  const [activeMenuItem, setActiveMenuItem] = useState('dashboard');
+  // Single routing authority: the active page lives in App.jsx (hash-synced,
+  // deep-linkable). This shell renders whatever page is active and forwards
+  // navigation requests up through setActivePage. The historical names are
+  // kept so the sidebar/header/Logout call sites read unchanged.
+  const activeMenuItem = activePage;
+  const setActiveMenuItem = setActivePage || (() => {});
   const [openSection, setOpenSection]       = useState(null);
 
   // Collapsible sidebar: remembered per-browser, defaults to expanded.
@@ -614,42 +606,33 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
   const activityLabels = activityRiders.map(r => (r.riderName || 'Rider').split(' ')[0]);
   const maxActivity     = Math.max(1, ...activityVals);
 
+  // Per-page prop contracts. Every page gets currentUser from the common base
+  // below; this adds only the extras. key -> component lives in pageMap.js,
+  // key -> extra props lives here — one registry each, no duplicated switch.
+  const pagePropsFor = (key) => ({
+    'process-seller': { pendingSellers, setPendingSellers, onNavigateToSettings: goToSettings },
+    'process-rider':  { pendingRiders,  setPendingRiders,  onNavigateToSettings: goToSettings },
+    'tracking-info':  { reports: trackingReports, onReportsChange: setTrackingReports },
+    'settings':       { archivedReports },
+    'logout':         { setActivePage: setActiveMenuItem, onLogout, onCancel: () => setActiveMenuItem('dashboard') },
+  }[key] || {});
+
+  // One router: the active key comes from App.jsx (hash-synced), the component
+  // from PAGE_MAP. Pages hidden for the current role render nothing — the same
+  // visibility rule the sidebar applies, now also enforced for deep links and
+  // header navigation. Logout is reachable from the header, not the sidebar,
+  // so it is exempt from the sidebar-visibility gate. The manage-accounts and
+  // hub-parcels role checks the old switch carried inline are subsumed by the
+  // gate: those keys only exist in menus built for their roles.
   const renderPage = () => {
-    switch (activeMenuItem) {
-      case 'process-seller':
-        return (
-          <ProcessSellerInformation
-            pendingSellers={pendingSellers}
-            setPendingSellers={setPendingSellers}
-            onNavigateToSettings={goToSettings}
-          />
-        );
-      case 'seller-report':       return <ViewSeller currentUser={currentUser} />;
-      case 'manage-parcels':      return <ManageParcels currentUser={currentUser} />;
-      case 'customer-list':       return <CustomerList currentUser={currentUser} />;
-      case 'app-notifications':  return <AppNotifications currentUser={currentUser} />;
-      case 'activity-log':        return <ActivityLog currentUser={currentUser} />;
-      case 'manage-issues':       return <ManageIssues currentUser={currentUser} />;
-      case 'process-rider':
-        return (
-          <ProcessRiderInformation
-            pendingRiders={pendingRiders}
-            setPendingRiders={setPendingRiders}
-            onNavigateToSettings={goToSettings}
-            currentUser={currentUser}
-          />
-        );
-      case 'monitor-rider':       return <MonitorRiderStatus currentUser={currentUser} />;
-      case 'rider-report':        return <GenerateRiderDataReport currentUser={currentUser} />;
-      case 'parcel-location':     return <ManageParcelLocation currentUser={currentUser} />;
-      case 'geofence':            return <MonitorParcel currentUser={currentUser} />;
-      case 'tracking-info':       return <GenerateTrackingInformation reports={trackingReports} onReportsChange={setTrackingReports} currentUser={currentUser} />;
-      case 'settings':            return <Settings currentUser={currentUser} archivedReports={archivedReports} />;
-      case 'manage-accounts':     return isSuperAdmin ? <ManageAccounts currentUser={currentUser} /> : null;
-      case 'hub-parcels':         return currentUser?.role === 'hub_receiver' ? <HubParcelReceiving currentUser={currentUser} /> : null;
-      case 'logout':              return <Logout setActivePage={setActiveMenuItem} onLogout={onLogout} onCancel={() => setActiveMenuItem('dashboard')} />;
-      default:                    return null;
-    }
+    const key = activeMenuItem;
+    if (key === 'dashboard' || !PAGE_MAP[key]) return null;
+    const visible = key === 'logout' || visibleMenuItems.some(
+      (item) => item.key === key || item.children?.some((c) => c.key === key),
+    );
+    if (!visible) return null;
+    const PageComponent = PAGE_MAP[key];
+    return <PageComponent currentUser={currentUser} {...pagePropsFor(key)} />;
   };
 
   return (
