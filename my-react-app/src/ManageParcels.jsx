@@ -130,11 +130,17 @@ function normalizeParcel(raw, riderNameById) {
     // the Parcel schema).
     sender: { name: raw.senderName || 'Unknown', phone: raw.senderPhone || '—', email: raw.senderEmail || '—' },
     receiver: { name: raw.receiverName || 'Unknown', phone: raw.receiverPhone || '—', email: raw.recipientEmail || '—' },
+    pickupAddress: raw.origin || '—',
+    deliveryAddress: raw.destination || raw.address || raw.origin || 'Unknown',
     address: raw.destination || raw.origin || 'Unknown',
     city,
     weight: raw.weight || '—',
     dimensions: dims,
     contents: raw.item || '—',
+    productName: raw.item || '—',
+    category: raw.packageCategory || '—',
+    quantity: raw.packageCount ? `${raw.packageCount} pc(s)` : '1 pc',
+    packagePhoto: raw.packagePhoto || '',
     value: raw.value || '—',
     // Service tier: packageType is the bridge-synced mobile package.type
     // (Standard/Express); serviceType remains the legacy web-created field.
@@ -195,10 +201,10 @@ function normalizeParcel(raw, riderNameById) {
 
 // ── Export helpers (CSV via Blob download, PDF via print window — no extra deps) ──
 
-const EXPORT_COLUMNS = ['Parcel ID', 'Sender', 'Receiver', 'Delivery Address', 'Weight', 'Service', 'Assigned Rider', 'Date Created', 'Status'];
+const EXPORT_COLUMNS = ['Tracking ID', 'Sender', 'Receiver', 'Pickup Address', 'Delivery Address', 'Weight', 'Service', 'Assigned Rider', 'Date Created', 'Status'];
 
 function rowValues(p) {
-  return [p.id, p.sender.name, p.receiver.name, p.address, p.weight, p.service, p.assignedRider || 'Unassigned', fmtDate(p.registeredDate), p.status];
+  return [p.id, p.sender.name, p.receiver.name, p.pickupAddress, p.deliveryAddress || p.address, p.weight, p.service, p.assignedRider || 'Unassigned', fmtDate(p.registeredDate), p.status];
 }
 
 function exportCSV(rows) {
@@ -382,11 +388,11 @@ function ParcelModal({ parcel, onClose, allParcels }) {
 
   const handleExport = () => {
     if (exportFmt === 'csv') {
-      const content = `Parcel ID,Timestamp,Event,Location\n${parcel.timeline.map((e) => `${parcel.id},"${e.timestamp}","${e.label}","${e.location}"`).join('\n')}`;
+      const content = `Tracking ID,Timestamp,Event,Location\n${parcel.timeline.map((e) => `${parcel.id},"${e.timestamp}","${e.label}","${e.location}"`).join('\n')}`;
       const blob = new Blob([content], { type: 'text/csv' });
       const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `report-${parcel.id}.csv`; a.click();
     } else if (exportFmt === 'txt') {
-      const content = `DELIVERY STATUS REPORT\n${reportDate}\n\nParcel ID: ${parcel.id}\nTracking: ${parcel.trackingNumber}\nStatus: ${parcel.status}\n\nTIMELINE:\n${parcel.timeline.map((e) => `[${e.timestamp}] ${e.label} — ${e.location}`).join('\n')}`;
+      const content = `DELIVERY STATUS REPORT\n${reportDate}\n\nTracking ID: ${parcel.id}\nTracking: ${parcel.trackingNumber}\nStatus: ${parcel.status}\n\nTIMELINE:\n${parcel.timeline.map((e) => `[${e.timestamp}] ${e.label} — ${e.location}`).join('\n')}`;
       const blob = new Blob([content], { type: 'text/plain' });
       const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `report-${parcel.id}.txt`; a.click();
     } else {
@@ -397,7 +403,7 @@ function ParcelModal({ parcel, onClose, allParcels }) {
   const handlePrint = () => {
     const w = window.open('', '_blank');
     if (!w) return;
-    w.document.write(`<html><head><title>Delivery Report</title><style>body{font-family:Arial,sans-serif;margin:20px}h1{color:#390955}table{width:100%;border-collapse:collapse}th,td{border:1px solid #e5e7eb;padding:10px;text-align:left}th{background:#f0eaf8}</style></head><body><h1>Delivery Status Report</h1><p>${escHtml(reportId)} · ${escHtml(reportDate)}</p><p><strong>Parcel:</strong> ${escHtml(parcel.id)} | <strong>Tracking:</strong> ${escHtml(parcel.trackingNumber)} | <strong>Status:</strong> ${escHtml(parcel.status)}</p><h3>Parcel Details</h3><p>Recipient: ${escHtml(parcel.receiver.name)}<br>Sender: ${escHtml(parcel.sender.name)}<br>Address: ${escHtml(parcel.address)}<br>Weight: ${escHtml(parcel.weight)} | Value: ${escHtml(parcel.value)} | Service: ${escHtml(parcel.service)}</p><h3>Delivery Timeline</h3><table><tr><th>Timestamp</th><th>Event</th><th>Location</th></tr>${parcel.timeline.map((e) => `<tr><td>${escHtml(e.timestamp)}</td><td>${escHtml(e.label)}</td><td>${escHtml(e.location)}</td></tr>`).join('')}</table><script>window.print();</script></body></html>`);
+    w.document.write(`<html><head><title>Delivery Report</title><style>body{font-family:Arial,sans-serif;margin:20px}h1{color:#390955}table{width:100%;border-collapse:collapse}th,td{border:1px solid #e5e7eb;padding:10px;text-align:left}th{background:#f0eaf8}</style></head><body><h1>Delivery Status Report</h1><p>${escHtml(reportId)} · ${escHtml(reportDate)}</p><p><strong>Parcel:</strong> ${escHtml(parcel.id)} | <strong>Tracking:</strong> ${escHtml(parcel.trackingNumber)} | <strong>Status:</strong> ${escHtml(parcel.status)}</p><h3>Parcel Details</h3><p>Recipient: ${escHtml(parcel.receiver.name)}<br>Sender: ${escHtml(parcel.sender.name)}<br>Pickup Address: ${escHtml(parcel.pickupAddress)}<br>Delivery Address: ${escHtml(parcel.deliveryAddress || parcel.address)}<br>Weight: ${escHtml(parcel.weight)} | Value: ${escHtml(parcel.value)} | Service: ${escHtml(parcel.service)}</p><h3>Delivery Timeline</h3><table><tr><th>Timestamp</th><th>Event</th><th>Location</th></tr>${parcel.timeline.map((e) => `<tr><td>${escHtml(e.timestamp)}</td><td>${escHtml(e.label)}</td><td>${escHtml(e.location)}</td></tr>`).join('')}</table><script>window.print();</script></body></html>`);
     w.document.close();
   };
 
@@ -446,27 +452,48 @@ function ParcelModal({ parcel, onClose, allParcels }) {
           {activeTab === 'details' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                {[{ label: 'From', name: parcel.sender.name, sub: parcel.sender.phone }, { label: 'To', name: parcel.receiver.name, sub: parcel.receiver.phone }].map(({ label, name, sub }) => (
+                {[
+                  { label: 'From (Sender)', name: parcel.sender.name, phone: parcel.sender.phone, email: parcel.sender.email },
+                  { label: 'To (Recipient)', name: parcel.receiver.name, phone: parcel.receiver.phone, email: parcel.receiver.email }
+                ].map(({ label, name, phone, email }) => (
                   <div key={label} style={{ background: '#faf8ff', border: '1.5px solid #ebe4f5', borderRadius: 10, padding: '14px 15px' }}>
                     <div style={{ fontSize: 10, fontWeight: 700, color: '#aaa', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>{label}</div>
                     <div style={{ fontSize: 13, fontWeight: 700, color: '#1a1a1a' }}>{name}</div>
-                    {sub && <div style={{ fontSize: 11, color: '#888', marginTop: 3, fontFamily: 'monospace' }}>{sub}</div>}
+                    {phone && <div style={{ fontSize: 11, color: '#888', marginTop: 3, fontFamily: 'monospace' }}>Phone: {phone}</div>}
+                    {email && email !== '—' && <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>Email: {email}</div>}
                   </div>
                 ))}
               </div>
 
-              <div style={{ background: '#faf8ff', border: '1.5px solid #ebe4f5', borderRadius: 10, padding: '14px 15px', display: 'flex', gap: 11, alignItems: 'flex-start' }}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="#390955" strokeWidth="2" width="15" height="15" style={{ flexShrink: 0, marginTop: 2 }}><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" /><circle cx="12" cy="10" r="3" /></svg>
-                <div>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: '#aaa', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Delivery Address</div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: '#1a1a1a' }}>{parcel.address}</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div style={{ background: '#faf8ff', border: '1.5px solid #ebe4f5', borderRadius: 10, padding: '14px 15px', display: 'flex', gap: 11, alignItems: 'flex-start' }}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="#390955" strokeWidth="2" width="15" height="15" style={{ flexShrink: 0, marginTop: 2 }}><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2"/></svg>
+                  <div>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: '#aaa', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Pickup Address</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: '#1a1a1a' }}>{parcel.pickupAddress}</div>
+                  </div>
+                </div>
+
+                <div style={{ background: '#faf8ff', border: '1.5px solid #ebe4f5', borderRadius: 10, padding: '14px 15px', display: 'flex', gap: 11, alignItems: 'flex-start' }}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="#390955" strokeWidth="2" width="15" height="15" style={{ flexShrink: 0, marginTop: 2 }}><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" /><circle cx="12" cy="10" r="3" /></svg>
+                  <div>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: '#aaa', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Delivery Address</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: '#1a1a1a' }}>{parcel.deliveryAddress || parcel.address}</div>
+                  </div>
                 </div>
               </div>
 
               <div>
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#390955', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10 }}>Package Details</div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#390955', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10 }}>Product &amp; Package Specifications</div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
-                  {[['Weight', parcel.weight], ['Dimensions', parcel.dimensions], ['Value', parcel.value], ['Contents', parcel.contents], ['Email', parcel.sender.email], ['Assigned Rider', parcel.assignedRider || 'Unassigned'], ['Date Created', fmtDate(parcel.registeredDate)], ['Est. Delivery', parcel.estimatedDelivery], ['Delivered On', parcel.actualDelivery || '—'], ['Service', parcel.service], ['Delivery Fee', parcel.deliveryFee || '—'], ['Payment', parcel.paymentMode !== '—' ? `${parcel.paymentMode}${parcel.codAmount !== '—' ? ` · COD ${parcel.codAmount}` : ''}` : '—']].map(([l, v]) => (
+                  {[
+                    ['Product Name', parcel.productName || parcel.contents],
+                    ['Product Category', parcel.category],
+                    ['Quantity', parcel.quantity],
+                    ['Dimensions', parcel.dimensions],
+                    ['Weight', parcel.weight],
+                    ['Declared Value', parcel.value],
+                  ].map(([l, v]) => (
                     <div key={l} style={{ background: 'white', border: '1px solid #ebe4f5', borderRadius: 8, padding: '10px 12px' }}>
                       <div style={{ fontSize: 10, color: '#aaa', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 3 }}>{l}</div>
                       <div style={{ fontSize: 12, fontWeight: 700, color: '#1a1a1a', wordBreak: 'break-all' }}>{v}</div>
@@ -475,10 +502,46 @@ function ParcelModal({ parcel, onClose, allParcels }) {
                 </div>
               </div>
 
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#390955', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10 }}>Service &amp; Payment</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+                  {[
+                    ['Service Level', parcel.service],
+                    ['Payment Mode', parcel.paymentMode],
+                    ['COD Amount', parcel.codAmount !== '—' ? parcel.codAmount : '—'],
+                    ['Computed Shipment Price', parcel.deliveryFee || '—'],
+                    ['Assigned Rider', parcel.assignedRider || 'Unassigned'],
+                    ['Date Created', fmtDate(parcel.registeredDate)],
+                    ['Est. Delivery', parcel.estimatedDelivery],
+                    ['Delivered On', parcel.actualDelivery || '—'],
+                    ['Recipient Email', parcel.receiver.email],
+                  ].map(([l, v]) => (
+                    <div key={l} style={{ background: 'white', border: '1px solid #ebe4f5', borderRadius: 8, padding: '10px 12px' }}>
+                      <div style={{ fontSize: 10, color: '#aaa', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 3 }}>{l}</div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: '#1a1a1a', wordBreak: 'break-all' }}>{v}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ background: '#faf8ff', border: '1.5px solid #ebe4f5', borderRadius: 10, padding: '14px 15px' }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#aaa', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>Product Photo</div>
+                {parcel.packagePhoto ? (
+                  <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                    <img src={parcel.packagePhoto} alt="Product" style={{ width: 80, height: 80, objectFit: 'cover', borderRadius: 8, border: '1px solid #ddd0f8' }} />
+                    <span style={{ fontSize: 12, color: '#555' }}>Attached parcel image</span>
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 12, color: '#888', fontStyle: 'italic' }}>
+                    No product photo attached during package booking.
+                  </div>
+                )}
+              </div>
+
               <div style={{ display: 'flex', gap: 11, alignItems: 'flex-start', background: '#f5f0ff', border: '1.5px solid #ddd0f8', borderRadius: 10, padding: '13px 15px' }}>
                 <svg viewBox="0 0 24 24" fill="none" stroke="#390955" strokeWidth="2" width="15" height="15" style={{ flexShrink: 0, marginTop: 1 }}><circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" /></svg>
                 <div>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: '#390955', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Special Instructions</div>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: '#390955', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Special Instructions / Shipping Notes</div>
                   <div style={{ fontSize: 12, fontWeight: 600, color: '#390955' }}>{parcel.instructions}</div>
                 </div>
               </div>
@@ -715,7 +778,7 @@ function AssignRiderButton({ parcel, riders, onAssign }) {
 
 // ── Main Component ──────────────────────────────────────────────────────────
 
-export default function ManageParcels({ currentUser }) {
+export default function ManageParcels() {
   const [parcels, setParcels]           = useState([]);
   const [riders, setRiders]             = useState([]); // [{ riderId, riderName }] from GET /api/riders
   const [loading, setLoading]           = useState(true);
@@ -775,6 +838,7 @@ export default function ManageParcels({ currentUser }) {
         p.id.toLowerCase().includes(q) ||
         p.sender.name.toLowerCase().includes(q) ||
         p.receiver.name.toLowerCase().includes(q) ||
+        (p.pickupAddress && p.pickupAddress.toLowerCase().includes(q)) ||
         p.address.toLowerCase().includes(q) ||
         (p.assignedRider && p.assignedRider.toLowerCase().includes(q))
       );
@@ -803,7 +867,7 @@ export default function ManageParcels({ currentUser }) {
     }
   };
 
-  const COLS = ['Parcel ID', 'Sender', 'Receiver', 'Delivery Address', 'Weight', 'Assigned Rider', 'Status'];
+  const COLS = ['Tracking ID', 'Sender', 'Receiver', 'Pickup Address', 'Delivery Address', 'Weight', 'Assigned Rider', 'Status'];
 
   return (
     <div style={{ flex: 1, overflowY: 'auto', backgroundColor: '#f9f7ff', fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" }}>
@@ -888,7 +952,8 @@ export default function ManageParcels({ currentUser }) {
                     <td style={{ padding: '12px 16px', fontFamily: 'monospace', color: '#390955', fontWeight: 700, whiteSpace: 'nowrap', borderBottom: '1px solid #f3f0f8' }}>{p.id}</td>
                     <td style={{ padding: '12px 16px', color: '#1a1a1a', fontWeight: 600, whiteSpace: 'nowrap', borderBottom: '1px solid #f3f0f8' }}>{p.sender.name}</td>
                     <td style={{ padding: '12px 16px', color: '#374151', whiteSpace: 'nowrap', borderBottom: '1px solid #f3f0f8' }}>{p.receiver.name}</td>
-                    <td style={{ padding: '12px 16px', color: '#666', borderBottom: '1px solid #f3f0f8', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.address}</td>
+                    <td style={{ padding: '12px 16px', color: '#666', borderBottom: '1px solid #f3f0f8', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.pickupAddress}</td>
+                    <td style={{ padding: '12px 16px', color: '#666', borderBottom: '1px solid #f3f0f8', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.deliveryAddress || p.address}</td>
                     <td style={{ padding: '12px 16px', color: '#374151', whiteSpace: 'nowrap', borderBottom: '1px solid #f3f0f8', textAlign: 'center' }}>{p.weight}</td>
                     <td style={{ padding: '12px 16px', whiteSpace: 'nowrap', borderBottom: '1px solid #f3f0f8' }}>
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: p.assignedRider ? '#1a1a1a' : '#bbb', fontWeight: 600, fontSize: 12 }}>
@@ -899,10 +964,10 @@ export default function ManageParcels({ currentUser }) {
                     <td style={{ padding: '12px 16px', whiteSpace: 'nowrap', borderBottom: '1px solid #f3f0f8' }}><StatusBadge status={p.status} /></td>
                     <td style={{ padding: '12px 16px', textAlign: 'center', borderBottom: '1px solid #f3f0f8' }}>
                       <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                        <button onClick={() => setViewParcel(p)} className="mp-view-btn" title="View"
+                        <button onClick={() => setViewParcel(p)} className="mp-view-btn" title="View Details"
                           style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 14px', borderRadius: 6, border: '1.5px solid #390955', background: 'white', color: '#390955', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="11" height="11"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>
-                          View
+                          View Details
                         </button>
                         <AssignRiderButton parcel={p} riders={riders} onAssign={handleAssignRider} />
                       </div>

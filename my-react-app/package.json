@@ -4,7 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "node scripts/dev.cjs",
+    "dev:web": "vite",
     "dev:server": "npm --prefix server start",
     "dev:all": "node scripts/dev.cjs",
     "start": "node scripts/dev.cjs",

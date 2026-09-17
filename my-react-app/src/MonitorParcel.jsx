@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import LiveRiderMap from './LiveRiderMap';
 import { CITY_COORDS } from './luzonCityCoords';
-import { ridersApi, parcelsApi } from './services/api';
+import { ridersApi, parcelsApi, parcelLocationsApi } from './services/api';
+import useSSE from './services/useSSE';
 import { VehicleIcon } from './components/ui/vehicleIcons';
 import Tooltip from './components/ui/Tooltip';
 import { Package, RefreshCw } from 'lucide-react';
@@ -12,9 +13,22 @@ export default function MonitorGeofenceBoundary() {
   const [alertFilter,   setAlertFilter]   = useState('All');
   const [lastUpdated,   setLastUpdated]   = useState('');
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
-      const [rData, pData] = await Promise.all([ridersApi.list(), parcelsApi.list()]);
+      const [rData, pData, locData] = await Promise.all([
+        ridersApi.list(),
+        parcelsApi.list(),
+        parcelLocationsApi.list().catch(() => []),
+      ]);
+
+      const locMap = {};
+      (Array.isArray(locData) ? locData : []).forEach(loc => {
+        const lat = parseFloat(loc.lat);
+        const lng = parseFloat(loc.lng);
+        if (loc.parcelId && Number.isFinite(lat) && Number.isFinite(lng) && !(lat === 0 && lng === 0)) {
+          locMap[loc.parcelId.toUpperCase()] = { lat, lng };
+        }
+      });
 
       // Only active riders
       const activeRiders = (Array.isArray(rData) ? rData : [])
@@ -42,34 +56,59 @@ export default function MonitorGeofenceBoundary() {
           };
         });
 
-      // Only active parcels
+      // Only active parcels with real coordinates prioritization
       const activeParcels = (Array.isArray(pData) ? pData : [])
-        .filter(p => p.status!=='delivered'&&p.status!=='returned'&&p.status!=='failed')
+        .filter(p => !['delivered', 'returned', 'failed'].includes(String(p.status || '').toLowerCase()))
         .map((p, i) => {
-          const destCoords = CITY_COORDS[p.destination];
-          const origCoords = CITY_COORDS[p.origin];
+          const tn = (p.trackingNumber || p.trackingId || '').toUpperCase();
+          const fix = locMap[tn];
+          const center = p.trackingGeofence?.center;
+          let lat, lng;
+          if (fix) {
+            lat = fix.lat;
+            lng = fix.lng;
+          } else if (center && Number.isFinite(center.lat) && Number.isFinite(center.lng)) {
+            lat = center.lat;
+            lng = center.lng;
+          } else if (Number.isFinite(p.riderLat) && Number.isFinite(p.riderLng) && !(p.riderLat === 0 && p.riderLng === 0)) {
+            lat = p.riderLat;
+            lng = p.riderLng;
+          } else {
+            const destCoords = CITY_COORDS[p.destination];
+            const origCoords = CITY_COORDS[p.origin];
+            lat = destCoords ? destCoords.lat+(i*0.002) : origCoords ? origCoords.lat+(i*0.002) : 14.58+(i*0.006);
+            lng = destCoords ? destCoords.lng+(i*0.002) : origCoords ? origCoords.lng+(i*0.002) : 121.01+(i*0.006);
+          }
           return {
             ...p,
-            lat: destCoords ? destCoords.lat+(i*0.002) : origCoords ? origCoords.lat+(i*0.002) : 14.58+(i*0.006),
-            lng: destCoords ? destCoords.lng+(i*0.002) : origCoords ? origCoords.lng+(i*0.002) : 121.01+(i*0.006),
+            lat,
+            lng,
           };
         });
 
       setRiders(activeRiders);
       setParcels(activeParcels);
     } catch(err) {
-      console.error('Error fetching:', err);
+      console.error('Error fetching geofence data:', err);
       setRiders([]); setParcels([]);
     } finally {
       setLastUpdated(new Date().toLocaleTimeString());
     }
-  };
+  }, []);
+
+  const { on } = useSSE();
+  useEffect(() => {
+    const unsub1 = on('location-synced', () => fetchData());
+    const unsub2 = on('parcel-synced',   () => fetchData());
+    const unsub3 = on('parcel-updated',  () => fetchData());
+    return () => { unsub1(); unsub2(); unsub3(); };
+  }, [on, fetchData]);
 
   useEffect(() => {
     fetchData();
     const interval = setInterval(fetchData, 15000);
     return () => clearInterval(interval);
-  }, []);
+  }, [fetchData]);
 
   const alertTypes=['All','Entry','Exit','Breach','Overspeed'];
   const alerts = riders.slice(0,5).map((r,i)=>({

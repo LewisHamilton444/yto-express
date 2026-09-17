@@ -79,6 +79,12 @@ function App() {
     return () => window.removeEventListener('yto:auth_expired', onAuthExpired);
   }, []);
 
+  useEffect(() => {
+    if (currentUser && (window.location.hash || '').replace(/^#\/?/, '') !== activePage) {
+      window.location.hash = `#/${activePage}`;
+    }
+  }, [activePage, currentUser]);
+
   // Not logged in -> show login page
   if (!currentUser) {
     return (
@@ -90,12 +96,6 @@ function App() {
       />
     );
   }
-
-  useEffect(() => {
-    if ((window.location.hash || '').replace(/^#\/?/, '') !== activePage) {
-      window.location.hash = `#/${activePage}`;
-    }
-  }, [activePage]);
 
   const PageComponent = PAGE_MAP[activePage] || AnalyticsDashboard;
 

@@ -18,43 +18,78 @@ const Rider = require('./models/Rider');
 const Parcel = require('./models/Parcel');
 const Issue = require('./models/Issue');
 
-// No preserved accounts — the platform is single-realm (REAL) since the
-// 2026-09-13 de-demo migration; this script wipes all operational data.
+const AdminNotification = require('./models/AdminNotification');
+const Account = require('./models/Account');
+
+// Preserve official demo accounts (seller@gmail.com, customer@gmail.com, rider@gmail.com)
+const OFFICIAL_DEMO_EMAILS = [
+  'seller@gmail.com',
+  'customer@gmail.com',
+  'rider@gmail.com',
+];
 
 async function cleanWebDatabase() {
   try {
     await mongoose.connect(MONGO_URI);
     console.log('Connected to Web MongoDB.');
 
-    // Delete customers
-    const delCust = await Customer.deleteMany({});
-    console.log(`Deleted ${delCust.deletedCount} customers.`);
+    // 1. Purge duplicate test/demo admin accounts and safeguard canonical Admin accounts
+    await Account.deleteMany({ email: { $in: ['superadmin@gmail.com', 'staff@gmail.com', 'hub@gmail.com'] } });
+    const adminCount = await Account.countDocuments();
+    const adminEmails = await Account.find({}).select('email role adminId').lean();
+    console.log(`[PRESERVED] Admin accounts count: ${adminCount}`, adminEmails.map(a => `${a.email} (${a.role}) [${a.adminId || 'no-id'}]`));
 
-    // Delete sellers
-    const delSell = await Seller.deleteMany({});
-    console.log(`Deleted ${delSell.deletedCount} sellers.`);
+    // 2. Delete non-official customers
+    const delCust = await Customer.deleteMany({ email: { $nin: OFFICIAL_DEMO_EMAILS } });
+    console.log(`Deleted ${delCust.deletedCount} temporary/test customers.`);
 
-    // Delete riders
-    const delRide = await Rider.deleteMany({});
-    console.log(`Deleted ${delRide.deletedCount} riders.`);
+    // 3. Delete non-official sellers
+    const delSell = await Seller.deleteMany({ email: { $nin: OFFICIAL_DEMO_EMAILS } });
+    console.log(`Deleted ${delSell.deletedCount} temporary/test sellers.`);
 
-    // Delete test parcels generated during automated testing (with test / e2e / dummy tracking)
+    // 4. Delete non-official riders
+    const delRide = await Rider.deleteMany({ email: { $nin: OFFICIAL_DEMO_EMAILS } });
+    console.log(`Deleted ${delRide.deletedCount} temporary/test riders.`);
+
+    // 5. Delete test parcels generated during automated testing
     const delParcels = await Parcel.deleteMany({
       $or: [
         { trackingNumber: { $regex: /TEST|E2E|DUMMY/i } },
-        { senderName: { $regex: /Bridge Test|E2E/i } }
+        { senderName: { $regex: /Bridge Test|E2E/i } },
+        { senderEmail: { $nin: OFFICIAL_DEMO_EMAILS } },
+        { recipientEmail: { $nin: OFFICIAL_DEMO_EMAILS } },
       ]
     });
     console.log(`Deleted ${delParcels.deletedCount} temporary test parcels.`);
 
-    // Delete test issues
+    // 6. Delete test issues
     const delIssues = await Issue.deleteMany({
       $or: [
         { trackingNumber: { $regex: /TEST|E2E|DUMMY/i } },
-        { reporterEmail: { $regex: /test|e2e|example/i } }
+        { reporterEmail: { $nin: OFFICIAL_DEMO_EMAILS } }
       ]
     });
     console.log(`Deleted ${delIssues.deletedCount} temporary test issues.`);
+
+    // 7. Delete test AdminNotifications
+    const delNotifs = await AdminNotification.deleteMany({
+      $or: [
+        { message: { $regex: /test\.seller|test\.rider|test\.cust|regd\.cust|uat_customer/i } },
+        { relatedId: { $regex: /YTOMU0OSUU0QUI8|YTOMU0OHY0G96FF|TICK-2026/i } },
+      ]
+    });
+    console.log(`Deleted ${delNotifs.deletedCount} test admin notifications.`);
+
+    // 8. Log remaining collections
+    const remainingCust = await Customer.find({}).select('email customerId accountCategory').lean();
+    const remainingSell = await Seller.find({}).select('email registrationId accountCategory').lean();
+    const remainingRide = await Rider.find({}).select('email registrationId accountCategory').lean();
+    const remainingAdmins = await Account.find({}).select('email role accountCategory').lean();
+
+    console.log('REMAINING CUSTOMERS:', remainingCust);
+    console.log('REMAINING SELLERS:', remainingSell);
+    console.log('REMAINING RIDERS:', remainingRide);
+    console.log('REMAINING ADMINS:', remainingAdmins);
 
     console.log('Web database cleanup complete.');
   } catch (err) {

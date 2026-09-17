@@ -28,25 +28,14 @@ const s = {
 // SMS path stays dormant in the backend until that's affordable.
 const SendSMSModal = ({ item, credentials, message, onCancel, onConfirm, sending, sendError }) => {
   const [targetEmail, setTargetEmail] = useState(item?.email || '');
-  const [copied, setCopied] = useState(false);
 
   if (!item) return null;
-
-  const handleCopyPassword = async () => {
-    try {
-      await navigator.clipboard.writeText(credentials.password);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      console.error('Clipboard copy failed:', err);
-    }
-  };
 
   return (
     <Modal onBackdropClick={onCancel} blur={false} tint="rgba(26,6,40,0.5)" zIndex={2100} maxWidth={460} padding={0} cardStyle={{ borderRadius: 12, overflow: 'hidden', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)', fontFamily: "'DM Sans', sans-serif" }}>
         <div style={s.header}>
-          <h3 style={s.title}>Approve &amp; Email Credentials</h3>
-          <p style={s.subtitle}>Confirm before emailing login details to {item.fullName}</p>
+          <h3 style={s.title}>Approve Account Registration</h3>
+          <p style={s.subtitle}>Confirm before activating account and notifying {item.fullName}</p>
         </div>
 
         <div style={s.body}>
@@ -63,28 +52,30 @@ const SendSMSModal = ({ item, credentials, message, onCancel, onConfirm, sending
 
           <div style={s.credGrid}>
             <div style={s.credCard}>
-              <span style={s.label}>Username</span>
-              <span style={s.credValue}>{credentials.username}</span>
+              <span style={s.label}>Applicant Name</span>
+              <span style={s.credValue}>{credentials.username || item.fullName}</span>
             </div>
             <div style={s.credCard}>
-              <span style={s.label}>Temp Password</span>
-              <span style={s.credValue}>{credentials.password}</span>
+              <span style={s.label}>Assigned Role</span>
+              <span style={s.credValue}>{credentials.role || 'Member'}</span>
             </div>
           </div>
 
+          <div style={{ ...s.credCard, borderStyle: 'solid', borderColor: '#d1fae5', background: '#ecfdf5', padding: '10px 14px' }}>
+            <span style={{ ...s.label, color: '#059669' }}>Password Security</span>
+            <span style={{ fontSize: '13px', fontWeight: 600, color: '#065f46' }}>
+              Encrypted · Created by applicant on mobile app during registration
+            </span>
+          </div>
+
           <div style={s.smsPreview}>
-            <span style={s.smsLabel}>Message Preview</span>
+            <span style={s.smsLabel}>Email Notice Preview</span>
             {message}
           </div>
 
           {sendError && (
             <div style={s.errorBox}>
               <span>{sendError}</span>
-              <div style={s.errorActions}>
-                <button style={s.btnCopy} onClick={handleCopyPassword}>
-                  {copied ? 'Copied!' : 'Copy Temp Password'}
-                </button>
-              </div>
             </div>
           )}
 
@@ -95,7 +86,7 @@ const SendSMSModal = ({ item, credentials, message, onCancel, onConfirm, sending
               onClick={() => onConfirm({ targetEmail: targetEmail.trim() })}
               disabled={sending || !targetEmail.trim()}
             >
-              {sending ? 'Sending…' : sendError ? 'Resend Email' : 'Approve & Send Email'}
+              {sending ? 'Approving…' : sendError ? 'Retry Notification' : 'Approve & Activate'}
             </button>
           </div>
         </div>

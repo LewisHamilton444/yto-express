@@ -673,6 +673,8 @@
 
 /* ============================================================
    RESPONSIVE
+   ============================================================ */
+
 /* Ultra-wide (QHD+): upscale the brand block + card so they keep
    presence at distance on large panels. */
 @media (min-width: 2000px) {
@@ -691,9 +693,6 @@
     font-size: 24px;
   }
 }
-
-
-   ============================================================ */
 
 /* Mid-size: tighten spacing, panel stays centered on the photo. */
 @media (max-width: 860px) {

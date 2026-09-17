@@ -4,46 +4,61 @@ import { normalizeSeller, formatStatusLabel, SELLER_STATUS } from './sellerRider
 import PaginationControls from './PaginationControls';
 import { exportToCSV, exportToExcel } from './exportUtils';
 import { apiFetch } from './services/api';
+import useSSE from './services/useSSE';
 import StatusBadge from './components/ui/StatusBadge';
 import { SELLER_STATUS_COLORS } from './components/ui/statusColors';
 import Modal from './components/ui/Modal';
 import { useToast } from './components/ui/useToast';
+import { isDemoEmail } from './demoUtils';
 
 const SELLER_EXPORT_COLUMNS = [
   { key: 'sellerId', label: 'Seller ID' },
+  { key: 'accountCategory', label: 'Category' },
   { key: 'fullName', label: 'Full Name' },
-  { key: 'email', label: 'Email' },
-  { key: 'phone', label: 'Phone' },
-  { key: 'paymentCycle', label: 'Payment Cycle' },
-  { key: 'commissionRate', label: 'Commission Rate (%)' },
+  { key: 'email', label: 'Email Address' },
+  { key: 'phone', label: 'Phone Number' },
+  { key: 'storeName', label: 'Store Name' },
+  { key: 'storeAddress', label: 'Store Address' },
   { key: 'status', label: 'Status' },
 ];
 
-const GenerateSellerReport = ({ currentUser }) => {
+const GenerateSellerReport = () => {
   // Sellers come from the live GET /api/sellers fetch below — the old
   // externalSellers/onUpdateSellers props fed a dashboard-held mock row
   // (removed with the de-demo migration).
   const [sellers, setSellers] = useState([]);
   const sellersRef = useRef(sellers);
   const [categoryFilter, setCategoryFilter] = useState('All');
+  const { on: onSSE } = useSSE();
+
+  const fetchSellers = async () => {
+    try {
+      const response = await apiFetch('/sellers');
+      if (!response.ok) throw new Error('Failed to fetch');
+      const data = await response.json();
+      const normalized = Array.isArray(data) ? data.map(normalizeSeller) : [];
+      setSellers(normalized);
+      sellersRef.current = normalized;
+    } catch (err) {
+      console.error("Error fetching sellers:", err);
+      setSellers([]);
+      sellersRef.current = [];
+    }
+  };
 
   useEffect(() => {
-    const fetchSellers = async () => {
-      try {
-        const response = await apiFetch('/sellers');
-        if (!response.ok) throw new Error('Failed to fetch');
-        const data = await response.json();
-        const normalized = Array.isArray(data) ? data.map(normalizeSeller) : [];
-        setSellers(normalized);
-        sellersRef.current = normalized;
-      } catch (err) {
-        console.error("Error fetching sellers:", err);
-        setSellers([]);
-        sellersRef.current = [];
-      }
-    };
     fetchSellers();
   }, []);
+
+  useEffect(() => {
+    if (!onSSE) return;
+    const unsub = onSSE('user-synced', (ev) => {
+      if (!ev || ev.role === 'seller') {
+        fetchSellers();
+      }
+    });
+    return () => { if (unsub) unsub(); };
+  }, [onSSE]);
 
   const applyUpdate = (next) => {
     sellersRef.current = next;
@@ -67,9 +82,12 @@ const GenerateSellerReport = ({ currentUser }) => {
     if (seller.status === SELLER_STATUS.ARCHIVED) return false;
     const matchesSearch =
       seller.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      seller.sellerId.toLowerCase().includes(searchTerm.toLowerCase());
+      seller.sellerId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (seller.storeName && seller.storeName.toLowerCase().includes(searchTerm.toLowerCase()));
     const matchesStatus = statusFilter === 'All' || seller.status === statusFilter;
-    return matchesSearch && matchesStatus;
+    const cat = seller.accountCategory || (isDemoEmail(seller.email) ? 'DEMO' : 'REAL');
+    const matchesCategory = categoryFilter === 'All' || cat === categoryFilter;
+    return matchesSearch && matchesStatus && matchesCategory;
   });
 
   const indexOfLastRecord  = currentPage * recordsPerPage;
@@ -79,8 +97,12 @@ const GenerateSellerReport = ({ currentUser }) => {
   const handleSearchChange       = (e) => { setSearchTerm(e.target.value);   setCurrentPage(1); };
   const handleStatusFilterChange = (e) => { setStatusFilter(e.target.value); setCurrentPage(1); };
 
-  const handleExportCSV = () => exportToCSV(filteredSellers, SELLER_EXPORT_COLUMNS, 'sellers-ledger');
-  const handleExportExcel = () => exportToExcel(filteredSellers, SELLER_EXPORT_COLUMNS, 'sellers-ledger');
+  const getExportData = () => filteredSellers.map(s => ({
+    ...s,
+    storeAddress: s.address?.street || s.address?.city || s.raw?.address || '—',
+  }));
+  const handleExportCSV = () => exportToCSV(getExportData(), SELLER_EXPORT_COLUMNS, 'sellers-ledger');
+  const handleExportExcel = () => exportToExcel(getExportData(), SELLER_EXPORT_COLUMNS, 'sellers-ledger');
 
   const formatTimelineDate = (dateStr) => {
     if (!dateStr) return '-';
@@ -127,6 +149,9 @@ const GenerateSellerReport = ({ currentUser }) => {
     try {
       const updateData = {
         fullName:   editingSeller.fullName,
+        storeName:  editingSeller.storeName,
+        warehouseAddress: editingSeller.warehouseAddress,
+        operatingHours: editingSeller.operatingHours,
         idType:     editingSeller.idType,
         idNumber:   editingSeller.governmentIdNumber,
         email:      editingSeller.email,
@@ -208,6 +233,14 @@ const GenerateSellerReport = ({ currentUser }) => {
               <input type="text" placeholder="Type to filter lookup..." style={s.formInput} value={searchTerm} onChange={handleSearchChange} />
             </div>
             <div>
+              <label style={{ fontSize: '11px', fontWeight: 700, color: '#a890c0', textTransform: 'uppercase', display: 'block', marginBottom: '6px' }}>Account Category</label>
+              <select style={s.formInput} value={categoryFilter} onChange={e => { setCategoryFilter(e.target.value); setCurrentPage(1); }}>
+                <option value="All">All Categories</option>
+                <option value="REAL">Real Sellers</option>
+                <option value="DEMO">Demo Sellers</option>
+              </select>
+            </div>
+            <div>
               <label style={{ fontSize: '11px', fontWeight: 700, color: '#a890c0', textTransform: 'uppercase', display: 'block', marginBottom: '6px' }}>Profile Lifecycle Status</label>
               <select style={s.formInput} value={statusFilter} onChange={handleStatusFilterChange}>
                 <option value="All">All Statuses</option>
@@ -237,9 +270,11 @@ const GenerateSellerReport = ({ currentUser }) => {
               <thead>
                 <tr>
                   <th style={s.th}>Seller ID</th>
+                  <th style={s.th}>Category</th>
                   <th style={s.th}>Full Name</th>
-                  <th style={s.th}>Contact Point (Email/Phone)</th>
-                  <th style={s.th}>Payment Cycle / Commission</th>
+                  <th style={s.th}>Email Address</th>
+                  <th style={s.th}>Phone Number</th>
+                  <th style={s.th}>Store Address</th>
                   <th style={s.th}>Status</th>
                   <th style={{ ...s.th, textAlign: 'right' }}>Actions</th>
                 </tr>
@@ -247,22 +282,41 @@ const GenerateSellerReport = ({ currentUser }) => {
               <tbody>
                 {currentRecords.length === 0 ? (
                   <tr>
-                    <td colSpan="7" style={{ ...s.td, textAlign: 'center', padding: '48px', color: '#a890c0', fontWeight: 500 }}>
+                    <td colSpan="8" style={{ ...s.td, textAlign: 'center', padding: '48px', color: '#a890c0', fontWeight: 500 }}>
                       No records match the current view.
                     </td>
                   </tr>
                 ) : (
-                  currentRecords.map((seller, idx) => (
+                  currentRecords.map((seller, idx) => {
+                    const isDemo = (seller.accountCategory || (isDemoEmail(seller.email) ? 'DEMO' : 'REAL')) === 'DEMO';
+                    return (
                       <tr key={seller._id || idx} style={{ background: idx % 2 === 0 ? 'white' : '#faf7fd' }}>
                         <td style={{ ...s.td, fontFamily: "'DM Mono', monospace", fontWeight: 600, fontSize: '12px' }}>{seller.sellerId}</td>
-                        <td style={{ ...s.td, fontWeight: 700 }}>{seller.fullName || '—'}</td>
                         <td style={s.td}>
-                          <div style={{ fontWeight: 500 }}>{seller.email}</div>
-                          <div style={{ fontSize: '11.5px', color: '#a890c0', marginTop: '2px' }}>{seller.phone}</div>
+                          <span style={{
+                            fontSize: '10px', fontWeight: 800, padding: '3px 8px', borderRadius: '6px',
+                            background: isDemo ? '#f3f4f6' : '#ecfdf5',
+                            color: isDemo ? '#6b7280' : '#059669',
+                            border: `1px solid ${isDemo ? '#d1d5db' : '#a7f3d0'}`,
+                            textTransform: 'uppercase',
+                          }}>
+                            {isDemo ? 'DEMO' : 'REAL'}
+                          </span>
+                        </td>
+                        <td style={{ ...s.td, fontWeight: 700 }}>
+                          <div>{seller.fullName || '—'}</div>
+                        </td>
+                        <td style={{ ...s.td, fontSize: '12px' }}>
+                          <div>{seller.email || '—'}</div>
+                        </td>
+                        <td style={{ ...s.td, fontSize: '12px' }}>
+                          <div>{seller.phone || '—'}</div>
                         </td>
                         <td style={s.td}>
-                          <div style={{ fontWeight: 600 }}>{seller.paymentCycle}</div>
-                          <div style={{ fontSize: '11.5px', color: '#a890c0', marginTop: '2px' }}>{seller.commissionRate}% commission</div>
+                          <div style={{ fontWeight: 600, color: '#390955' }}>{seller.storeName || seller.raw?.storeName || '—'}</div>
+                          <div style={{ fontSize: '11.5px', color: '#a890c0', marginTop: '2px' }}>
+                            {seller.address?.street || seller.address?.city || seller.raw?.address || '—'}
+                          </div>
                         </td>
                         <td style={s.td}>
                           <StatusBadge status={seller.status} label={formatStatusLabel(seller.status)} colorMap={SELLER_STATUS_COLORS} fallback="ACTIVE" />
@@ -278,7 +332,8 @@ const GenerateSellerReport = ({ currentUser }) => {
                           </div>
                         </td>
                       </tr>
-                  ))
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -300,12 +355,18 @@ const GenerateSellerReport = ({ currentUser }) => {
             <div style={{ background: '#390955', padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <h3 style={{ color: 'white', margin: 0, fontSize: '15px', fontWeight: 700 }}>{detailSeller.fullName || 'Seller'}</h3>
+                {(detailSeller.storeName || detailSeller.raw?.storeName) && (
+                  <div style={{ color: '#f37021', fontSize: '12px', fontWeight: 600, marginTop: '2px' }}>
+                    {detailSeller.storeName || detailSeller.raw?.storeName}
+                  </div>
+                )}
                 <p style={{ color: 'rgba(255,255,255,0.6)', margin: '2px 0 0', fontSize: '12px' }}>{detailSeller.sellerId}</p>
               </div>
               <button onClick={() => setDetailSeller(null)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', fontSize: '20px', lineHeight: 1 }}>&times;</button>
             </div>
             <div style={{ padding: '20px 24px 24px' }}>
               <div style={s.detailSection}>Identification</div>
+              <div style={s.detailRow}><span style={s.detailLabel}>Account Category</span><span style={{ ...s.detailValue, fontWeight: 800, color: (detailSeller.accountCategory || (isDemoEmail(detailSeller.email) ? 'DEMO' : 'REAL')) === 'DEMO' ? '#6b7280' : '#059669' }}>{detailSeller.accountCategory || (isDemoEmail(detailSeller.email) ? 'DEMO' : 'REAL')}</span></div>
               <div style={s.detailRow}><span style={s.detailLabel}>ID Type</span><span style={s.detailValue}>{detailSeller.idType}</span></div>
               <div style={s.detailRow}><span style={s.detailLabel}>Government ID No.</span><span style={s.detailValue}>{detailSeller.governmentIdNumber || '—'}</span></div>
 
@@ -337,11 +398,20 @@ const GenerateSellerReport = ({ currentUser }) => {
               {/* Details Tab */}
               {detailTab === 'details' && (
                 <>
-                  <div style={s.detailSection}>Bank & Payout</div>
-                  <div style={s.detailRow}><span style={s.detailLabel}>Bank Name</span><span style={s.detailValue}>{detailSeller.bankName || '—'}</span></div>
-                  <div style={s.detailRow}><span style={s.detailLabel}>Account Number</span><span style={s.detailValue}>{detailSeller.accountNumber || '—'}</span></div>
-                  <div style={s.detailRow}><span style={s.detailLabel}>Payment Cycle</span><span style={s.detailValue}>{detailSeller.paymentCycle}</span></div>
-                  <div style={s.detailRow}><span style={s.detailLabel}>Commission Rate</span><span style={s.detailValue}>{detailSeller.commissionRate}%</span></div>
+                  <div style={s.detailSection}>Store &amp; Operations</div>
+                  <div style={s.detailRow}><span style={s.detailLabel}>Store Name</span><span style={s.detailValue}>{detailSeller.storeName || detailSeller.raw?.storeName || 'Personal Merchant'}</span></div>
+                  <div style={s.detailRow}><span style={s.detailLabel}>Warehouse Address</span><span style={s.detailValue}>{detailSeller.warehouseAddress || detailSeller.raw?.warehouseAddress || '—'}</span></div>
+                  <div style={s.detailRow}><span style={s.detailLabel}>Operating Hours</span><span style={s.detailValue}>{detailSeller.operatingHours || detailSeller.raw?.operatingHours || '—'}</span></div>
+                  <div style={s.detailRow}><span style={s.detailLabel}>Registration Date</span><span style={s.detailValue}>{detailSeller.createdAt || detailSeller.raw?.createdAt ? formatTimelineDate(detailSeller.createdAt || detailSeller.raw?.createdAt) : '—'}</span></div>
+                  {detailSeller.bankName ? (
+                    <>
+                      <div style={s.detailSection}>Bank &amp; Payout</div>
+                      <div style={s.detailRow}><span style={s.detailLabel}>Bank Name</span><span style={s.detailValue}>{detailSeller.bankName}</span></div>
+                      <div style={s.detailRow}><span style={s.detailLabel}>Account Number</span><span style={s.detailValue}>{detailSeller.accountNumber || '—'}</span></div>
+                      <div style={s.detailRow}><span style={s.detailLabel}>Payment Cycle</span><span style={s.detailValue}>{detailSeller.paymentCycle || 'Weekly'}</span></div>
+                      <div style={s.detailRow}><span style={s.detailLabel}>Commission Rate</span><span style={s.detailValue}>{detailSeller.commissionRate ?? 0}%</span></div>
+                    </>
+                  ) : null}
                 </>
               )}
 
@@ -400,6 +470,18 @@ const GenerateSellerReport = ({ currentUser }) => {
                 <input type="text" required style={s.formInput} value={editingSeller.fullName || ''} onChange={e => setEditingSeller({ ...editingSeller, fullName: e.target.value })} />
               </div>
               <div>
+                <label style={{ fontSize: '11px', fontWeight: 700, color: '#a890c0', textTransform: 'uppercase', display: 'block', marginBottom: '6px' }}>Store / Business Name</label>
+                <input type="text" style={s.formInput} value={editingSeller.storeName || ''} onChange={e => setEditingSeller({ ...editingSeller, storeName: e.target.value })} placeholder="e.g. Acme Supplies" />
+              </div>
+              <div>
+                <label style={{ fontSize: '11px', fontWeight: 700, color: '#a890c0', textTransform: 'uppercase', display: 'block', marginBottom: '6px' }}>Warehouse Address</label>
+                <input type="text" style={s.formInput} value={editingSeller.warehouseAddress || ''} onChange={e => setEditingSeller({ ...editingSeller, warehouseAddress: e.target.value })} placeholder="e.g. Warehouse 4, Pulilan" />
+              </div>
+              <div>
+                <label style={{ fontSize: '11px', fontWeight: 700, color: '#a890c0', textTransform: 'uppercase', display: 'block', marginBottom: '6px' }}>Operating Hours</label>
+                <input type="text" style={s.formInput} value={editingSeller.operatingHours || ''} onChange={e => setEditingSeller({ ...editingSeller, operatingHours: e.target.value })} placeholder="e.g. 08:00 AM - 05:00 PM" />
+              </div>
+              <div>
                 <label style={{ fontSize: '11px', fontWeight: 700, color: '#a890c0', textTransform: 'uppercase', display: 'block', marginBottom: '6px' }}>ID Type</label>
                 <select style={s.formInput} value={editingSeller.idType || 'National ID'} onChange={e => setEditingSeller({ ...editingSeller, idType: e.target.value })}>
                   <option>National ID</option>
@@ -410,8 +492,8 @@ const GenerateSellerReport = ({ currentUser }) => {
                 </select>
               </div>
               <div>
-                <label style={{ fontSize: '11px', fontWeight: 700, color: '#a890c0', textTransform: 'uppercase', display: 'block', marginBottom: '6px' }}>Government ID Number</label>
-                <input type="text" required style={s.formInput} value={editingSeller.governmentIdNumber || ''} onChange={e => setEditingSeller({ ...editingSeller, governmentIdNumber: e.target.value })} />
+                <label style={{ fontSize: '11px', fontWeight: 700, color: '#a890c0', textTransform: 'uppercase', display: 'block', marginBottom: '6px' }}>Government ID Number (Optional)</label>
+                <input type="text" style={s.formInput} value={editingSeller.governmentIdNumber || ''} onChange={e => setEditingSeller({ ...editingSeller, governmentIdNumber: e.target.value })} placeholder="Verified via App OTP if blank" />
               </div>
               <div>
                 <label style={{ fontSize: '11px', fontWeight: 700, color: '#a890c0', textTransform: 'uppercase', display: 'block', marginBottom: '6px' }}>Email</label>

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { apiFetch } from './services/api';
+import { barHeightPercent } from './utils/barHeight';
 
 const ConnectionHistoryChart = () => {
     const [history, setHistory] = useState([]);
@@ -155,13 +156,13 @@ const ConnectionHistoryChart = () => {
                     {/* Bars */}
                     <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, height: 100, paddingLeft: 28, paddingBottom: 24 }}>
                         {chartData.map((d, i) => {
-                            const height = (d.count / maxCount) * 100;
+                            const height = barHeightPercent(d.count, maxCount);
                             const isPeak = d.count === stats.peak && d.count > 0;
                             return (
                                 <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end' }}>
                                     <div style={{
                                         width: '100%', maxWidth: 24,
-                                        height: `${Math.max(4, height)}%`,
+                                        height: `${height}%`,
                                         background: isPeak ? '#F37021' : '#390955',
                                         borderRadius: '3px 3px 0 0',
                                         transition: 'height 0.3s ease',

@@ -104,7 +104,7 @@ function MapView({ lat, lng, vehicle, uniqueId }) {
   return <div ref={containerRef} id={`map-${uniqueId}`} style={{ width: '100%', height: '150px', borderRadius: '8px', border: '1px solid #e2e8f0', marginTop: '12px' }} />;
 }
 
-export default function MonitorRiderStatus({ currentUser }) {
+export default function MonitorRiderStatus() {
   const [activeTab, setActiveTab] = useState('gps-coords');
   const [riders, setRiders] = useState([]);
   const [archivedCount, setArchivedCount] = useState(0);
@@ -200,8 +200,7 @@ export default function MonitorRiderStatus({ currentUser }) {
   // (handleToggleGeofence removed — it mutated a `geofences` state that never
   // existed in this component; invoking it would have thrown at runtime.)
 
-  const th = { padding: '13px 16px', textAlign: 'left', fontWeight: 700, color: 'white', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5, background: '#390955' };
-  const td = { padding: '13px 16px', borderBottom: '1px solid #f0eaf8', color: '#1a1a1a', verticalAlign: 'middle' };
+
 
   return (
     <div style={{ flex: 1, background: '#f9f7ff', overflowY: 'auto', fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" }}>
@@ -281,10 +280,17 @@ export default function MonitorRiderStatus({ currentUser }) {
                         </div>
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 5 }}>
-                        <span style={{ fontSize: '10px', background: r.liveGps.isOnline ? '#e6f9ed' : '#f5f5f5', color: r.liveGps.isOnline ? '#1e7e34' : '#888', padding: '3px 8px', borderRadius: '10px', fontWeight: 700, display:'flex', alignItems:'center', gap:4 }}>
-                          <span style={{ width:5, height:5, borderRadius:'50%', background: r.liveGps.isOnline ? '#22c55e' : '#bbb', animation: r.liveGps.isOnline ? 'pulse 1.5s infinite' : 'none', display:'inline-block' }}/>
-                          {r.liveGps.isOnline ? 'On Duty' : 'Off Duty'}
-                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          {r.accountCategory === 'DEMO' && (
+                            <span style={{ fontSize: '9px', fontWeight: 800, padding: '2px 6px', borderRadius: '4px', background: '#f1f5f9', color: '#475569', border: '1px solid #cbd5e1', letterSpacing: '0.05em' }}>
+                              DEMO
+                            </span>
+                          )}
+                          <span style={{ fontSize: '10px', background: r.liveGps.isOnline ? '#e6f9ed' : '#f5f5f5', color: r.liveGps.isOnline ? '#1e7e34' : '#888', padding: '3px 8px', borderRadius: '10px', fontWeight: 700, display:'flex', alignItems:'center', gap:4 }}>
+                            <span style={{ width:5, height:5, borderRadius:'50%', background: r.liveGps.isOnline ? '#22c55e' : '#bbb', animation: r.liveGps.isOnline ? 'pulse 1.5s infinite' : 'none', display:'inline-block' }}/>
+                            {r.liveGps.isOnline ? 'On Duty' : 'Off Duty'}
+                          </span>
+                        </div>
                       </div>
                     </div>
 
@@ -294,24 +300,24 @@ export default function MonitorRiderStatus({ currentUser }) {
                         <span style={{ fontWeight: 600, color: '#390955' }}>{r.riderId}</span>
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ color: '#888' }}>Vehicle Type:</span>
-                        <span style={{ fontWeight: 600 }}>{r.vehicleType}</span>
+                        <span style={{ color: '#888' }}>Email Address:</span>
+                        <span style={{ fontWeight: 600, fontSize: '11px' }}>{r.email || '—'}</span>
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                         <span style={{ color: '#888' }}>Phone Number:</span>
                         <span style={{ fontWeight: 600 }}>{r.phone || '—'}</span>
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ color: '#888' }}>City/Location:</span>
-                        <span style={{ fontWeight: 600, color: '#390955' }}>{r.location.city}{r.location.province ? `, ${r.location.province}` : ''}</span>
+                        <span style={{ color: '#888' }}>Vehicle Info:</span>
+                        <span style={{ fontWeight: 600 }}>{(r.vehicleType || r.vehiclePlateNumber) ? `${r.vehicleType || ''}${r.vehiclePlateNumber ? ` (${r.vehiclePlateNumber})` : ''}`.trim() : '—'}</span>
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ color: '#888' }}>Latitude:</span>
-                        <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>{Number(r.liveGps.latitude).toFixed(5)}</span>
+                        <span style={{ color: '#888' }}>Hub Address:</span>
+                        <span style={{ fontWeight: 600, color: '#390955', fontSize: '11px', textAlign: 'right', maxWidth: '60%' }}>{r.assignedHub || r.raw?.assignedHub || r.raw?.assignedHubAddress || r.raw?.address || (r.location?.city ? `${r.location.city} Sorting Hub` : '—')}</span>
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ color: '#888' }}>Longitude:</span>
-                        <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>{Number(r.liveGps.longitude).toFixed(5)}</span>
+                        <span style={{ color: '#888' }}>GPS Coords:</span>
+                        <span style={{ fontFamily: 'monospace', fontWeight: 600, fontSize: '11px' }}>{Number(r.liveGps.latitude).toFixed(4)}, {Number(r.liveGps.longitude).toFixed(4)}</span>
                       </div>
                     </div>
 
@@ -361,14 +367,16 @@ export default function MonitorRiderStatus({ currentUser }) {
                 <>
                   {[
                     { label: 'Full Name', value: selectedRider.fullName },
-                    { label: 'Email', value: selectedRider.email || '---' },
-                    { label: 'Phone', value: selectedRider.phone || '---' },
-                    { label: 'Vehicle Type', value: selectedRider.vehicleType },
+                    { label: 'Email Address', value: selectedRider.email || '---' },
+                    { label: 'Phone Number', value: selectedRider.phone || '---' },
+                    { label: 'Vehicle Info', value: `${selectedRider.vehicleType}${selectedRider.vehiclePlateNumber ? ` (${selectedRider.vehiclePlateNumber})` : ''}` },
                     { label: 'Plate Number', value: selectedRider.vehiclePlateNumber || '---' },
                     { label: 'License Number', value: selectedRider.driverLicenseNumber || '---' },
-                    { label: 'City', value: selectedRider.location?.city || '---' },
-                    { label: 'Status', value: selectedRider.status, badge: true, color: selectedRider.status === 'Active' ? { bg: '#d1fae5', color: '#065f46' } : { bg: '#fee2e2', color: '#991b1b' } },
-                    { label: 'Deliveries', value: selectedRider.performance?.deliveriesCount ?? 0 },
+                    { label: 'Hub Address', value: selectedRider.assignedHub || selectedRider.raw?.assignedHub || selectedRider.raw?.assignedHubAddress || selectedRider.raw?.address || (selectedRider.location?.city ? `${selectedRider.location.city} Sorting Hub` : 'Pulilan Sorting Hub') },
+                    { label: 'Category', value: selectedRider.accountCategory === 'DEMO' ? 'Demo' : 'Real (Verified)', badge: true, color: selectedRider.accountCategory === 'DEMO' ? { bg: '#f1f5f9', color: '#475569' } : { bg: '#d1fae5', color: '#065f46' } },
+                    { label: 'Duty Status', value: selectedRider.liveGps?.isOnline ? 'On Duty' : 'Off Duty', badge: true, color: selectedRider.liveGps?.isOnline ? { bg: '#e6f9ed', color: '#1e7e34' } : { bg: '#f5f5f5', color: '#888888' } },
+                    { label: 'Account Status', value: selectedRider.status, badge: true, color: selectedRider.status === 'Active' ? { bg: '#d1fae5', color: '#065f46' } : { bg: '#fee2e2', color: '#991b1b' } },
+                    { label: 'Deliveries Completed', value: selectedRider.performance?.deliveriesCount ?? 0 },
                     { label: 'Rating', value: `${selectedRider.performance?.rating ?? 5.0}/5.0` },
                     { label: 'Joined', value: selectedRider.joined || '---' },
                   ].map(row => (

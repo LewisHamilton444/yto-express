@@ -63,31 +63,29 @@ const ReviewModal = ({ item, type, onClose, onApprove, onReject }) => {
                 <span style={s.infoValue}>{item.fullName}</span>
               </div>
               <div style={s.infoCard}>
-                <span style={s.infoLabel}>Contact Number</span>
-                <span style={s.infoValue}>{item.contactNumber}</span>
+                <span style={s.infoLabel}>Account Category</span>
+                <span style={{ ...s.infoValue, color: item.accountCategory === 'DEMO' ? '#6b7280' : '#059669' }}>
+                  {item.accountCategory || 'REAL'}
+                </span>
               </div>
               <div style={s.infoCard}>
-                <span style={s.infoLabel}>Email</span>
-                <span style={s.infoValue}>{item.email}</span>
+                <span style={s.infoLabel}>Email Address</span>
+                <span style={s.infoValue}>{item.email || '—'}</span>
               </div>
               <div style={s.infoCard}>
-                <span style={s.infoLabel}>Government ID</span>
-                <span style={s.infoValue}>{item.governmentId.type} — {item.governmentId.number}</span>
+                <span style={s.infoLabel}>Phone Number</span>
+                <span style={s.infoValue}>{item.contactNumber || item.phone || '—'}</span>
               </div>
               <div style={{ ...s.infoCard, gridColumn: 'span 2' }}>
-                <span style={s.infoLabel}>Address</span>
-                <span style={s.infoValue}>{item.address}</span>
+                <span style={s.infoLabel}>{type === 'seller' ? 'Store Address' : 'Hub Address'}</span>
+                <span style={s.infoValue}>{item.address || '—'}</span>
               </div>
 
               {type === 'seller' && (
                 <>
-                  <div style={s.infoCard}>
-                    <span style={s.infoLabel}>Business Name</span>
-                    <span style={s.infoValue}>{item.businessName}</span>
-                  </div>
-                  <div style={s.infoCard}>
-                    <span style={s.infoLabel}>Business Type</span>
-                    <span style={s.infoValue}>{item.businessType}</span>
+                  <div style={{ ...s.infoCard, gridColumn: 'span 2' }}>
+                    <span style={s.infoLabel}>Store Name</span>
+                    <span style={{ ...s.infoValue, color: '#f37021' }}>{item.storeName || item.businessName || '—'}</span>
                   </div>
                 </>
               )}
@@ -95,16 +93,12 @@ const ReviewModal = ({ item, type, onClose, onApprove, onReject }) => {
               {type === 'rider' && (
                 <>
                   <div style={s.infoCard}>
-                    <span style={s.infoLabel}>Vehicle Type</span>
-                    <span style={s.infoValue}>{item.vehicle.type}</span>
+                    <span style={s.infoLabel}>Vehicle Info (Type)</span>
+                    <span style={s.infoValue}>{item.vehicle?.type || 'Motorcycle'}</span>
                   </div>
                   <div style={s.infoCard}>
                     <span style={s.infoLabel}>Plate Number</span>
-                    <span style={s.infoValue}>{item.vehicle.plate}</span>
-                  </div>
-                  <div style={{ ...s.infoCard, gridColumn: 'span 2' }}>
-                    <span style={s.infoLabel}>Vehicle Model</span>
-                    <span style={s.infoValue}>{item.vehicle.model}</span>
+                    <span style={s.infoValue}>{item.vehicle?.plate || '—'}</span>
                   </div>
                 </>
               )}
@@ -112,41 +106,43 @@ const ReviewModal = ({ item, type, onClose, onApprove, onReject }) => {
           </div>
 
           <div>
-            <p style={s.sectionTitle}>Submitted Documents</p>
-            <div style={s.docList}>
-              {item.documents.map((doc) => {
-                const isImg = isImageFile(doc.fileName);
-                const src = doc.url || doc.dataUrl || '';
-                const canPreview = isImg && !!src;
-                return (
-                  <div
-                    key={doc.fileName}
-                    style={{ ...s.docRow, alignItems: canPreview ? 'center' : 'flex-start', cursor: canPreview ? 'pointer' : 'default' }}
-                    onClick={canPreview ? () => setZoomDoc(doc) : undefined}
-                    title={canPreview ? 'Click to enlarge' : undefined}
-                  >
-                    {canPreview ? (
-                      <img
-                        src={src}
-                        alt={doc.label}
-                        style={{ width: 46, height: 46, borderRadius: 8, objectFit: 'cover', border: '1px solid #e4d8f2', flexShrink: 0 }}
-                      />
-                    ) : (
-                      <span style={s.docIcon}><FileText size={20} aria-hidden="true" /></span>
-                    )}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, color: '#390955', fontWeight: 600 }}>{doc.label}</div>
-                      <div style={{ color: '#a890c0', fontWeight: 500, fontFamily: "'DM Mono', monospace", fontSize: '11px', marginTop: 2 }}>{doc.fileName}</div>
-                      {isImg && !canPreview && (
-                        <div style={{ fontSize: 10.5, color: '#b45309', marginTop: 3 }}>
-                          Preview unavailable — the image was not uploaded with this registration.
-                        </div>
+            <p style={s.sectionTitle}>Verification Status & Documents</p>
+            {item.documents && item.documents.length > 0 ? (
+              <div style={s.docList}>
+                {item.documents.map((doc) => {
+                  const isImg = isImageFile(doc.fileName);
+                  const src = doc.url || doc.dataUrl || '';
+                  const canPreview = isImg && !!src;
+                  return (
+                    <div
+                      key={doc.fileName}
+                      style={{ ...s.docRow, alignItems: canPreview ? 'center' : 'flex-start', cursor: canPreview ? 'pointer' : 'default' }}
+                      onClick={canPreview ? () => setZoomDoc(doc) : undefined}
+                      title={canPreview ? 'Click to enlarge' : undefined}
+                    >
+                      {canPreview ? (
+                        <img
+                          src={src}
+                          alt={doc.label}
+                          style={{ width: 46, height: 46, borderRadius: 8, objectFit: 'cover', border: '1px solid #e4d8f2', flexShrink: 0 }}
+                        />
+                      ) : (
+                        <span style={s.docIcon}><FileText size={20} aria-hidden="true" /></span>
                       )}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13, color: '#390955', fontWeight: 600 }}>{doc.label}</div>
+                        <div style={{ color: '#a890c0', fontWeight: 500, fontFamily: "'DM Mono', monospace", fontSize: '11px', marginTop: 2 }}>{doc.fileName}</div>
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div style={{ padding: '14px 16px', background: '#faf7fd', border: '1px solid #e4d8f2', borderRadius: '10px', fontSize: '12px', color: '#6b7280', display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: '16px' }}>📱</span>
+                <span>Submitted directly from the mobile app. Phone & email authenticated via OTP verification.</span>
+              </div>
+            )}
           </div>
 
           {rejecting && (

@@ -7,7 +7,7 @@ import CardFooter from './components/ui/CardFooter';
 import ListSkeleton from './components/ui/ListSkeleton';
 import {
   History, CalendarRange, X,
-  UserPlus, RefreshCcw, Package, Bike, Store, ShieldCheck,
+  UserPlus, RefreshCcw, Package, Bike, Store, ShieldCheck, AlertTriangle,
 } from 'lucide-react';
 
 const ROLE_TONE = { customer: 'blue', seller: 'amber', rider: 'green', admin: 'violet' };
@@ -19,9 +19,23 @@ const ROLE_ACCENT = {
   admin:    { ring: 'ring-violet-500/25', bg: 'bg-violet-50', dot: 'text-violet-700', accent: '#7c3aed' },
 };
 
-const TYPE_ICON = { registration: UserPlus, status_change: RefreshCcw };
+const TYPE_ICON = {
+  registration: UserPlus,
+  status_change: RefreshCcw,
+  order: Package,
+  delivery: Bike,
+  issue: AlertTriangle,
+};
 
-const ActivityLog = ({ currentUser }) => {
+const TYPE_LABEL = {
+  registration: 'Registration',
+  status_change: 'Status Change',
+  order: 'Shipment Booking',
+  delivery: 'Logistics / Delivery',
+  issue: 'Issue Ticket',
+};
+
+const ActivityLog = () => {
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [roleFilter, setRoleFilter] = useState('all');
@@ -100,13 +114,16 @@ const ActivityLog = ({ currentUser }) => {
   const stats = {
     registrations: events.filter(e => e.type === 'registration').length,
     statusChanges: events.filter(e => e.type === 'status_change').length,
+    orders:        events.filter(e => e.type === 'order').length,
+    deliveries:    events.filter(e => e.type === 'delivery').length,
+    issues:        events.filter(e => e.type === 'issue').length,
   };
 
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-6">
       <PageHeader
         title="Activity Log"
-        subtitle="Global timeline of all registration and status events across roles"
+        subtitle="Global timeline of all activities across customer, seller, rider, and admin roles"
         breadcrumb={['Dashboard', 'Admin', 'Activity Log']}
       />
 
@@ -115,7 +132,7 @@ const ActivityLog = ({ currentUser }) => {
         <CardSectionHeader
           icon={History}
           title="Event Timeline"
-          subtitle={`${filtered.length} of ${events.length} events — registration and status-change activity`}
+          subtitle={`${filtered.length} of ${events.length} events across all user roles and logistics workflows`}
         />
 
         {/* Control bar */}
@@ -140,6 +157,9 @@ const ActivityLog = ({ currentUser }) => {
               <option value="all">All Types</option>
               <option value="registration">Registrations</option>
               <option value="status_change">Status Changes</option>
+              <option value="order">Shipment Bookings</option>
+              <option value="delivery">Logistics & Deliveries</option>
+              <option value="issue">Issue Tickets</option>
             </select>
             <div className="flex items-center gap-2 border border-slate-200 rounded-xl px-3 py-2">
               <CalendarRange size={14} className="text-slate-400" />
@@ -219,7 +239,7 @@ const ActivityLog = ({ currentUser }) => {
                         <p className="m-0 text-xs leading-relaxed text-gray-500">{evt.description}</p>
                         <div className="mt-1.5 flex items-center justify-between">
                           <span className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-[9px] font-bold text-brand-muted ring-1 ring-slate-200">
-                            <TypeIcon size={10} /> {evt.type === 'registration' ? 'Registration' : 'Status Change'}
+                            <TypeIcon size={10} /> {TYPE_LABEL[evt.type] || evt.type || 'Activity'}
                           </span>
                           <span className="text-[10px] text-brand-purple-300">{formatDate(evt.timestamp)}</span>
                         </div>
@@ -237,6 +257,9 @@ const ActivityLog = ({ currentUser }) => {
           pills={[
             { label: 'Registrations', value: stats.registrations, tone: 'blue' },
             { label: 'Status Changes', value: stats.statusChanges, tone: 'amber' },
+            { label: 'Shipments', value: stats.orders, tone: 'purple' },
+            { label: 'Deliveries', value: stats.deliveries, tone: 'green' },
+            { label: 'Issues', value: stats.issues, tone: 'red' },
           ]}
         />
       </div>

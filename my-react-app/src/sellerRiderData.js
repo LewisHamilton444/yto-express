@@ -1,5 +1,7 @@
 
 
+import { isDemoEmail } from './demoUtils';
+
 // ── Shared Seller/Rider data shapes ──────────────────────────────────────────
 // The MongoDB documents (see server/models/Seller.js and server/models/Rider.js)
 // store flat fields (idNumber, city, state, deliveries, rating, ...). Every page
@@ -58,6 +60,9 @@ export function normalizeSeller(raw = {}) {
     _id: raw._id,
     sellerId: raw.registrationId || raw.sellerId || raw._id || '—',
     fullName: raw.fullName || raw.displayName || raw.companyName || '',
+    storeName: raw.storeName || '',
+    warehouseAddress: raw.warehouseAddress || '',
+    operatingHours: raw.operatingHours || '',
     idType: raw.idType || 'National ID',
     governmentIdNumber: raw.idNumber || raw.governmentIdNumber || '',
     email: raw.email || '',
@@ -74,6 +79,7 @@ export function normalizeSeller(raw = {}) {
     paymentCycle: raw.paymentCycle || 'Weekly',
     commissionRate: raw.commissionRate ?? 0,
     status: normalizeStatus(raw.status),
+    accountCategory: raw.accountCategory || (isDemoEmail(raw.email) || String(raw.sellerId || raw.registrationId || '').includes('DEMO') ? 'DEMO' : 'REAL'),
     raw: raw,
   };
 }
@@ -185,6 +191,7 @@ export function normalizeRider(raw = {}) {
     email: raw.email || '',
     vehicleType: raw.vehicleType || 'Motorcycle',
     vehiclePlateNumber: raw.vehiclePlate || raw.vehiclePlateNumber || '',
+    assignedHub: raw.assignedHub || '',
     location: {
       province: raw.state || raw.province || addrFallback.province || '',
       city: raw.city || addrFallback.city || '',
@@ -201,6 +208,7 @@ export function normalizeRider(raw = {}) {
     // derives both this and the parcel-based "on-delivery" signal.
     isOnDuty: raw.isOnDuty === true,
     status: normalizeStatus(raw.status),
+    accountCategory: raw.accountCategory || (isDemoEmail(raw.email) || String(raw.riderId || raw.registrationId || '').includes('DEMO') ? 'DEMO' : 'REAL'),
     performance: {
       deliveriesCount: raw.deliveries ?? 0,
       rating: raw.rating ?? 5.0,

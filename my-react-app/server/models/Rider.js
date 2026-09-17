@@ -19,6 +19,7 @@ const riderSchema = new mongoose.Schema({
     bankName: String,
     payoutRate: Number,
     payoutCycle: String,
+    assignedHub: { type: String, default: '' },
     status: { type: String, default: 'Active' },
     // Real-time duty flag synced from the Android rider profile toggle
     // (PUT auth/duty-status -> User.isOnDuty). The parcel-derived
@@ -29,6 +30,7 @@ const riderSchema = new mongoose.Schema({
     deliveries: { type: Number, default: 0 },
     rating: { type: Number, default: 5.0 },
     successRate: { type: Number, default: 100 },
+    accountCategory: { type: String, enum: ['REAL', 'DEMO'], default: 'REAL' },
     statusHistory: [{
         status: String,
         changedAt: { type: Date, default: Date.now },

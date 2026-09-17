@@ -11,6 +11,8 @@ const s = {
   td:           { padding: '14px 16px', color: '#390955', borderBottom: '1px solid #f3edfb', verticalAlign: 'top' },
   badge:        { fontSize: '11px', fontWeight: 700, padding: '4px 10px', borderRadius: '100px', background: '#fef3c7', color: '#92400e', whiteSpace: 'nowrap' },
   badgeVerified:{ fontSize: '11px', fontWeight: 700, padding: '4px 10px', borderRadius: '100px', background: '#d1fae5', color: '#065f46', whiteSpace: 'nowrap' },
+  badgeReal:    { fontSize: '10px', fontWeight: 800, padding: '3px 8px', borderRadius: '6px', background: '#ecfdf5', color: '#059669', border: '1px solid #a7f3d0', textTransform: 'uppercase' },
+  badgeDemo:    { fontSize: '10px', fontWeight: 800, padding: '3px 8px', borderRadius: '6px', background: '#f3f4f6', color: '#6b7280', border: '1px solid #d1d5db', textTransform: 'uppercase' },
   btnPrimary:   { padding: '8px 16px', borderRadius: '8px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', background: '#f37021', color: 'white', border: 'none', fontFamily: 'inherit' },
   emptyState:   { textAlign: 'center', padding: '48px', color: '#a890c0', fontWeight: 500 },
   sub:          { fontSize: '11.5px', color: '#a890c0', marginTop: '2px' },
@@ -42,9 +44,14 @@ const PendingVerificationsTable = ({ type, items, onReview }) => {
             <thead>
               <tr>
                 <th style={s.th}>Applicant</th>
-                <th style={s.th}>Contact Number</th>
-                <th style={s.th}>Government ID</th>
-                {type === 'rider' && <th style={s.th}>Vehicle</th>}
+                <th style={s.th}>Category</th>
+                <th style={s.th}>Email Address</th>
+                <th style={s.th}>Phone Number</th>
+                {type === 'seller' ? (
+                  <th style={s.th}>Store Address</th>
+                ) : (
+                  <th style={s.th}>Vehicle Info</th>
+                )}
                 <th style={s.th}>Submitted</th>
                 <th style={s.th}>Status</th>
                 <th style={{ ...s.th, textAlign: 'right' }}>Actions</th>
@@ -53,40 +60,53 @@ const PendingVerificationsTable = ({ type, items, onReview }) => {
             <tbody>
               {items.length === 0 ? (
                 <tr>
-                  <td colSpan={type === 'rider' ? 7 : 6} style={{ ...s.td, ...s.emptyState }}>
+                  <td colSpan={8} style={{ ...s.td, ...s.emptyState }}>
                     No pending {label.toLowerCase()} registrations. New mobile app submissions will appear here.
                   </td>
                 </tr>
               ) : (
-                items.map((item, idx) => (
-                  <tr key={item.id} style={{ background: idx % 2 === 0 ? 'white' : '#faf7fd' }}>
-                    <td style={{ ...s.td, fontWeight: 700 }}>
-                      {item.fullName}
-                      <div style={s.sub}>{item.id}</div>
-                    </td>
-                    <td style={s.td}>
-                      {item.contactNumber}
-                      <div style={s.sub}>{item.email}</div>
-                    </td>
-                    <td style={s.td}>
-                      {item.governmentId.type}
-                      <div style={s.sub}>{item.governmentId.number}</div>
-                    </td>
-                    {type === 'rider' && (
-                      <td style={s.td}>
-                        {item.vehicle.type}
-                        <div style={s.sub}>{item.vehicle.plate}</div>
+                items.map((item, idx) => {
+                  const isDemo = item.accountCategory === 'DEMO';
+                  return (
+                    <tr key={item.id || idx} style={{ background: idx % 2 === 0 ? 'white' : '#faf7fd' }}>
+                      <td style={{ ...s.td, fontWeight: 700 }}>
+                        {item.fullName}
+                        <div style={s.sub}>{item.id}</div>
                       </td>
-                    )}
-                    <td style={s.td}>{formatDate(item.submittedAt)}</td>
-                    <td style={s.td}>
-                      <span style={item.status === 'Verified' ? s.badgeVerified : s.badge}>{item.status}</span>
-                    </td>
-                    <td style={{ ...s.td, textAlign: 'right' }}>
-                      <button style={s.btnPrimary} onClick={() => onReview(item)}>Review</button>
-                    </td>
-                  </tr>
-                ))
+                      <td style={s.td}>
+                        <span style={isDemo ? s.badgeDemo : s.badgeReal}>
+                          {isDemo ? 'DEMO' : 'REAL'}
+                        </span>
+                      </td>
+                      <td style={{ ...s.td, fontSize: '12px' }}>
+                        {item.email || '—'}
+                      </td>
+                      <td style={{ ...s.td, fontSize: '12px' }}>
+                        {item.contactNumber || item.phone || '—'}
+                      </td>
+                      <td style={s.td}>
+                        {type === 'seller' ? (
+                          <>
+                            <div style={{ fontWeight: 600, color: '#f37021' }}>{item.storeName || item.businessName || '—'}</div>
+                            <div style={s.sub}>{item.address || '—'}</div>
+                          </>
+                        ) : (
+                          <>
+                            <div style={{ fontWeight: 600 }}>{item.vehicle?.type || 'Motorcycle'}</div>
+                            <div style={s.sub}>{item.vehicle?.plate || '—'}</div>
+                          </>
+                        )}
+                      </td>
+                      <td style={s.td}>{formatDate(item.submittedAt)}</td>
+                      <td style={s.td}>
+                        <span style={item.status === 'Verified' || item.status === 'ACTIVE' || item.status === 'Active' ? s.badgeVerified : s.badge}>{item.status}</span>
+                      </td>
+                      <td style={{ ...s.td, textAlign: 'right' }}>
+                        <button style={s.btnPrimary} onClick={() => onReview(item)}>Review</button>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>

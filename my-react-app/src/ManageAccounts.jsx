@@ -5,6 +5,7 @@ import TableSkeleton from './components/ui/TableSkeleton';
 import EmptyState from './components/ui/EmptyState';
 import { useToast } from './components/ui/useToast';
 import { Users, AlertTriangle, ClipboardList, Package } from 'lucide-react';
+import { isDemoEmail } from './demoUtils';
 
 const ROLE_LABELS = {
   super_admin:  'Super Admin',
@@ -18,19 +19,26 @@ const ROLE_COLORS = {
   hub_receiver: { bg: '#fef3c7', color: '#92400e' },
 };
 
-export default function ManageAccounts({ currentUser }) {
+const MOCK_ACCOUNTS = [
+  { _id: 'mock-1', adminId: 'YTOA20260001', name: 'Super Admin',      email: 'superadmin@ytoexpress.com', role: 'super_admin',  status: 'Active',      accountCategory: 'REAL', createdDate: '2026-01-01' },
+  { _id: 'mock-2', adminId: 'YTOA20260002', name: 'Operations Staff', email: 'staff@ytoexpress.com',      role: 'staff',        status: 'Active',      accountCategory: 'REAL', createdDate: '2026-01-01' },
+  { _id: 'mock-3', adminId: 'YTOA20260003', name: 'Hub Receiver',     email: 'hub@ytoexpress.com',        role: 'hub_receiver', status: 'Active',      accountCategory: 'REAL', createdDate: '2026-01-01' },
+];
+
+export default function ManageAccounts() {
   const [accounts,     setAccounts]     = useState([]);
   const [loading,      setLoading]      = useState(true);
   const [searchTerm,   setSearchTerm]   = useState('');
   const [roleFilter,   setRoleFilter]   = useState('All');
   const [statusFilter, setStatusFilter] = useState('All');
+  const [categoryFilter, setCategoryFilter] = useState('All');
   const [showModal,    setShowModal]    = useState(false);
   const [editingAccount, setEditingAccount] = useState(null);
   const [showDeactivateConfirm, setShowDeactivateConfirm] = useState(null);
   const [showFormPass, setShowFormPass] = useState(false);
   const toast = useToast();
 
-  const blankForm = { name: '', email: '', phone: '', role: 'staff', password: '' };
+  const blankForm = { name: '', email: '', role: 'staff', password: '' };
   const [formData, setFormData] = useState(blankForm);
 
   // ── Fetch all accounts on mount ──────────────────────────────────────────
@@ -42,10 +50,14 @@ export default function ManageAccounts({ currentUser }) {
       const res = await apiFetch('/accounts');
       if (!res.ok) throw new Error(`Server responded ${res.status}`);
       const data = await res.json();
-      setAccounts(Array.isArray(data) ? data : []);
+      if (Array.isArray(data) && data.length > 0) {
+        setAccounts(data);
+      } else {
+        setAccounts(MOCK_ACCOUNTS);
+      }
     } catch {
-      setAccounts([]);
-      flash('Could not reach the server.', 'error');
+      setAccounts(MOCK_ACCOUNTS);
+      flash('Could not reach server. Showing local accounts.', 'error');
     } finally {
       setLoading(false);
     }
@@ -64,7 +76,7 @@ export default function ManageAccounts({ currentUser }) {
 
   const openEditModal = (account) => {
     setEditingAccount(account);
-    setFormData({ name: account.name, email: account.email, phone: account.phone || '', role: account.role, password: '' });
+    setFormData({ name: account.name, email: account.email, role: account.role, password: '' });
     setShowFormPass(false);
     setShowModal(true);
   };
@@ -87,7 +99,7 @@ export default function ManageAccounts({ currentUser }) {
     try {
       if (editingAccount) {
         // PUT update
-        const body = { name: formData.name, email: formData.email, phone: formData.phone, role: formData.role };
+        const body = { name: formData.name, email: formData.email, role: formData.role };
         if (formData.password.trim()) body.password = formData.password;
         const res = await apiFetch(`/accounts/${editingAccount._id}`, {
           method: 'PUT',
@@ -140,10 +152,15 @@ export default function ManageAccounts({ currentUser }) {
   };
 
   const filtered = accounts.filter(a => {
-    const matchSearch = a.name.toLowerCase().includes(searchTerm.toLowerCase()) || a.email.toLowerCase().includes(searchTerm.toLowerCase());
+    const term = searchTerm.toLowerCase();
+    const matchSearch = (a.name && a.name.toLowerCase().includes(term)) ||
+                        (a.email && a.email.toLowerCase().includes(term)) ||
+                        (a.adminId && a.adminId.toLowerCase().includes(term));
     const matchRole   = roleFilter   === 'All' || a.role   === roleFilter;
     const matchStatus = statusFilter === 'All' || a.status === statusFilter;
-    return matchSearch && matchRole && matchStatus;
+    const cat = a.accountCategory || (isDemoEmail(a.email) ? 'DEMO' : 'REAL');
+    const matchCat    = categoryFilter === 'All' || cat === categoryFilter;
+    return matchSearch && matchRole && matchStatus && matchCat;
   });
 
   // ── Styles ────────────────────────────────────────────────────────────────
@@ -179,6 +196,24 @@ export default function ManageAccounts({ currentUser }) {
       {status}
     </span>
   );
+
+  const CategoryBadge = ({ category, email }) => {
+    const isDemo = category === 'DEMO' || (category !== 'REAL' && isDemoEmail(email));
+    return (
+      <span style={{
+        fontSize: '10px',
+        fontWeight: 800,
+        padding: '3px 8px',
+        borderRadius: '6px',
+        background: isDemo ? '#f3f4f6' : '#ecfdf5',
+        color: isDemo ? '#6b7280' : '#059669',
+        border: `1px solid ${isDemo ? '#d1d5db' : '#a7f3d0'}`,
+        textTransform: 'uppercase',
+      }}>
+        {isDemo ? 'DEMO' : 'REAL'}
+      </span>
+    );
+  };
 
   return (
     <div style={s.main}>
@@ -222,8 +257,15 @@ export default function ManageAccounts({ currentUser }) {
       <div style={s.panel}>
         <div style={s.panelHeader}><h2 style={s.panelHeading}>Search & Filter</h2></div>
         <div style={s.panelBody}>
-          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '16px' }}>
-            <div><label style={s.label}>Search Name or Email</label><input style={s.input} placeholder="Type to search..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} /></div>
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: '16px' }}>
+            <div><label style={s.label}>Search Admin, ID, or Email</label><input style={s.input} placeholder="Type to search..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} /></div>
+            <div><label style={s.label}>Category</label>
+              <select style={s.select} value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}>
+                <option value="All">All Categories</option>
+                <option value="REAL">Real Accounts</option>
+                <option value="DEMO">Demo Accounts</option>
+              </select>
+            </div>
             <div><label style={s.label}>Role</label>
               <select style={s.select} value={roleFilter} onChange={e => setRoleFilter(e.target.value)}>
                 <option value="All">All Roles</option>
@@ -254,9 +296,10 @@ export default function ManageAccounts({ currentUser }) {
             <table style={s.table}>
               <thead>
                 <tr>
-                  <th style={s.th}>Name</th>
-                  <th style={s.th}>Email</th>
-                  <th style={s.th}>Phone</th>
+                  <th style={s.th}>Admin ID</th>
+                  <th style={s.th}>Category</th>
+                  <th style={s.th}>Full Admin Name</th>
+                  <th style={s.th}>Email Address</th>
                   <th style={s.th}>Role</th>
                   <th style={s.th}>Status</th>
                   <th style={s.th}>Date Created</th>
@@ -265,10 +308,10 @@ export default function ManageAccounts({ currentUser }) {
               </thead>
               <tbody>
                 {loading ? (
-                  <TableSkeleton rows={6} columns={7} />
+                  <TableSkeleton rows={6} columns={8} />
                 ) : filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={7} style={{ ...s.td, padding: 0 }}>
+                    <td colSpan={8} style={{ ...s.td, padding: 0 }}>
                       <EmptyState
                         icon={Users}
                         title="No accounts found"
@@ -279,6 +322,10 @@ export default function ManageAccounts({ currentUser }) {
                   </tr>
                 ) : filtered.map((account, idx) => (
                   <tr key={account._id} style={{ background: idx % 2 === 0 ? 'white' : '#faf7fd' }}>
+                    <td style={{ ...s.td, fontFamily: 'monospace', fontWeight: 700, fontSize: '12px', color: '#5b21b6' }}>
+                      {account.adminId || '—'}
+                    </td>
+                    <td style={s.td}><CategoryBadge category={account.accountCategory} email={account.email} /></td>
                     <td style={{ ...s.td, fontWeight: 700 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                         <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#390955', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 800, color: 'white', flexShrink: 0 }}>
@@ -289,7 +336,6 @@ export default function ManageAccounts({ currentUser }) {
                       </div>
                     </td>
                     <td style={{ ...s.td, fontSize: '12px' }}>{account.email}</td>
-                    <td style={{ ...s.td, color: '#a890c0', fontSize: '12px' }}>{account.phone || '—'}</td>
                     <td style={s.td}><RoleBadge role={account.role} /></td>
                     <td style={s.td}><StatusBadge status={account.status} /></td>
                     <td style={{ ...s.td, color: '#a890c0', fontSize: '12px' }}>{account.createdDate}</td>
@@ -330,11 +376,7 @@ export default function ManageAccounts({ currentUser }) {
                   <label style={s.label}>Email Address *</label>
                   <input style={s.input} type="email" name="email" value={formData.email} onChange={handleFormChange} placeholder="Enter email" required />
                 </div>
-                <div>
-                  <label style={s.label}>Phone Number</label>
-                  <input style={s.input} name="phone" value={formData.phone} onChange={handleFormChange} placeholder="e.g. 09171234567" />
-                </div>
-                <div>
+                <div style={{ gridColumn: 'span 2' }}>
                   <label style={s.label}>Role *</label>
                   <select style={s.select} name="role" value={formData.role} onChange={handleFormChange}>
                     <option value="staff">Staff</option>

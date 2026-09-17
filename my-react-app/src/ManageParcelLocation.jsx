@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { apiFetch, parcelLocationsApi, parcelsApi, ridersApi } from './services/api';
+import useSSE from './services/useSSE';
 import Modal from './components/ui/Modal';
 import { useToast } from './components/ui/useToast';
 import './ManageParcelLocation.css';
@@ -113,11 +114,21 @@ export default function ProcessParcelLocation() {
   // store a rider (they're just scan/coordinate logs, keyed by parcelId).
   const [parcelRiderByTracking, setParcelRiderByTracking] = useState({});
   const [riderNameById,         setRiderNameById]         = useState({});
+  const [parcelsList,           setParcelsList]           = useState([]);
 
   useEffect(() => {
     fetchLocations();
     fetchRiderLinks();
   }, []);
+
+  // SSE real-time updates for newly created or updated parcels
+  const { on } = useSSE();
+  useEffect(() => {
+    const unsub1 = on('location-synced', () => { fetchLocations(); fetchRiderLinks(); });
+    const unsub2 = on('parcel-synced',   () => { fetchLocations(); fetchRiderLinks(); });
+    const unsub3 = on('parcel-updated',  () => { fetchLocations(); fetchRiderLinks(); });
+    return () => { unsub1(); unsub2(); unsub3(); };
+  }, [on]);
 
   const fetchLocations = async () => {
     try {
@@ -133,10 +144,23 @@ export default function ProcessParcelLocation() {
   const fetchRiderLinks = async () => {
     try {
       const [pData, rData] = await Promise.all([parcelsApi.list(), ridersApi.list()]);
+      const safeParcels = Array.isArray(pData) ? pData : [];
+      setParcelsList(safeParcels);
+
       const pMap = {};
-      (Array.isArray(pData) ? pData : []).forEach(p => { if (p.trackingNumber) pMap[p.trackingNumber] = p.riderId || ''; });
+      safeParcels.forEach(p => {
+        const tn = p.trackingNumber || p.trackingId;
+        if (tn) pMap[tn] = p.riderId || '';
+      });
+
       const rMap = {};
-      (Array.isArray(rData) ? rData : []).forEach(r => { rMap[r.registrationId || r._id] = r.riderName || 'Unknown Rider'; });
+      (Array.isArray(rData) ? rData : []).forEach(r => {
+        const name = r.riderName || r.fullName || 'Unknown Rider';
+        if (r.registrationId) rMap[r.registrationId] = name;
+        if (r._id) rMap[String(r._id)] = name;
+        if (r.email) rMap[r.email.toLowerCase()] = name;
+      });
+
       setParcelRiderByTracking(pMap);
       setRiderNameById(rMap);
     } catch (err) {
@@ -169,12 +193,70 @@ export default function ProcessParcelLocation() {
     }
   };
 
-  const handleGpsLookup = () => {
+  const handleGpsLookup = async () => {
     const q = gpsQuery.trim().toUpperCase();
     if (!q) { setGpsError('Please provide a Parcel ID.'); setGpsResult(null); return; }
-    const found = locations.find(r => r.parcelId.toUpperCase() === q);
-    if (found) { setGpsResult(found); setGpsError(''); }
-    else { setGpsResult(null); setGpsError(`No match found for "${gpsQuery}".`); }
+
+    // 1. Search in local locations
+    const found = locations.find(r => r.parcelId?.toUpperCase() === q);
+    if (found) {
+      setGpsResult(found);
+      setGpsError('');
+      return;
+    }
+
+    // 2. Search in parcelsList
+    const foundParcel = parcelsList.find(p => (p.trackingNumber || p.trackingId || '').toUpperCase() === q);
+    if (foundParcel) {
+      const center = foundParcel.trackingGeofence?.center;
+      const lat = center?.lat ? String(center.lat) : String(foundParcel.riderLat || '14.9016');
+      const lng = center?.lng ? String(center.lng) : String(foundParcel.riderLng || '120.8667');
+      setGpsResult({
+        _id: foundParcel._id,
+        parcelId: foundParcel.trackingNumber || foundParcel.trackingId,
+        lat,
+        lng,
+        location: foundParcel.origin || foundParcel.destination || 'Pulilan Sorting Hub',
+        type: 'Warehouse',
+        status: foundParcel.status || 'Active',
+        geofence: 'Inside',
+        notes: foundParcel.item || '',
+        updatedAt: foundParcel.updatedAt || foundParcel.createdAt || new Date().toISOString(),
+      });
+      setGpsError('');
+      return;
+    }
+
+    // 3. Fallback: live query API directly
+    try {
+      const pRes = await apiFetch(`/parcels`);
+      if (pRes.ok) {
+        const list = await pRes.json();
+        const p = Array.isArray(list) ? list.find(x => (x.trackingNumber || x.trackingId || '').toUpperCase() === q) : null;
+        if (p) {
+          const center = p.trackingGeofence?.center;
+          const lat = center?.lat ? String(center.lat) : String(p.riderLat || '14.9016');
+          const lng = center?.lng ? String(center.lng) : String(p.riderLng || '120.8667');
+          setGpsResult({
+            _id: p._id,
+            parcelId: p.trackingNumber || p.trackingId,
+            lat,
+            lng,
+            location: p.origin || p.destination || 'Pulilan Sorting Hub',
+            type: 'Warehouse',
+            status: p.status || 'Active',
+            geofence: 'Inside',
+            notes: p.item || '',
+            updatedAt: p.updatedAt || p.createdAt || new Date().toISOString(),
+          });
+          setGpsError('');
+          return;
+        }
+      }
+    } catch { /* ignore */ }
+
+    setGpsResult(null);
+    setGpsError(`No match found for "${gpsQuery}".`);
   };
 
   const handleGpsRefresh = () => {

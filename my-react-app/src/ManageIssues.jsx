@@ -13,6 +13,7 @@ import {
   Eye, Search, ShieldAlert, X,
   Camera, Tag, User, Hash, Package,
 } from 'lucide-react';
+import { isDemoEmail } from './demoUtils';
 
 const STATUS_TONE = {
   'Open': 'red',
@@ -35,9 +36,21 @@ const CATEGORIES = [
 
 const STATUS_TABS = ['All', 'Open', 'Under Investigation', 'Resolved', 'Closed'];
 
-const TABLE_HEADERS = ['Ticket ID', 'Type', 'Tracking #', 'Category', 'Reporter', 'Status', 'Evidence', 'Date Reported'];
+const TABLE_HEADERS = [
+  { label: 'Ticket ID', width: 'min-w-[140px]' },
+  { label: 'Type', width: 'min-w-[160px]' },
+  { label: 'Tracking ID', width: 'min-w-[160px]' },
+  { label: 'Category', width: 'min-w-[100px]' },
+  { label: 'Reporter', width: 'min-w-[200px]' },
+  { label: 'Product Name', width: 'min-w-[170px]' },
+  { label: 'Product Category', width: 'min-w-[150px]' },
+  { label: 'ETA', width: 'min-w-[120px]' },
+  { label: 'Evidence', width: 'min-w-[110px]' },
+  { label: 'Status', width: 'min-w-[140px]' },
+  { label: 'Date Reported', width: 'min-w-[170px]' },
+];
 
-export default function ManageIssues({ currentUser }) {
+export default function ManageIssues() {
   const [issues, setIssues] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -120,8 +133,11 @@ export default function ManageIssues({ currentUser }) {
         !search ||
         (issue.ticketId && issue.ticketId.toLowerCase().includes(search.toLowerCase())) ||
         (issue.trackingNumber && issue.trackingNumber.toLowerCase().includes(search.toLowerCase())) ||
+        (issue.category && issue.category.toLowerCase().includes(search.toLowerCase())) ||
         (issue.reporterName && issue.reporterName.toLowerCase().includes(search.toLowerCase())) ||
         (issue.reporterEmail && issue.reporterEmail.toLowerCase().includes(search.toLowerCase())) ||
+        (issue.productName && issue.productName.toLowerCase().includes(search.toLowerCase())) ||
+        (issue.productCategory && issue.productCategory.toLowerCase().includes(search.toLowerCase())) ||
         (issue.description && issue.description.toLowerCase().includes(search.toLowerCase()));
 
       const matchStatus = statusFilter === 'All' || issue.status === statusFilter;
@@ -207,13 +223,44 @@ export default function ManageIssues({ currentUser }) {
           </div>
         </div>
 
+        {/* Custom scroll styling */}
+        <style>{`
+          .custom-issues-table-scroll {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+          }
+          .custom-issues-table-scroll::-webkit-scrollbar {
+            height: 7px;
+          }
+          .custom-issues-table-scroll::-webkit-scrollbar-track {
+            background: #f1f5f9;
+            border-radius: 4px;
+          }
+          .custom-issues-table-scroll::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+          }
+          .custom-issues-table-scroll::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+          }
+        `}</style>
+
         {/* Tickets Table */}
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[900px] border-collapse text-left">
+        <div className="overflow-x-auto w-full custom-issues-table-scroll rounded-lg border border-slate-100">
+          <table className="w-full min-w-[1720px] border-collapse text-left">
             <thead className="bg-[#390955] text-white">
               <tr>
-                {TABLE_HEADERS.map(h => <th key={h} className="px-4 py-3.5 text-xs font-semibold uppercase tracking-wider text-left">{h}</th>)}
-                <th className="px-4 py-3.5 text-xs font-semibold uppercase tracking-wider text-center">Action</th>
+                {TABLE_HEADERS.map(h => (
+                  <th
+                    key={h.label}
+                    className={`whitespace-nowrap px-4 py-3.5 text-xs font-semibold uppercase tracking-wider text-left ${h.width}`}
+                  >
+                    {h.label}
+                  </th>
+                ))}
+                <th className="whitespace-nowrap px-4 py-3.5 text-xs font-semibold uppercase tracking-wider text-center min-w-[140px]">
+                  Action
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -230,25 +277,43 @@ export default function ManageIssues({ currentUser }) {
               ) : (
                 currentIssues.map((issue, idx) => {
                   const dateStr = issue.createdAt ? new Date(issue.createdAt).toLocaleString() : 'N/A';
+                  const isDemo = issue.accountCategory === 'DEMO' || isDemoEmail(issue.reporterEmail);
                   return (
                     <tr key={issue._id || idx} className="border-b border-slate-100 text-[13px] transition hover:bg-slate-50">
-                      <td className="px-4 py-3.5 font-extrabold text-brand-purple">{issue.ticketId}</td>
-                      <td className="px-4 py-3.5 font-bold text-brand-orange">{issue.trackingNumber}</td>
-                      <td className="px-4 py-3.5 font-semibold text-gray-700">{issue.category}</td>
-                      <td className="px-4 py-3.5">
+                      <td className="whitespace-nowrap px-4 py-3.5 font-extrabold text-brand-purple font-mono">{issue.ticketId}</td>
+                      <td className="whitespace-nowrap px-4 py-3.5 font-semibold text-gray-700">{issue.category}</td>
+                      <td className="whitespace-nowrap px-4 py-3.5 font-bold text-brand-orange">{issue.trackingNumber}</td>
+                      <td className="whitespace-nowrap px-4 py-3.5">
+                        <span style={{
+                          fontSize: '10px',
+                          fontWeight: 800,
+                          padding: '3px 8px',
+                          borderRadius: '6px',
+                          background: isDemo ? '#f3f4f6' : '#ecfdf5',
+                          color: isDemo ? '#6b7280' : '#059669',
+                          border: `1px solid ${isDemo ? '#d1d5db' : '#a7f3d0'}`,
+                          textTransform: 'uppercase',
+                        }}>
+                          {isDemo ? 'DEMO' : 'REAL'}
+                        </span>
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3.5">
                         <div className="font-bold text-gray-800">{issue.reporterName || 'Customer'}</div>
                         <div className="text-[11px] text-gray-500">{issue.reporterEmail || issue.reporterPhone || 'Mobile App'}</div>
                       </td>
-                      <td className="px-4 py-3.5"><Badge tone={STATUS_TONE[issue.status] || 'red'} hint={{ Open: 'Reported — awaiting first action', Investigating: 'Being investigated by operations staff', Resolved: 'Closed after a resolution was confirmed' }[issue.status]}>{issue.status}</Badge></td>
-                      <td className="px-4 py-3.5">
+                      <td className="whitespace-nowrap px-4 py-3.5 text-xs font-semibold text-gray-800">{issue.productName || '—'}</td>
+                      <td className="whitespace-nowrap px-4 py-3.5 text-xs text-gray-600">{issue.productCategory || '—'}</td>
+                      <td className="whitespace-nowrap px-4 py-3.5 text-xs text-gray-600">{issue.eta || '—'}</td>
+                      <td className="whitespace-nowrap px-4 py-3.5">
                         {issue.evidenceImages && issue.evidenceImages.length > 0 ? (
                           <Badge tone="purple" icon={Camera} hint={`${issue.evidenceImages.length} attached evidence image${issue.evidenceImages.length > 1 ? 's' : ''} — click View & Resolve to inspect`}>{issue.evidenceImages.length} Photo{issue.evidenceImages.length > 1 ? 's' : ''}</Badge>
                         ) : (
                           <span className="text-[11px] text-gray-400">None</span>
                         )}
                       </td>
-                      <td className="px-4 py-3.5 text-xs text-gray-500">{dateStr}</td>
-                      <td className="px-4 py-3.5 text-center">
+                      <td className="whitespace-nowrap px-4 py-3.5"><Badge tone={STATUS_TONE[issue.status] || 'red'} hint={{ Open: 'Reported — awaiting first action', Investigating: 'Being investigated by operations staff', Resolved: 'Closed after a resolution was confirmed' }[issue.status]}>{issue.status}</Badge></td>
+                      <td className="whitespace-nowrap px-4 py-3.5 text-xs text-gray-500">{dateStr}</td>
+                      <td className="whitespace-nowrap px-4 py-3.5 text-center">
                         <button
                           onClick={() => handleOpenDetail(issue)}
                           className="inline-flex items-center gap-1.5 rounded-md bg-brand-orange px-3 py-1.5 text-xs font-bold text-white transition hover:bg-orange-600 active:scale-95"
@@ -317,14 +382,38 @@ export default function ManageIssues({ currentUser }) {
                 <div className="mt-0.5 text-[15px] font-extrabold text-brand-orange">{selectedIssue.trackingNumber}</div>
               </div>
               <div className="rounded-lg bg-brand-purple-50 p-3">
-                <div className="flex items-center gap-1.5 text-[11px] font-bold text-brand-muted"><Tag size={12} /> ISSUE CATEGORY</div>
+                <div className="flex items-center gap-1.5 text-[11px] font-bold text-brand-muted"><Tag size={12} /> ISSUE TYPE</div>
                 <div className="mt-0.5 text-sm font-extrabold text-brand-purple">{selectedIssue.category}</div>
+              </div>
+            </div>
+
+            {/* Shipment & Product Information */}
+            <div className="mb-4 rounded-lg border border-brand-purple-200 bg-white p-3.5">
+              <div className="mb-1.5 flex items-center gap-1.5 text-xs font-bold text-brand-purple"><Package size={13} /> Shipment Details</div>
+              <div className="grid grid-cols-1 gap-2 text-xs sm:grid-cols-3">
+                <div><span className="text-gray-500">Product Name:</span> <strong>{selectedIssue.productName || '—'}</strong></div>
+                <div><span className="text-gray-500">Product Category:</span> <strong>{selectedIssue.productCategory || '—'}</strong></div>
+                <div><span className="text-gray-500">ETA:</span> <strong>{selectedIssue.eta || '—'}</strong></div>
               </div>
             </div>
 
             {/* Reporter Details */}
             <div className="mb-4 rounded-lg border border-brand-purple-200 bg-white p-3.5">
-              <div className="mb-1.5 flex items-center gap-1.5 text-xs font-bold text-brand-purple"><User size={13} /> Reporter Information</div>
+              <div className="mb-1.5 flex items-center justify-between">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-brand-purple"><User size={13} /> Reporter Information</div>
+                <span style={{
+                  fontSize: '9px',
+                  fontWeight: 800,
+                  padding: '2px 7px',
+                  borderRadius: '5px',
+                  background: (selectedIssue.accountCategory === 'DEMO' || isDemoEmail(selectedIssue.reporterEmail)) ? '#f3f4f6' : '#ecfdf5',
+                  color: (selectedIssue.accountCategory === 'DEMO' || isDemoEmail(selectedIssue.reporterEmail)) ? '#6b7280' : '#059669',
+                  border: `1px solid ${(selectedIssue.accountCategory === 'DEMO' || isDemoEmail(selectedIssue.reporterEmail)) ? '#d1d5db' : '#a7f3d0'}`,
+                  textTransform: 'uppercase',
+                }}>
+                  {(selectedIssue.accountCategory === 'DEMO' || isDemoEmail(selectedIssue.reporterEmail)) ? 'DEMO' : 'REAL'}
+                </span>
+              </div>
               <div className="grid grid-cols-1 gap-2 text-xs sm:grid-cols-2">
                 <div><span className="text-gray-500">Name:</span> <strong>{selectedIssue.reporterName || 'Customer'}</strong></div>
                 <div><span className="text-gray-500">Role:</span> <strong className="capitalize">{selectedIssue.reporterRole || 'Customer'}</strong></div>

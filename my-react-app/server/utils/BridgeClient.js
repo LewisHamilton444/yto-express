@@ -204,6 +204,13 @@ async function sendIssueStatus(ticketId, status, adminNotes = '') {
 }
 
 /**
+ * Send user profile updates to the Android backend.
+ */
+async function sendUserUpdate(email, role, updates) {
+    return postWithRetry('/receive-user-update', { email, role, updates, updatedAt: new Date().toISOString() });
+}
+
+/**
  * Health check — tests connectivity to the Android backend.
  */
 async function healthCheck() {
@@ -231,4 +238,4 @@ async function healthCheck() {
     });
 }
 
-module.exports = { sendStatus, sendApproval, syncParcel, sendIssueStatus, pollChanges, healthCheck, isBridgeEnabled };
+module.exports = { sendStatus, sendApproval, syncParcel, sendIssueStatus, pollChanges, sendUserUpdate, healthCheck, isBridgeEnabled };

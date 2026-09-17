@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { apiFetch } from './services/api';
+import useSSE from './services/useSSE';
 import PaginationControls from './PaginationControls';
 import { exportToCSV } from './exportUtils';
 import Modal from './components/ui/Modal';
@@ -9,17 +10,24 @@ import CardSectionHeader from './components/ui/CardSectionHeader';
 import CardFooter from './components/ui/CardFooter';
 import TableSkeleton from './components/ui/TableSkeleton';
 import EmptyState from './components/ui/EmptyState';
+import { ACCOUNT_CATEGORY_TONE, ACCOUNT_CATEGORY_LABEL } from './components/ui/statusColors';
+import { isDemoEmail } from './demoUtils';
 import {
   Users, Search, X,
   Hash, User, Mail, Phone, Tag, Activity, Globe, Calendar,
-  PackageSearch, History, Info,
+  PackageSearch, History, Info, Shield, Eye,
 } from 'lucide-react';
 
 const CUSTOMER_EXPORT_COLUMNS = [
   { key: 'customerId', label: 'Customer ID' },
+  { key: 'accountCategory', label: 'Category' },
   { key: 'fullName', label: 'Full Name' },
-  { key: 'email', label: 'Email' },
-  { key: 'phone', label: 'Phone' },
+  { key: 'email', label: 'Email Address' },
+  { key: 'phone', label: 'Phone Number' },
+  { key: 'address', label: 'Primary Address' },
+  { key: 'city', label: 'City' },
+  { key: 'deliveryInstructions', label: 'Delivery Instructions' },
+  { key: 'role', label: 'Role' },
   { key: 'status', label: 'Status' },
   { key: 'source', label: 'Source' },
 ];
@@ -37,12 +45,15 @@ const TIMELINE = {
 
 const TABLE_HEADERS = [
   { label: 'Customer ID', icon: Hash },
-  { label: 'Name', icon: User },
-  { label: 'Email', icon: Mail },
-  { label: 'Phone', icon: Phone },
+  { label: 'Category', icon: Tag },
+  { label: 'Full Name', icon: User },
+  { label: 'Email Address', icon: Mail },
+  { label: 'Phone Number', icon: Phone },
+  { label: 'Role', icon: Shield },
   { label: 'Status', icon: Activity },
   { label: 'Source', icon: Globe },
   { label: 'Joined', icon: Calendar },
+  { label: 'Actions', icon: Eye },
 ];
 
 const DETAIL_TABS = [
@@ -51,10 +62,11 @@ const DETAIL_TABS = [
   { key: 'timeline', label: 'Timeline', icon: History },
 ];
 
-const CustomerList = ({ currentUser }) => {
+const CustomerList = () => {
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('All');
   const [currentPage, setCurrentPage] = useState(1);
   const [recordsPerPage, setRecordsPerPage] = useState(10);
   const [detailCustomer, setDetailCustomer] = useState(null);
@@ -63,10 +75,21 @@ const CustomerList = ({ currentUser }) => {
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [timelineEvents, setTimelineEvents] = useState([]);
   const [timelineLoading, setTimelineLoading] = useState(false);
+  const { on: onSSE } = useSSE();
 
   useEffect(() => {
     fetchCustomers();
   }, []);
+
+  useEffect(() => {
+    if (!onSSE) return;
+    const unsub = onSSE('user-synced', (data) => {
+      if (!data || data.role === 'customer') {
+        fetchCustomers();
+      }
+    });
+    return () => { if (unsub) unsub(); };
+  }, [onSSE]);
 
   useEffect(() => {
     if (detailCustomer && detailTab === 'orders') {
@@ -175,15 +198,24 @@ const CustomerList = ({ currentUser }) => {
     const matchSearch = c.fullName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                         c.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                         c.customerId?.toLowerCase().includes(searchTerm.toLowerCase());
-    return matchSearch;
+    const cat = c.accountCategory || (isDemoEmail(c.email) ? 'DEMO' : 'REAL');
+    const matchCategory = categoryFilter === 'All' || cat === categoryFilter;
+    return matchSearch && matchCategory;
   });
 
   const indexOfLast = currentPage * recordsPerPage;
   const indexOfFirst = indexOfLast - recordsPerPage;
   const currentRecords = filtered.slice(indexOfFirst, indexOfLast);
 
+  const realCount = customers.filter(c => (c.accountCategory || (isDemoEmail(c.email) ? 'DEMO' : 'REAL')) !== 'DEMO').length;
+  const demoCount = customers.filter(c => (c.accountCategory || (isDemoEmail(c.email) ? 'DEMO' : 'REAL')) === 'DEMO').length;
+
   const handleExport = () => {
-    exportToCSV(filtered, CUSTOMER_EXPORT_COLUMNS, 'yto_customers');
+    const exportData = filtered.map(c => ({
+      ...c,
+      role: c.role || 'Customer',
+    }));
+    exportToCSV(exportData, CUSTOMER_EXPORT_COLUMNS, 'yto_customers');
   };
 
   const formatDate = (dateStr) => {
@@ -214,7 +246,7 @@ const CustomerList = ({ currentUser }) => {
     <div className="space-y-6">
       <PageHeader
         title="Customer List"
-        subtitle="Mobile-registered customers synced via bridge"
+        subtitle="Customers registered through the mobile app"
         breadcrumb={['Dashboard', 'People', 'Customer List']}
       />
 
@@ -239,6 +271,15 @@ const CustomerList = ({ currentUser }) => {
                 className="pl-10 pr-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 w-72"
               />
             </div>
+            <select
+              value={categoryFilter}
+              onChange={e => { setCategoryFilter(e.target.value); setCurrentPage(1); }}
+              className="px-3 py-2 border border-slate-200 rounded-xl text-sm bg-white cursor-pointer font-semibold text-brand-purple"
+            >
+              <option value="All">All Categories</option>
+              <option value="REAL">Real</option>
+              <option value="DEMO">Demo</option>
+            </select>
             <span className="text-xs text-slate-400 whitespace-nowrap">{filtered.length} results</span>
           </div>
           <button
@@ -291,12 +332,34 @@ const CustomerList = ({ currentUser }) => {
                   className="cursor-pointer border-b border-slate-100 transition hover:bg-slate-50"
                 >
                   <td className="px-4 py-3 font-mono text-xs font-bold text-brand-purple">{c.customerId || '-'}</td>
+                  <td className="px-4 py-3">
+                    <Badge tone={ACCOUNT_CATEGORY_TONE[c.accountCategory || (isDemoEmail(c.email) ? 'DEMO' : 'REAL')] || 'slate'}>
+                      {ACCOUNT_CATEGORY_LABEL[c.accountCategory || (isDemoEmail(c.email) ? 'DEMO' : 'REAL')] || (c.accountCategory || (isDemoEmail(c.email) ? 'Demo' : 'Real (Verified)'))}
+                    </Badge>
+                  </td>
                   <td className="px-4 py-3 text-sm font-semibold text-gray-900">{c.fullName || '-'}</td>
                   <td className="px-4 py-3 text-xs text-gray-500">{c.email || '-'}</td>
                   <td className="px-4 py-3 text-xs text-gray-500">{c.phone || '-'}</td>
+                  <td className="px-4 py-3">
+                    <Badge tone="purple">{c.role || 'Customer'}</Badge>
+                  </td>
                   <td className="px-4 py-3"><Badge tone={STATUS_TONE[c.status] || 'green'}>{c.status || 'Active'}</Badge></td>
                   <td className="px-4 py-3 text-xs text-gray-500">{c.source || 'mobile-app'}</td>
                   <td className="px-4 py-3 text-xs text-gray-500">{formatDate(c.createdAt)}</td>
+                  <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDetailCustomer(c);
+                        setDetailTab('details');
+                        setOrders([]);
+                        setTimelineEvents([]);
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-purple-200 text-brand-purple text-xs font-bold hover:bg-purple-50 transition"
+                    >
+                      <Eye size={12} /> View Details
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -306,6 +369,8 @@ const CustomerList = ({ currentUser }) => {
         <CardFooter
           resultsLabel={`Showing ${filtered.length} of ${customers.length} results`}
           pills={[
+            { label: 'Real', value: realCount, tone: 'green' },
+            { label: 'Demo', value: demoCount, tone: 'amber' },
             { label: 'Active', value: customers.filter(c => c.status !== 'Deactivated').length, tone: 'green' },
           ]}
         />
@@ -363,8 +428,13 @@ const CustomerList = ({ currentUser }) => {
               <>
                 {[
                   { label: 'Full Name', value: detailCustomer.fullName },
-                  { label: 'Email', value: detailCustomer.email },
-                  { label: 'Phone', value: detailCustomer.phone || '---' },
+                  { label: 'Role', value: detailCustomer.role || 'Customer', badge: true, tone: 'purple' },
+                  { label: 'Email Address', value: detailCustomer.email },
+                  { label: 'Phone Number', value: detailCustomer.phone || '---' },
+                  { label: 'Primary Address', value: detailCustomer.address || '—' },
+                  { label: 'City', value: detailCustomer.city || '—' },
+                  { label: 'Delivery Instructions', value: detailCustomer.deliveryInstructions || '—' },
+                  { label: 'Account Category', value: ACCOUNT_CATEGORY_LABEL[detailCustomer.accountCategory || (isDemoEmail(detailCustomer.email) ? 'DEMO' : 'REAL')] || (detailCustomer.accountCategory || (isDemoEmail(detailCustomer.email) ? 'Demo' : 'Real (Verified)')), badge: true, tone: ACCOUNT_CATEGORY_TONE[detailCustomer.accountCategory || (isDemoEmail(detailCustomer.email) ? 'DEMO' : 'REAL')] || 'green' },
                   { label: 'Status', value: detailCustomer.status || 'Active', badge: true, tone: STATUS_TONE[detailCustomer.status] || 'green' },
                   { label: 'Source', value: detailCustomer.source || 'mobile-app' },
                   { label: 'Joined', value: formatDateTime(detailCustomer.createdAt) },

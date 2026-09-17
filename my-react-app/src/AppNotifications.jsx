@@ -18,6 +18,7 @@ const TYPE_LABELS = {
   new_order: 'New Order',
   system_alert: 'System Alert',
   system: 'System',
+  security: 'Security',
 };
 
 export default function AppNotifications() {

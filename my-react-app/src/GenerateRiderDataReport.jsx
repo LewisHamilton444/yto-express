@@ -9,12 +9,19 @@ import { VehicleIcon } from './components/ui/vehicleIcons';
 import { RIDER_STATUS_BADGE } from './components/ui/statusColors';
 import Tooltip from './components/ui/Tooltip';
 import { ArrowLeft, ArrowRight, CheckCircle2, XCircle } from 'lucide-react';
+import { isDemoEmail } from './demoUtils';
 
 const RIDER_EXPORT_COLUMNS = [
   { key: 'riderId', label: 'Rider ID' },
+  { key: 'accountCategory', label: 'Category' },
   { key: 'fullName', label: 'Full Name' },
-  { key: 'vehicleType', label: 'Vehicle Type' },
-  { key: 'phone', label: 'Phone' },
+  { key: 'email', label: 'Email Address' },
+  { key: 'phone', label: 'Phone Number' },
+  { key: 'vehicleInfo', label: 'Vehicle Info' },
+  { key: 'hubAddress', label: 'Hub Address' },
+  { key: 'deliveriesCompleted', label: 'Deliveries Completed' },
+  { key: 'rating', label: 'Rating' },
+  { key: 'dutyLabel', label: 'On Duty' },
   { key: 'status', label: 'Status' },
 ];
 
@@ -77,7 +84,7 @@ const isArchivedDelivery = (parcel) => {
 };
 
 export default function GenerateRiderDataReport() {
-  const [filters,      setFilters]      = useState({ riderName: '', riderId: '', status: 'all', vehicleType: 'all', duty: 'all', area: '', dateFrom: '', dateTo: '' });
+  const [filters,      setFilters]      = useState({ riderName: '', riderId: '', contact: '', category: 'all', status: 'all', vehicleType: 'all', duty: 'all', area: '', dateFrom: '', dateTo: '' });
   const [currentPage,  setCurrentPage]  = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(8);
   const [selectedRider,setSelectedRider]= useState(null);
@@ -181,25 +188,49 @@ export default function GenerateRiderDataReport() {
     setSaveMsg(''); setSaveErr('');
   };
 
-  const handleExportCSV = () => exportToCSV(filteredData, RIDER_EXPORT_COLUMNS, 'riders-ledger');
-  const handleExportExcel = () => exportToExcel(filteredData, RIDER_EXPORT_COLUMNS, 'riders-ledger');
+  const getExportData = () => filteredData.map(r => ({
+    riderId: r.riderId,
+    accountCategory: r.accountCategory || (isDemoEmail(r.email) ? 'DEMO' : 'REAL'),
+    fullName: r.fullName,
+    email: r.email || '—',
+    phone: r.phone || '—',
+    vehicleInfo: `${r.vehicleType}${r.vehiclePlateNumber ? ` (${r.vehiclePlateNumber})` : ''}`,
+    hubAddress: r.raw?.assignedHubAddress || r.raw?.address || (r.location.city ? `${r.location.city} Hub` : 'Pulilan Hub'),
+    deliveriesCompleted: r.performance.deliveriesCount,
+    rating: r.performance.rating,
+    dutyLabel: DUTY_LABELS[getDutyState(r)],
+    status: formatStatusLabel(r.status),
+  }));
+
+  const handleExportCSV = () => exportToCSV(getExportData(), RIDER_EXPORT_COLUMNS, 'riders-ledger');
+  const handleExportExcel = () => exportToExcel(getExportData(), RIDER_EXPORT_COLUMNS, 'riders-ledger');
 
   // Archived riders live in Settings > Archived Records now, not here.
   const filteredData  = riders.filter(r => {
     if (r.status === RIDER_STATUS.ARCHIVED) return false;
+    const cat = r.accountCategory || (isDemoEmail(r.email) ? 'DEMO' : 'REAL');
+    if (filters.category && filters.category !== 'all' && cat !== filters.category) return false;
     if (filters.riderId   && !r.riderId.toLowerCase().includes(filters.riderId.toLowerCase()))     return false;
     if (filters.riderName && !r.fullName.toLowerCase().includes(filters.riderName.toLowerCase())) return false;
+    if (filters.contact) {
+      const c = filters.contact.toLowerCase();
+      const matchContact = (r.email || '').toLowerCase().includes(c) || (r.phone || '').includes(c);
+      if (!matchContact) return false;
+    }
     if (filters.status !== 'all' && r.status !== filters.status)                              return false;
     if (filters.vehicleType !== 'all' && r.vehicleType !== filters.vehicleType)                return false;
     if (filters.duty !== 'all' && getDutyState(r) !== filters.duty)                             return false;
-    if (filters.area && !r.location.city.toLowerCase().includes(filters.area.toLowerCase()))           return false;
+    if (filters.area) {
+      const hubText = (r.raw?.assignedHubAddress || r.raw?.address || r.location?.city || '').toLowerCase();
+      if (!hubText.includes(filters.area.toLowerCase())) return false;
+    }
     return true;
   });
 
   const paginatedData = filteredData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   const handleFilterChange = (field, value) => { setFilters(p => ({ ...p, [field]: value })); setCurrentPage(1); };
-  const handleReset = () => { setFilters({ riderName: '', riderId: '', status: 'all', vehicleType: 'all', duty: 'all', area: '', dateFrom: '', dateTo: '' }); setCurrentPage(1); };
+  const handleReset = () => { setFilters({ riderName: '', riderId: '', contact: '', category: 'all', status: 'all', vehicleType: 'all', duty: 'all', area: '', dateFrom: '', dateTo: '' }); setCurrentPage(1); };
 
   const rider = selectedRider ? riders.find(r => r.riderId === selectedRider) : null;
   const riderHeldParcels   = rider ? getHeldParcels(rider) : [];
@@ -241,16 +272,33 @@ export default function GenerateRiderDataReport() {
                 </div>
                 Report Filters
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 14, marginBottom: 18 }}>
-                {[{ label:'Rider Name', key:'riderName', type:'text', ph:'Search by name' }, { label:'Rider ID', key:'riderId', type:'text', ph:'e.g. RD-...' }].map(f => (
-                  <div key={f.key} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    <label style={{ fontSize: 11, fontWeight: 700, color: '#390955', textTransform: 'uppercase', letterSpacing: 0.4 }}>{f.label}</label>
-                    <input type={f.type} placeholder={f.ph} value={filters[f.key]} onChange={e => handleFilterChange(f.key, e.target.value)}
-                      style={{ padding: '9px 12px', border: '1.5px solid #e0d5f0', borderRadius: 8, fontSize: 13, fontFamily: 'inherit', background: '#faf9ff', color: '#1a1a1a' }}/>
-                  </div>
-                ))}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 14, marginBottom: 18 }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <label style={{ fontSize: 11, fontWeight: 700, color: '#390955', textTransform: 'uppercase', letterSpacing: 0.4 }}>Vehicle Type</label>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: '#390955', textTransform: 'uppercase', letterSpacing: 0.4 }}>Full Name</label>
+                  <input type="text" placeholder="Search by name" value={filters.riderName} onChange={e => handleFilterChange('riderName', e.target.value)}
+                    style={{ padding: '9px 12px', border: '1.5px solid #e0d5f0', borderRadius: 8, fontSize: 13, fontFamily: 'inherit', background: '#faf9ff', color: '#1a1a1a' }}/>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: '#390955', textTransform: 'uppercase', letterSpacing: 0.4 }}>Rider ID</label>
+                  <input type="text" placeholder="e.g. RD-..." value={filters.riderId} onChange={e => handleFilterChange('riderId', e.target.value)}
+                    style={{ padding: '9px 12px', border: '1.5px solid #e0d5f0', borderRadius: 8, fontSize: 13, fontFamily: 'inherit', background: '#faf9ff', color: '#1a1a1a' }}/>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: '#390955', textTransform: 'uppercase', letterSpacing: 0.4 }}>Email / Phone</label>
+                  <input type="text" placeholder="Search email/phone" value={filters.contact} onChange={e => handleFilterChange('contact', e.target.value)}
+                    style={{ padding: '9px 12px', border: '1.5px solid #e0d5f0', borderRadius: 8, fontSize: 13, fontFamily: 'inherit', background: '#faf9ff', color: '#1a1a1a' }}/>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: '#390955', textTransform: 'uppercase', letterSpacing: 0.4 }}>Category</label>
+                  <select value={filters.category} onChange={e => handleFilterChange('category', e.target.value)}
+                    style={{ padding: '9px 12px', border: '1.5px solid #e0d5f0', borderRadius: 8, fontSize: 13, fontFamily: 'inherit', background: '#faf9ff', color: '#1a1a1a' }}>
+                    <option value="all">All Categories</option>
+                    <option value="REAL">Real Riders</option>
+                    <option value="DEMO">Demo Riders</option>
+                  </select>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: '#390955', textTransform: 'uppercase', letterSpacing: 0.4 }}>Vehicle Info</label>
                   <select value={filters.vehicleType} onChange={e => handleFilterChange('vehicleType', e.target.value)}
                     style={{ padding: '9px 12px', border: '1.5px solid #e0d5f0', borderRadius: 8, fontSize: 13, fontFamily: 'inherit', background: '#faf9ff', color: '#1a1a1a' }}>
                     <option value="all">All Vehicles</option>
@@ -260,13 +308,9 @@ export default function GenerateRiderDataReport() {
                   </select>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <label style={{ fontSize: 11, fontWeight: 700, color: '#390955', textTransform: 'uppercase', letterSpacing: 0.4 }}>Status</label>
-                  <select value={filters.status} onChange={e => handleFilterChange('status', e.target.value)}
-                    style={{ padding: '9px 12px', border: '1.5px solid #e0d5f0', borderRadius: 8, fontSize: 13, fontFamily: 'inherit', background: '#faf9ff', color: '#1a1a1a' }}>
-                    <option value="all">All Status</option>
-                    <option value={RIDER_STATUS.ACTIVE}>Active</option>
-                    <option value={RIDER_STATUS.PENDING_VERIFICATION}>Pending Verification</option>
-                  </select>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: '#390955', textTransform: 'uppercase', letterSpacing: 0.4 }}>Hub Address</label>
+                  <input type="text" placeholder="e.g. Pulilan or City" value={filters.area} onChange={e => handleFilterChange('area', e.target.value)}
+                    style={{ padding: '9px 12px', border: '1.5px solid #e0d5f0', borderRadius: 8, fontSize: 13, fontFamily: 'inherit', background: '#faf9ff', color: '#1a1a1a' }}/>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   <label style={{ fontSize: 11, fontWeight: 700, color: '#390955', textTransform: 'uppercase', letterSpacing: 0.4 }}>On Duty</label>
@@ -279,9 +323,13 @@ export default function GenerateRiderDataReport() {
                   </select>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <label style={{ fontSize: 11, fontWeight: 700, color: '#390955', textTransform: 'uppercase', letterSpacing: 0.4 }}>City</label>
-                  <input type="text" placeholder="e.g. Quezon City" value={filters.area} onChange={e => handleFilterChange('area', e.target.value)}
-                    style={{ padding: '9px 12px', border: '1.5px solid #e0d5f0', borderRadius: 8, fontSize: 13, fontFamily: 'inherit', background: '#faf9ff', color: '#1a1a1a' }}/>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: '#390955', textTransform: 'uppercase', letterSpacing: 0.4 }}>Status</label>
+                  <select value={filters.status} onChange={e => handleFilterChange('status', e.target.value)}
+                    style={{ padding: '9px 12px', border: '1.5px solid #e0d5f0', borderRadius: 8, fontSize: 13, fontFamily: 'inherit', background: '#faf9ff', color: '#1a1a1a' }}>
+                    <option value="all">All Status</option>
+                    <option value={RIDER_STATUS.ACTIVE}>Active</option>
+                    <option value={RIDER_STATUS.PENDING_VERIFICATION}>Pending Verification</option>
+                  </select>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   <label style={{ fontSize: 11, fontWeight: 700, color: '#390955', textTransform: 'uppercase', letterSpacing: 0.4 }}>Date From</label>
@@ -322,7 +370,7 @@ export default function GenerateRiderDataReport() {
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                     <thead>
                       <tr>
-                        {['Rider ID','Rider Name','Vehicle Type','City','Deliveries Completed','Rating','On Duty','Status','Actions'].map(h => <th key={h} style={th}>{h}</th>)}
+                        {['Rider ID','Category','Full Name','Email Address','Phone Number','Vehicle Info','Hub Address','Deliveries Completed','Rating','On Duty','Status','Actions'].map(h => <th key={h} style={th}>{h}</th>)}
                       </tr>
                     </thead>
                     <tbody>
@@ -330,18 +378,39 @@ export default function GenerateRiderDataReport() {
                         const badge = RIDER_STATUS_BADGE[r.status] || RIDER_STATUS_BADGE.ACTIVE;
                         const duty = getDutyState(r);
                         const dutyBadge = DUTY_BADGE[duty];
+                        const isDemo = (r.accountCategory || (isDemoEmail(r.email) ? 'DEMO' : 'REAL')) === 'DEMO';
                         return (
                         <tr key={r.riderId} className="hrow" onClick={() => setSelectedRider(r.riderId)}
                           style={{ cursor: 'pointer', ...(i%2===0 ? {} : { background: 'rgba(57,9,85,0.015)' }) }}>
                           <td style={{ ...td, fontWeight: 700, color: '#390955', fontFamily: 'monospace', fontSize: 11 }}>{r.riderId}</td>
+                          <td style={td}>
+                            <span style={{
+                              fontSize: '10px', fontWeight: 800, padding: '3px 8px', borderRadius: '6px',
+                              background: isDemo ? '#f3f4f6' : '#ecfdf5',
+                              color: isDemo ? '#6b7280' : '#059669',
+                              border: `1px solid ${isDemo ? '#d1d5db' : '#a7f3d0'}`,
+                              textTransform: 'uppercase',
+                            }}>
+                              {isDemo ? 'DEMO' : 'REAL'}
+                            </span>
+                          </td>
                           <td style={td}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
                               <div style={{ width: 30, height: 30, borderRadius: '50%', background: '#fff4ec', border: '2px solid #f37021', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f37021', flexShrink: 0 }}><VehicleIcon type={r.vehicleType} size={16} /></div>
                               <div style={{ fontWeight: 700, color: '#1a1a1a' }}>{r.fullName}</div>
                             </div>
                           </td>
-                          <td style={td}><span style={{ fontSize: 12, fontWeight: 600, color: '#555' }}>{r.vehicleType}</span></td>
-                          <td style={td}><span style={{ fontSize: 12, fontWeight: 600, color: '#555', background: '#f5f0fc', padding: '3px 9px', borderRadius: 6 }}>{r.location.city || '—'}</span></td>
+                          <td style={{ ...td, fontSize: 12 }}>{r.email || '—'}</td>
+                          <td style={{ ...td, fontSize: 12 }}>{r.phone || '—'}</td>
+                          <td style={td}>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: '#1a1a1a' }}>{r.vehicleType}</div>
+                            <div style={{ fontSize: 11, color: '#888' }}>{r.vehiclePlateNumber || '—'}</div>
+                          </td>
+                          <td style={td}>
+                            <span style={{ fontSize: 12, fontWeight: 600, color: '#390955', background: '#f5f0fc', padding: '3px 9px', borderRadius: 6, display: 'inline-block' }}>
+                              {r.raw?.assignedHubAddress || r.raw?.address || (r.location.city ? `${r.location.city} Hub` : 'Pulilan Hub')}
+                            </span>
+                          </td>
                           <td style={{ ...td, fontWeight: 700 }}>{r.performance.deliveriesCount}</td>
                           <td style={td}><Stars rating={r.performance.rating}/></td>
                           <td style={td}>
@@ -433,16 +502,17 @@ export default function GenerateRiderDataReport() {
                     </div>
                     <div style={{ padding: '4px 18px 12px' }}>
                       {[
-                        ['Full Name',        rider.fullName],
-                        ['Rider ID',         rider.riderId],
-                        ['Phone',            rider.phone],
-                        ['Email',            rider.email || '—'],
-                        ['Vehicle Type',     rider.vehicleType],
+                        ['Full Name',          rider.fullName],
+                        ['Rider ID',           rider.riderId],
+                        ['Email Address',      rider.email || '—'],
+                        ['Phone Number',       rider.phone || '—'],
+                        ['Vehicle Info',       `${rider.vehicleType}${rider.vehiclePlateNumber ? ` (${rider.vehiclePlateNumber})` : ''}`],
                         ['Driver License No.', rider.driverLicenseNumber || '—'],
-                        ['Plate No.',        rider.vehiclePlateNumber || '—'],
-                        ['City',             rider.location.city || '—'],
-                        ['Province',         rider.location.province || '—'],
-                        ['Joined',           rider.joined],
+                        ['Plate No.',          rider.vehiclePlateNumber || '—'],
+                        ['Hub Address',        rider.raw?.assignedHubAddress || rider.raw?.address || (rider.location.city ? `${rider.location.city} Hub` : 'Pulilan Hub')],
+                        ['City',               rider.location.city || '—'],
+                        ['Province',           rider.location.province || '—'],
+                        ['Joined',             rider.joined],
                       ].map(([k, v]) => (
                         <div key={k} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 0', borderBottom: '1px solid #f5f0ff', fontSize: 13 }}>
                           <span style={{ color: '#888', fontWeight: 500 }}>{k}</span>

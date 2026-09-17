@@ -247,7 +247,7 @@ async function syncSeller(body, email, accountCategory) {
   if (body.idType !== undefined) updates.idType = body.idType;
   if (body.storeName !== undefined) updates.storeName = body.storeName;
   if (body.accountNumber !== undefined) updates.accountNumber = body.accountNumber;
-  Object.assign(updates, pickDefined(body, ['address', 'city', 'state', 'country', 'postalCode', 'bankName', 'commissionRate', 'paymentCycle']));
+  Object.assign(updates, pickDefined(body, ['address', 'city', 'state', 'country', 'postalCode', 'bankName', 'commissionRate', 'paymentCycle', 'warehouseAddress', 'operatingHours']));
 
   const existing = await Seller.findOne({ email });
   if (existing) {
@@ -293,7 +293,7 @@ async function syncRider(body, email, accountCategory) {
   if (body.plateNumber !== undefined) updates.vehiclePlate = body.plateNumber;   // mobile plateNumber -> web vehiclePlate
   if (body.vehicleModel !== undefined) updates.vehicleType = body.vehicleModel;  // mobile vehicleModel -> web vehicleType
   if (body.accountNumber !== undefined) updates.accountNumber = body.accountNumber;
-  Object.assign(updates, pickDefined(body, ['address', 'city', 'state', 'country', 'postalCode', 'bankName', 'licenseNumber', 'emergencyContactName', 'emergencyContactPhone', 'payoutRate', 'payoutCycle']));
+  Object.assign(updates, pickDefined(body, ['address', 'city', 'state', 'country', 'postalCode', 'bankName', 'licenseNumber', 'emergencyContactName', 'emergencyContactPhone', 'payoutRate', 'payoutCycle', 'assignedHub']));
 
   const existing = await Rider.findOne({ email });
   if (existing) {
@@ -331,7 +331,7 @@ async function syncRider(body, email, accountCategory) {
 
 async function syncCustomer(body, email, accountCategory) {
   const updates = { fullName: body.name, email };
-  if (body.phone !== undefined) updates.phone = body.phone;
+  Object.assign(updates, pickDefined(body, ['phone', 'address', 'city', 'deliveryInstructions']));
 
   const existing = await Customer.findOne({ email });
   if (existing) {

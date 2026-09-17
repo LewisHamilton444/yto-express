@@ -26,6 +26,58 @@ app.use(cors({
 }));
 app.use(express.json());
 
+// ── EDITABLE-FIELD ALLOWLISTS ───────────────────────────────────────────────
+// Every admin PUT below assigns its fields straight into $set, so each request body
+// is filtered through an explicit allowlist first. Without this, an authenticated
+// admin could write any schema field, and validation was off so bad values were
+// stored silently. Deliberately NOT writable: identity (trackingNumber, parcelId,
+// registrationId, accountNumber), delivery proof (podPhoto), rider telemetry
+// (riderLat/riderLng), money (codAmount, deliveryFee), derived counters
+// (deliveries, rating, successRate, isOnDuty), and the Web-minted identity
+// artifacts (qrPayload, sellerEnterpriseId, customerEnterpriseId, trackingGeofence)
+// — the Web is the sole minting authority for those.
+const pickEditable = (body, allowed) => {
+    const updates = {};
+    allowed.forEach((field) => {
+        if (body[field] !== undefined) updates[field] = body[field];
+    });
+    return updates;
+};
+
+const CUSTOMER_EDITABLE_FIELDS = [
+    'fullName', 'email', 'phone', 'address', 'city', 'deliveryInstructions', 'status',
+];
+
+const SELLER_EDITABLE_FIELDS = [
+    'fullName', 'storeName', 'warehouseAddress', 'operatingHours',
+    'idType', 'idNumber', 'email', 'phone', 'address', 'city', 'state',
+    'country', 'postalCode', 'bankName', 'commissionRate', 'paymentCycle', 'status',
+];
+
+const RIDER_EDITABLE_FIELDS = [
+    'riderName', 'vehicleType', 'email', 'phone', 'address', 'city', 'state',
+    'country', 'postalCode', 'licenseNumber', 'vehiclePlate',
+    'emergencyContactName', 'emergencyContactPhone', 'bankName',
+    'payoutRate', 'payoutCycle', 'assignedHub', 'status',
+];
+
+// events IS allowed: the hub and status screens legitimately append timeline entries
+// through this route.
+const PARCEL_EDITABLE_FIELDS = [
+    'senderName', 'senderPhone', 'senderEmail',
+    'receiverName', 'receiverPhone', 'recipientEmail',
+    'item', 'weight', 'value', 'origin', 'destination',
+    'status', 'riderId', 'events', 'notes',
+    'paymentMode', 'packageCount', 'packageCategory', 'packageType',
+    'dimensions', 'estimatedDeliveryDate', 'actualDeliveryDate',
+];
+
+// parcelId excluded: it is the join key with Parcel, so rewriting it would orphan
+// the location from the parcel it belongs to.
+const PARCEL_LOCATION_EDITABLE_FIELDS = [
+    'lat', 'lng', 'location', 'type', 'status', 'geofence', 'notes',
+];
+
 const Seller          = require('./models/Seller');
 const Rider           = require('./models/Rider');
 const Customer        = require('./models/Customer');
@@ -143,7 +195,14 @@ app.post('/api/sellers', authenticateToken, async (req, res) => {
 
 app.get('/api/sellers', authenticateToken, async (req, res) => {
     try {
-        const sellers = await Seller.find({}).sort({ createdAt: -1 });
+        const filter = {};
+        if (req.query.status) {
+            // Escape the value before it becomes a pattern: raw input here is
+            // regex injection, and a crafted value can also hang the event loop.
+            const escapedStatus = req.query.status.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            filter.status = new RegExp(`^${escapedStatus}$`, 'i');
+        }
+        const sellers = await Seller.find(filter).sort({ createdAt: -1 });
         res.json(sellers);
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -152,15 +211,32 @@ app.get('/api/sellers', authenticateToken, async (req, res) => {
 
 app.put('/api/sellers/:id', authenticateToken, async (req, res) => {
     try {
+        const updates = pickEditable(req.body, SELLER_EDITABLE_FIELDS);
+        if (Object.keys(updates).length === 0) {
+            return res.status(400).json({ error: 'No updatable fields were provided.' });
+        }
+
         const updated = await Seller.findByIdAndUpdate(
             req.params.id,
-            { $set: req.body },
-            { new: true, runValidators: false }
+            { $set: updates },
+            { new: true, runValidators: true }
         );
 
         if (req.body.status && updated.email) {
             BridgeClient.sendApproval(updated.email, 'seller', req.body.status, updated.registrationId)
                 .catch(e => console.warn('[Bridge→Android] sendApproval failed:', e.message));
+        }
+
+        if (updated && updated.email) {
+            BridgeClient.sendUserUpdate(updated.email, 'seller', {
+                name: updated.fullName,
+                phone: updated.phone,
+                storeName: updated.storeName,
+                warehouseAddress: updated.warehouseAddress,
+                operatingHours: updated.operatingHours,
+                address: updated.address,
+                city: updated.city,
+            }).catch(e => console.warn('[Bridge→Android] sendUserUpdate seller failed:', e.message));
         }
 
         res.json(updated);
@@ -191,7 +267,14 @@ app.post('/api/riders', authenticateToken, async (req, res) => {
 
 app.get('/api/riders', authenticateToken, async (req, res) => {
     try {
-        const riders = await Rider.find({}).sort({ createdAt: -1 });
+        const filter = {};
+        if (req.query.status) {
+            // Escape the value before it becomes a pattern: raw input here is
+            // regex injection, and a crafted value can also hang the event loop.
+            const escapedStatus = req.query.status.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            filter.status = new RegExp(`^${escapedStatus}$`, 'i');
+        }
+        const riders = await Rider.find(filter).sort({ createdAt: -1 });
         res.json(riders);
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -200,15 +283,32 @@ app.get('/api/riders', authenticateToken, async (req, res) => {
 
 app.put('/api/riders/:id', authenticateToken, async (req, res) => {
     try {
+        const updates = pickEditable(req.body, RIDER_EDITABLE_FIELDS);
+        if (Object.keys(updates).length === 0) {
+            return res.status(400).json({ error: 'No updatable fields were provided.' });
+        }
+
         const updated = await Rider.findByIdAndUpdate(
             req.params.id,
-            { $set: req.body },
-            { new: true, runValidators: false }
+            { $set: updates },
+            { new: true, runValidators: true }
         );
 
         if (req.body.status && updated.email) {
             BridgeClient.sendApproval(updated.email, 'rider', req.body.status, updated.registrationId)
                 .catch(e => console.warn('[Bridge→Android] sendApproval failed:', e.message));
+        }
+
+        if (updated && updated.email) {
+            BridgeClient.sendUserUpdate(updated.email, 'rider', {
+                name: updated.riderName,
+                phone: updated.phone,
+                vehicleModel: updated.vehicleType,
+                plateNumber: updated.vehiclePlate,
+                assignedHub: updated.assignedHub,
+                address: updated.address,
+                city: updated.city,
+            }).catch(e => console.warn('[Bridge→Android] sendUserUpdate rider failed:', e.message));
         }
 
         res.json(updated);
@@ -231,6 +331,44 @@ app.get('/api/customers', authenticateToken, async (req, res) => {
     try {
         const customers = await Customer.find({}).sort({ createdAt: -1 });
         res.json(customers);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.put('/api/customers/:id', authenticateToken, async (req, res) => {
+    try {
+        const query = mongoose.isValidObjectId(req.params.id)
+            ? { _id: req.params.id }
+            : { customerId: req.params.id };
+
+        const updates = pickEditable(req.body, CUSTOMER_EDITABLE_FIELDS);
+
+        if (Object.keys(updates).length === 0) {
+            return res.status(400).json({ error: 'No updatable fields were provided.' });
+        }
+
+        const updated = await Customer.findOneAndUpdate(
+            query,
+            { $set: updates },
+            { new: true, runValidators: true }
+        );
+
+        if (!updated) {
+            return res.status(404).json({ error: 'Customer not found.' });
+        }
+
+        if (updated.email) {
+            BridgeClient.sendUserUpdate(updated.email, 'customer', {
+                name: updated.fullName,
+                phone: updated.phone,
+                address: updated.address,
+                city: updated.city,
+                deliveryInstructions: updated.deliveryInstructions,
+            }).catch(e => console.warn('[Bridge→Android] sendUserUpdate customer failed:', e.message));
+        }
+
+        res.json(updated);
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
@@ -259,12 +397,14 @@ app.get('/api/customers/:id/orders', authenticateToken, async (req, res) => {
 });
 
 // ── ACTIVITY LOG ROUTE ──
+// ── ACTIVITY LOG ROUTE ──
 app.get('/api/activity-log', authenticateToken, async (req, res) => {
     try {
-        const limit = Math.min(parseInt(req.query.limit) || 50, 200);
+        const limit = Math.min(parseInt(req.query.limit) || 100, 300);
         const roleFilter = req.query.role;
         const events = [];
 
+        // 1. Customers Activity (Registrations, Status Changes, Parcel Shipments, Issue Tickets)
         if (!roleFilter || roleFilter === 'customer') {
             const customers = await Customer.find({});
             customers.forEach(c => {
@@ -291,8 +431,39 @@ app.get('/api/activity-log', authenticateToken, async (req, res) => {
                     });
                 }
             });
+
+            // Customer parcel orders
+            const custParcels = await Parcel.find({}).sort({ createdAt: -1 }).limit(limit).lean();
+            custParcels.forEach(p => {
+                if (p.receiverName) {
+                    events.push({
+                        role: 'customer',
+                        actorName: p.receiverName,
+                        actorId: p.customerEnterpriseId || p.recipientEmail || p.trackingNumber,
+                        type: 'order',
+                        status: p.status,
+                        description: `Shipment ${p.trackingNumber} destination: ${p.destination || p.city || 'Delivery Address'} (${p.item || 'Package'})`,
+                        timestamp: p.createdAt,
+                    });
+                }
+            });
+
+            // Customer issue tickets
+            const issues = await Issue.find({}).sort({ createdAt: -1 }).limit(limit).lean();
+            issues.forEach(i => {
+                events.push({
+                    role: 'customer',
+                    actorName: 'Customer',
+                    actorId: i.ticketId,
+                    type: 'issue',
+                    status: i.status || 'Pending',
+                    description: `Issue ticket ${i.ticketId} filed for tracking ${i.trackingNumber}: ${i.category} - ${i.description.slice(0, 70)}`,
+                    timestamp: i.createdAt,
+                });
+            });
         }
 
+        // 2. Sellers Activity (Registrations, Approvals, Parcel Bookings)
         if (!roleFilter || roleFilter === 'seller') {
             const sellers = await Seller.find({});
             sellers.forEach(s => {
@@ -302,7 +473,7 @@ app.get('/api/activity-log', authenticateToken, async (req, res) => {
                     actorId: s.registrationId,
                     type: 'registration',
                     status: s.status || 'ACTIVE',
-                    description: `${s.fullName} registered as a seller`,
+                    description: `${s.fullName} registered as a merchant (${s.storeName || 'Store'})`,
                     timestamp: s.createdAt,
                 });
                 if (s.statusHistory && s.statusHistory.length > 0) {
@@ -319,8 +490,25 @@ app.get('/api/activity-log', authenticateToken, async (req, res) => {
                     });
                 }
             });
+
+            // Seller bookings
+            const sellerParcels = await Parcel.find({}).sort({ createdAt: -1 }).limit(limit).lean();
+            sellerParcels.forEach(p => {
+                if (p.senderName) {
+                    events.push({
+                        role: 'seller',
+                        actorName: p.senderName,
+                        actorId: p.sellerEnterpriseId || p.sellerId || p.trackingNumber,
+                        type: 'order',
+                        status: p.status,
+                        description: `Merchant ${p.senderName} generated package ${p.trackingNumber} for ${p.receiverName} (${p.item || 'Item'})`,
+                        timestamp: p.createdAt,
+                    });
+                }
+            });
         }
 
+        // 3. Riders Activity (Registrations, Duty Changes, Logistics Pickups/Deliveries/POD)
         if (!roleFilter || roleFilter === 'rider') {
             const riders = await Rider.find({});
             riders.forEach(r => {
@@ -330,7 +518,7 @@ app.get('/api/activity-log', authenticateToken, async (req, res) => {
                     actorId: r.registrationId,
                     type: 'registration',
                     status: r.status || 'Active',
-                    description: `${r.riderName} registered as a rider`,
+                    description: `${r.riderName} registered as a courier (${r.vehicleType || 'Motorcycle'} ${r.vehiclePlate || ''})`,
                     timestamp: r.createdAt,
                 });
                 if (r.statusHistory && r.statusHistory.length > 0) {
@@ -341,17 +529,43 @@ app.get('/api/activity-log', authenticateToken, async (req, res) => {
                             actorId: r.registrationId,
                             type: 'status_change',
                             status: sh.status,
-                            description: sh.reason || `Status changed to ${sh.status}`,
+                            description: sh.reason || `Duty / status updated to ${sh.status}`,
                             timestamp: sh.changedAt,
                         });
                     });
                 }
             });
+
+            // Rider pickups, transits, and POD deliveries
+            const riderParcels = await Parcel.find({ $or: [{ riderId: { $ne: '' } }, { 'events.0': { $exists: true } }] }).sort({ createdAt: -1 }).limit(limit).lean();
+            riderParcels.forEach(p => {
+                if (Array.isArray(p.events) && p.events.length > 0) {
+                    p.events.forEach(ev => {
+                        events.push({
+                            role: 'rider',
+                            actorName: p.assignedRider || 'Courier',
+                            actorId: p.riderId || p.trackingNumber,
+                            type: 'delivery',
+                            status: ev.status || p.status,
+                            description: `Parcel ${p.trackingNumber}: ${ev.event || ev.status} at ${ev.location || 'Routing Hub'}`,
+                            timestamp: ev.time ? new Date(ev.time) : p.updatedAt,
+                        });
+                    });
+                } else if (p.riderId) {
+                    events.push({
+                        role: 'rider',
+                        actorName: p.assignedRider || 'Courier',
+                        actorId: p.riderId || p.trackingNumber,
+                        type: 'delivery',
+                        status: p.status,
+                        description: `Assigned delivery task for parcel ${p.trackingNumber} (${p.status})`,
+                        timestamp: p.updatedAt || p.createdAt,
+                    });
+                }
+            });
         }
 
-        // Admin feed (2026-09-13): account registration / update / activate /
-        // deactivate events from Account.statusHistory, so the Activity Log
-        // renders real admin account data like it does for customers/sellers/riders.
+        // 4. Admin Activity (Accounts, Management, Notifications)
         if (!roleFilter || roleFilter === 'admin') {
             const accounts = await Account.find({});
             accounts.forEach(a => {
@@ -360,7 +574,7 @@ app.get('/api/activity-log', authenticateToken, async (req, res) => {
                         events.push({
                             role: 'admin',
                             actorName: a.name,
-                            actorId: String(a._id),
+                            actorId: a.adminId || String(a._id),
                             type: sh.type || 'status_change',
                             status: sh.status || a.status || 'Active',
                             description: sh.reason || (sh.type === 'registration' ? `${a.name} registered as an admin` : `${a.name} account updated`),
@@ -371,13 +585,27 @@ app.get('/api/activity-log', authenticateToken, async (req, res) => {
                     events.push({
                         role: 'admin',
                         actorName: a.name,
-                        actorId: String(a._id),
+                        actorId: a.adminId || String(a._id),
                         type: 'registration',
                         status: a.status || 'Active',
-                        description: `${a.name} registered as an admin`,
+                        description: `${a.name} provisioned as ${a.role || 'staff'}`,
                         timestamp: a.createdAt || a.createdDate,
                     });
                 }
+            });
+
+            // System & Admin Notifications
+            const notifs = await AdminNotification.find({}).sort({ createdAt: -1 }).limit(limit).lean();
+            notifs.forEach(n => {
+                events.push({
+                    role: n.role || 'admin',
+                    actorName: 'System Monitor',
+                    actorId: n.relatedId || n.notificationId || 'SYS',
+                    type: n.type === 'new_order' ? 'order' : n.type === 'security' ? 'registration' : 'status_change',
+                    status: 'Logged',
+                    description: `${n.title}: ${n.message}`,
+                    timestamp: n.createdAt,
+                });
             });
         }
 
@@ -447,6 +675,37 @@ app.post('/api/parcels', authenticateToken, async (req, res) => {
             console.warn('[Bridge→Android] sync-parcel error:', bridgeErr.message);
         }
 
+        // Auto-index into ParcelLocation for Parcel Map and Geofence telemetry
+        try {
+            // Index only a genuine coordinate. The old fallback pinned every located
+            // parcel to one fixed point, which misleads the map and the geofence far
+            // more than leaving it unlocated until a real fix arrives.
+            if (!newParcel.riderLat || !newParcel.riderLng) {
+                console.warn(`[ParcelLocation] skipping auto-index for ${newParcel.trackingNumber}: no coordinates yet`);
+            } else {
+                const lat = String(newParcel.riderLat);
+                const lng = String(newParcel.riderLng);
+                await ParcelLocation.findOneAndUpdate(
+                    { parcelId: newParcel.trackingNumber },
+                    {
+                        $set: {
+                            parcelId: newParcel.trackingNumber,
+                            lat,
+                            lng,
+                            location: newParcel.origin || 'Pulilan Sorting Hub',
+                            type: 'Warehouse',
+                            status: newParcel.status || 'Active',
+                            geofence: 'Inside',
+                            notes: newParcel.item || '',
+                        }
+                    },
+                    { upsert: true, new: true, setDefaultsOnInsert: true }
+                );
+            }
+        } catch (locErr) {
+            console.warn('[ParcelLocation] auto-index error:', locErr.message);
+        }
+
         res.status(201).json({ message: "Parcel saved!", parcel: newParcel });
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -464,10 +723,15 @@ app.get('/api/parcels', authenticateToken, async (req, res) => {
 
 app.put('/api/parcels/:id', authenticateToken, async (req, res) => {
     try {
+        const updates = pickEditable(req.body, PARCEL_EDITABLE_FIELDS);
+        if (Object.keys(updates).length === 0) {
+            return res.status(400).json({ error: 'No updatable fields were provided.' });
+        }
+
         const updated = await Parcel.findByIdAndUpdate(
             req.params.id,
-            { $set: req.body },
-            { new: true, runValidators: false }
+            { $set: updates },
+            { new: true, runValidators: true }
         );
 
         if (req.body.status && updated.trackingNumber) {
@@ -519,10 +783,15 @@ app.get('/api/parcel-locations', authenticateToken, async (req, res) => {
 
 app.put('/api/parcel-locations/:id', authenticateToken, async (req, res) => {
     try {
+        const updates = pickEditable(req.body, PARCEL_LOCATION_EDITABLE_FIELDS);
+        if (Object.keys(updates).length === 0) {
+            return res.status(400).json({ error: 'No updatable fields were provided.' });
+        }
+
         const updated = await ParcelLocation.findByIdAndUpdate(
             req.params.id,
-            { $set: req.body },
-            { new: true, runValidators: false }
+            { $set: updates },
+            { new: true, runValidators: true }
         );
         res.json(updated);
     } catch (error) {
@@ -591,8 +860,15 @@ app.post('/api/accounts', authenticateToken, async (req, res) => {
         if (existing) {
             return res.status(400).json({ error: 'An account with this email already exists.' });
         }
+        let adminId = req.body.adminId;
+        if (!adminId) {
+            const count = await Account.countDocuments();
+            const year = new Date().getFullYear();
+            adminId = `YTOA${year}${String(count + 1).padStart(4, '0')}`;
+        }
         const newAccount = new Account({
             ...req.body,
+            adminId,
             email,
         });
         newAccount.statusHistory = [{
@@ -729,8 +1005,53 @@ app.patch('/api/notifications/:id/read', authenticateToken, async (req, res) => 
 // ── SUPPORT TICKET / ISSUE ROUTES ──
 app.get('/api/issues', authenticateToken, async (req, res) => {
     try {
-        const issues = await Issue.find({}).sort({ createdAt: -1 });
-        res.json(issues);
+        const limit = Math.min(parseInt(req.query.limit) || 200, 500);
+        const issues = await Issue.find({}).sort({ createdAt: -1 }).limit(limit).lean();
+
+        // One parcel lookup for the whole page rather than one query per ticket.
+        const trackingNumbers = issues
+            .filter(i => (!i.productName || !i.productCategory || !i.eta) && i.trackingNumber)
+            .map(i => i.trackingNumber);
+        const parcelByTracking = new Map();
+        if (trackingNumbers.length > 0) {
+            const linked = await Parcel.find({ trackingNumber: { $in: trackingNumbers } })
+                .select('trackingNumber item productName packageType category estimatedDeliveryDate eta')
+                .lean();
+            linked.forEach(p => parcelByTracking.set(p.trackingNumber, p));
+        }
+
+        const DEMO_REPORTER_EMAILS = ['customer@gmail.com', 'seller@gmail.com', 'rider@gmail.com'];
+
+        // Read-only projection. This route used to mint a random ticket id and persist
+        // its own enrichment through issue.save(), which made a GET write to the database
+        // and gave a legacy ticket a different id on every request. Missing values are now
+        // derived deterministically for the response only; nothing is written here.
+        const enriched = issues.map((issue) => {
+            const obj = { ...issue };
+
+            if (!obj.ticketId) {
+                const year = new Date(obj.createdAt || Date.now()).getFullYear();
+                const suffix = String(parseInt(String(obj._id).slice(-6), 16) % 100000).padStart(5, '0');
+                obj.ticketId = `TICK-${year}-${suffix}`;
+            }
+
+            if (!obj.accountCategory) {
+                const reporterEmail = (obj.reporterEmail || '').toLowerCase().trim();
+                obj.accountCategory = DEMO_REPORTER_EMAILS.includes(reporterEmail) ? 'DEMO' : 'REAL';
+            }
+
+            if (!obj.productName || !obj.productCategory || !obj.eta) {
+                const parcel = parcelByTracking.get(obj.trackingNumber);
+                if (parcel) {
+                    if (!obj.productName) obj.productName = parcel.item || parcel.productName || '';
+                    if (!obj.productCategory) obj.productCategory = parcel.packageType || parcel.category || '';
+                    if (!obj.eta) obj.eta = parcel.estimatedDeliveryDate || parcel.eta || '';
+                }
+            }
+
+            return obj;
+        });
+        res.json(enriched);
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
@@ -956,9 +1277,9 @@ if (!MONGO_URI) {
 // Insert-only: ensures the canonical admin accounts exist with bcrypt-hashed
 // passwords from env. Passwords are never overwritten on restart.
 const ADMIN_BOOTSTRAP = [
-  { email: 'superadmin@ytoexpress.com', name: 'YTO Super Admin',      role: 'super_admin',  passwordEnv: 'ADMIN_PASSWORD_SUPERADMIN', legacyEnv: 'DEMO_ADMIN_PASSWORD_SUPERADMIN', phone: '09170000000' },
-  { email: 'staff@ytoexpress.com',      name: 'YTO Operations Staff', role: 'staff',        passwordEnv: 'ADMIN_PASSWORD_STAFF',      legacyEnv: 'DEMO_ADMIN_PASSWORD_STAFF',      phone: '09170000000' },
-  { email: 'hub@ytoexpress.com',        name: 'YTO Hub Receiver',     role: 'hub_receiver', passwordEnv: 'ADMIN_PASSWORD_HUB',        legacyEnv: 'DEMO_ADMIN_PASSWORD_HUB',        phone: '09170000000' },
+  { email: 'superadmin@ytoexpress.com', adminId: 'YTOA20260001', name: 'YTO Super Admin',      role: 'super_admin',  passwordEnv: 'ADMIN_PASSWORD_SUPERADMIN', legacyEnv: 'DEMO_ADMIN_PASSWORD_SUPERADMIN', phone: '09170000000' },
+  { email: 'staff@ytoexpress.com',      adminId: 'YTOA20260002', name: 'YTO Operations Staff', role: 'staff',        passwordEnv: 'ADMIN_PASSWORD_STAFF',      legacyEnv: 'DEMO_ADMIN_PASSWORD_STAFF',      phone: '09170000000' },
+  { email: 'hub@ytoexpress.com',        adminId: 'YTOA20260003', name: 'YTO Hub Receiver',     role: 'hub_receiver', passwordEnv: 'ADMIN_PASSWORD_HUB',        legacyEnv: 'DEMO_ADMIN_PASSWORD_HUB',        phone: '09170000000' },
 ];
 
 function resolveAdminPassword(entry) {
@@ -982,16 +1303,27 @@ async function ensureAdminAccounts() {
         { email: d.email },
         {
           $setOnInsert: {
+            adminId: d.adminId,
             email: d.email,
             name: d.name,
             phone: d.phone,
             role: d.role,
             password: passwordHash,
             status: 'Active',
+            accountCategory: 'REAL',
             createdDate: today,
           },
         },
         { upsert: true }
+      );
+      // Ensure adminId and accountCategory are set on existing accounts as well
+      await Account.collection.updateOne(
+        { email: d.email, $or: [{ adminId: { $exists: false } }, { adminId: null }] },
+        { $set: { adminId: d.adminId } }
+      );
+      await Account.collection.updateOne(
+        { email: d.email, accountCategory: { $exists: false } },
+        { $set: { accountCategory: 'REAL' } }
       );
       if (source !== d.passwordEnv) console.log(`[Bootstrap] ${d.email}: password sourced from ${source}.`);
     }
@@ -1001,14 +1333,117 @@ async function ensureAdminAccounts() {
   }
 }
 
+async function ensureOfficialDemoAccounts() {
+  try {
+    await Seller.updateOne(
+      { email: 'seller@gmail.com' },
+      {
+        $setOnInsert: {
+          registrationId: 'YTOS2026DEMO1',
+          accountNumber: '9876543210',
+          fullName: 'YTO Merchant',
+          storeName: 'YTO Official Store',
+          email: 'seller@gmail.com',
+          phone: '09876543210',
+          idType: 'National ID',
+          idNumber: 'PH-ID-98765',
+          address: 'YTO Central Warehouse, Pulilan, Bulacan',
+          city: 'Pulilan',
+          state: 'Bulacan',
+          country: 'Philippines',
+          postalCode: '3005',
+          bankName: 'BDO Unibank',
+          paymentCycle: 'Weekly',
+          commissionRate: 10,
+          status: 'ACTIVE',
+          statusHistory: [{ status: 'ACTIVE', changedAt: new Date(), reason: 'Official Demo Seller Initialization' }],
+        },
+        $set: { accountCategory: 'DEMO', fullName: 'YTO Merchant', storeName: 'YTO Official Store' },
+      },
+      { upsert: true }
+    );
+
+    await Customer.updateOne(
+      { email: 'customer@gmail.com' },
+      {
+        $setOnInsert: {
+          customerId: 'YTOC2026DEMO1',
+          fullName: 'YTO Buyer',
+          email: 'customer@gmail.com',
+          phone: '01234567890',
+          status: 'Active',
+          source: 'mobile-app',
+          statusHistory: [{ status: 'Active', changedAt: new Date(), reason: 'Official Demo Customer Initialization' }],
+        },
+        $set: { accountCategory: 'DEMO', fullName: 'YTO Buyer' },
+      },
+      { upsert: true }
+    );
+
+    await Rider.updateOne(
+      { email: 'rider@gmail.com' },
+      {
+        $setOnInsert: {
+          registrationId: 'YTOR2026DEMO1',
+          accountNumber: '2468101214',
+          riderName: 'YTO Rider',
+          email: 'rider@gmail.com',
+          phone: '02468101214',
+          vehicleType: 'Yamaha NMAX 155',
+          vehiclePlate: 'ABC-1234',
+          licenseNumber: 'N01-23-456789',
+          address: 'Pulilan Hub, Pulilan, Bulacan',
+          city: 'Pulilan',
+          state: 'Bulacan',
+          country: 'Philippines',
+          postalCode: '3005',
+          bankName: 'BPI',
+          payoutRate: 80,
+          payoutCycle: 'Weekly',
+          status: 'Active',
+          isOnDuty: true,
+          deliveries: 120,
+          rating: 5.0,
+          statusHistory: [{ status: 'Active', changedAt: new Date(), reason: 'Official Demo Rider Initialization' }],
+        },
+        $set: { accountCategory: 'DEMO', riderName: 'YTO Rider' },
+      },
+      { upsert: true }
+    );
+
+    // Backfill accountCategory: 'REAL' for any non-demo records missing it
+    await Seller.updateMany(
+      { email: { $ne: 'seller@gmail.com' }, accountCategory: { $exists: false } },
+      { $set: { accountCategory: 'REAL' } }
+    );
+    await Customer.updateMany(
+      { email: { $ne: 'customer@gmail.com' }, accountCategory: { $exists: false } },
+      { $set: { accountCategory: 'REAL' } }
+    );
+    await Rider.updateMany(
+      { email: { $ne: 'rider@gmail.com' }, accountCategory: { $exists: false } },
+      { $set: { accountCategory: 'REAL' } }
+    );
+
+    console.log('[Bootstrap] Official demo accounts ensured (Seller, Customer, Rider) with DEMO category.');
+  } catch (err) {
+    console.error('[Bootstrap Warning] Could not ensure official demo accounts:', err.message);
+  }
+}
+
 const bootstrapRequested = process.env.ENABLE_ADMIN_BOOTSTRAP === '1' || process.env.ENABLE_DEMO_BOOTSTRAP === '1';
 const bootstrapAllowedInProd = process.env.ALLOW_ADMIN_BOOTSTRAP_IN_PROD === '1' || process.env.ALLOW_DEMO_BOOTSTRAP_IN_PROD === '1';
 const bootstrapActive = bootstrapRequested && (process.env.NODE_ENV !== 'production' || bootstrapAllowedInProd);
 
 mongoose.connect(MONGO_URI, { serverSelectionTimeoutMS: 15000 })
   .then(async () => {
+    // Admin and demo-account bootstrap stay behind the opt-in gate: a production
+    // deploy that forgets ENABLE_ADMIN_BOOTSTRAP must not silently create admin
+    // records or seed demo rows. ALLOW_ADMIN_BOOTSTRAP_IN_PROD=1 is still required
+    // in production, and the demo seeder only runs when the same flag is set.
     if (bootstrapActive) {
       await ensureAdminAccounts();
+      await ensureOfficialDemoAccounts();
     } else if (bootstrapRequested) {
       console.log('[Bootstrap] ENABLE_ADMIN_BOOTSTRAP=1 while NODE_ENV=production without ALLOW_ADMIN_BOOTSTRAP_IN_PROD=1 - skipped for safety.');
     }

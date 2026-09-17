@@ -17,7 +17,7 @@ const s = {
   empty:  { padding: '24px 16px', textAlign: 'center', color: '#bbb', fontSize: 12.5 },
 };
 
-export default function NotificationBell({ riders = [], pendingCount = 0, onNavigate }) {
+export default function NotificationBell({ pendingCount = 0, onNavigate }) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef(null);
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   PackageCheck, Bike, Truck, UserCheck,
   TrendingUp, TrendingDown,
@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { apiFetch, parcelsApi, ridersApi } from './services/api';
 import { exportToCSV } from './exportUtils';
+import { barHeightPercent } from './utils/barHeight';
 import useSSE from './services/useSSE';
 import './AnalyticsDashboard.css';
 import Tooltip from './components/ui/Tooltip';
@@ -34,6 +35,57 @@ import PeakAlertBanner                   from "./PeakAlertBanner";import GlobalH
 import TableSkeleton from "./components/ui/TableSkeleton";
 import { initialPendingSellers, initialPendingRiders } from "./verification/registrationCredentials";
 import { isDeliveredStatus, isReturnFamilyStatus, isInTransitFamilyStatus } from "./utils/parcelStatus";
+import { isDemoEmail } from './demoUtils';
+
+function mapSellerToPendingItem(seller) {
+  const isDemo = (seller.accountCategory || (isDemoEmail(seller.email) ? 'DEMO' : 'REAL')) === 'DEMO';
+  return {
+    id: seller.registrationId || String(seller._id),
+    _id: seller._id,
+    fullName: seller.fullName || '—',
+    contactNumber: seller.phone || '—',
+    email: seller.email || '—',
+    storeName: seller.storeName || '—',
+    accountCategory: isDemo ? 'DEMO' : 'REAL',
+    governmentId: {
+      type: seller.idType || 'National ID',
+      number: seller.idNumber || '—',
+    },
+    address: typeof seller.address === 'string' ? seller.address : (seller.address?.street || '—'),
+    businessName: seller.storeName || seller.fullName || '—',
+    businessType: 'Retail',
+    submittedAt: seller.createdAt || new Date().toISOString(),
+    status: seller.status || 'Pending Verification',
+    documents: Array.isArray(seller.documents) ? seller.documents : [],
+    raw: seller,
+  };
+}
+
+function mapRiderToPendingItem(rider) {
+  const isDemo = (rider.accountCategory || (isDemoEmail(rider.email) ? 'DEMO' : 'REAL')) === 'DEMO';
+  return {
+    id: rider.registrationId || String(rider._id),
+    _id: rider._id,
+    fullName: rider.riderName || '—',
+    contactNumber: rider.phone || '—',
+    email: rider.email || '—',
+    accountCategory: isDemo ? 'DEMO' : 'REAL',
+    governmentId: {
+      type: rider.idType || "Driver's License",
+      number: rider.licenseNumber || rider.idNumber || '—',
+    },
+    vehicle: {
+      type: rider.vehicleType || 'Motorcycle',
+      plate: rider.vehiclePlate || '—',
+      model: rider.vehicleType || '—',
+    },
+    address: typeof rider.address === 'string' ? rider.address : (rider.address?.street || '—'),
+    submittedAt: rider.createdAt || new Date().toISOString(),
+    status: rider.status || 'Pending',
+    documents: Array.isArray(rider.documents) ? rider.documents : [],
+    raw: rider,
+  };
+}
 
 // ── Dashboard parcel-report exports (CSV + printable PDF) ───────────────
 const DASH_PARCEL_COLUMNS = [
@@ -347,16 +399,51 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
   const [pendingSellers, setPendingSellers] = useState(initialPendingSellers);
   const [pendingRiders,  setPendingRiders]  = useState(initialPendingRiders);
 
+  const fetchPendingRegistrations = useCallback(async () => {
+    try {
+      const [sellersRes, ridersRes] = await Promise.all([
+        apiFetch('/sellers?status=PENDING_VERIFICATION'),
+        apiFetch('/riders?status=Pending'),
+      ]);
+      if (sellersRes.ok) {
+        const data = await sellersRes.json();
+        if (Array.isArray(data)) {
+          setPendingSellers(data.map(mapSellerToPendingItem));
+        }
+      }
+      if (ridersRes.ok) {
+        const data = await ridersRes.json();
+        if (Array.isArray(data)) {
+          setPendingRiders(data.map(mapRiderToPendingItem));
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to fetch pending registrations:', e);
+    }
+  }, []);
+
   const [trackingReports, setTrackingReports] = useState([]);
   const [archivedReports] = useState([]);
 
   const isSuperAdmin = currentUser?.role === 'super_admin';
 
   // Real-time SSE connection — auto-refreshes data when bridge events arrive
-  const { connected: sseConnected } = useSSE();
+  const { connected: sseConnected, on: onSSE } = useSSE();
 
   // SSE connection count (how many admin clients are connected)
   const [sseClientCount, setSseClientCount] = useState(0);
+
+  useEffect(() => {
+    fetchPendingRegistrations();
+    if (onSSE) {
+      const unsubUser = onSSE('user-synced', () => fetchPendingRegistrations());
+      const unsubApproval = onSSE('approval-updated', () => fetchPendingRegistrations());
+      return () => {
+        if (typeof unsubUser === 'function') unsubUser();
+        if (typeof unsubApproval === 'function') unsubApproval();
+      };
+    }
+  }, [fetchPendingRegistrations, onSSE]);
 
   useEffect(() => {
     const fetchSSEStats = async () => {
@@ -712,7 +799,7 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
               <>
                 {statsError && (
                   <div style={{ fontSize: '11px', fontWeight: 600, color: '#c2410c', background: '#fff4ec', padding: '6px 12px', borderRadius: '8px', marginBottom: '10px', display: 'inline-block' }}>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><AlertTriangle size={13} aria-hidden="true" /> Stats endpoint unreachable — KPIs below are computed from the full parcel/rider lists instead.</span>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><AlertTriangle size={13} aria-hidden="true" /> Some totals could not be loaded just now. The figures below are counted from the full parcel and rider lists.</span>
                   </div>
                 )}
                 {/* Dominant KPI anchor + compact inline tickers — asymmetric, no uniform card grid */}
@@ -794,7 +881,7 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
                             <div className="ed-bar-column" key={i}>
                               <span className="ed-bar-score" style={{ color: v === maxVolume ? '#f37021' : '#390955' }}>{v}</span>
                               <div className="ed-bar-track">
-                                <div className={`ed-bar-fill ${v === maxVolume ? 'peak' : 'standard'}`} style={{ height: `${Math.max(4, (v / maxVolume) * 100)}%` }} />
+                                <div className={`ed-bar-fill ${v === maxVolume ? 'peak' : 'standard'}`} style={{ height: `${barHeightPercent(v, maxVolume)}%` }} />
                               </div>
                               <span className="ed-bar-day">{volumeLabels[i]}</span>
                             </div>
@@ -860,7 +947,7 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
                       <div className="ed-mini-head"><h6>Parcel Deliveries (7d)</h6><span>{deliveryVals.reduce((a, b) => a + b, 0)}</span></div>
                       <div className="ed-mini-bars purple">
                         {deliveryVals.map((v, i) => (
-                          <div key={i} className="ed-mini-bar" style={{ height: `${Math.max(4, (v / maxDelivery) * 100)}%`, background: v === maxDelivery && v > 0 ? '#f37021' : '#390955' }} />
+                          <div key={i} className="ed-mini-bar" style={{ height: `${barHeightPercent(v, maxDelivery)}%`, background: v === maxDelivery && v > 0 ? '#f37021' : '#390955' }} />
                         ))}
                       </div>
                     </div>
@@ -869,7 +956,7 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
                       <div className="ed-mini-head"><h6>Returned Parcels (7d)</h6><span style={{ color: '#f37021' }}>{maxReturn} peak</span></div>
                       <div className="ed-mini-bars orange">
                         {returnVals.map((v, i) => (
-                          <div key={i} className="ed-mini-bar" style={{ height: `${Math.max(4, (v / maxReturn) * 100)}%`, background: v === maxReturn && v > 0 ? '#390955' : '#f37021' }} />
+                          <div key={i} className="ed-mini-bar" style={{ height: `${barHeightPercent(v, maxReturn)}%`, background: v === maxReturn && v > 0 ? '#390955' : '#f37021' }} />
                         ))}
                       </div>
                     </div>
@@ -885,7 +972,7 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
                           <div className="ed-mini-head"><h6>Deliveries per Rider (Top 7)</h6><span>{activityVals.reduce((a, b) => a + b, 0)} total</span></div>
                           <div className="ed-mini-bars purple">
                             {activityVals.map((v, i) => (
-                              <div key={i} className="ed-mini-bar" style={{ height: `${Math.max(4, (v / maxActivity) * 100)}%`, background: v === maxActivity && v > 0 ? '#f37021' : '#390955' }} />
+                              <div key={i} className="ed-mini-bar" style={{ height: `${barHeightPercent(v, maxActivity)}%`, background: v === maxActivity && v > 0 ? '#f37021' : '#390955' }} />
                             ))}
                           </div>
                           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
@@ -904,7 +991,7 @@ export default function AnalyticsDashboard({ onLogout, currentUser }) {
                     <div className="ed-action-bar">
                       <Tooltip content="Open the full Manage Parcels page">
                       <button className="ed-action-btn primary" onClick={() => handleMenuClick('manage-parcels')}>
-                        <ClipboardList size={15} /> Generate Full Report
+                        <ClipboardList size={15} /> View parcels
                       </button>
                       </Tooltip>
                       <Tooltip content="Download the current parcel list as a PDF report">
