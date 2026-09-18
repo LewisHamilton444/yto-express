@@ -339,7 +339,9 @@ html, body, #root {
 }
 .ed-toolbar-titles h1 {
   margin: 0;
-  font-size: 17px;
+  /* 24px = the shared page-title standard (text-2xl in PageHeader);
+     the dashboard title was 17px — quieter than secondary screens. */
+  font-size: 24px;
   font-weight: 800;
   color: var(--yto-brand-purple);
   letter-spacing: -0.3px;
@@ -735,7 +737,7 @@ html, body, #root {
 @media (max-width: 1440px) {
   .enhanced-dashboard-root { padding: 16px; gap: 12px; }
   .ed-toolbar { padding: 0 0 10px; }
-  .ed-toolbar-titles h1 { font-size: 16px; }
+  .ed-toolbar-titles h1 { font-size: 21px; }
   .ed-anchor-row { gap: 10px; }
   .ed-canvas-grid { gap: 12px; }
 }
@@ -744,7 +746,7 @@ html, body, #root {
    presence at distance on large panels. */
 @media (min-width: 2000px) {
   .enhanced-dashboard-root { padding: 28px; gap: 18px; max-width: 1760px; }
-  .ed-toolbar-titles h1 { font-size: 19px; }
+  .ed-toolbar-titles h1 { font-size: 26px; }
   .ed-anchor-metric h2 { font-size: 38px; }
   .ad-sidebar { width: 280px; }
   .ad-main { margin-left: 280px; }

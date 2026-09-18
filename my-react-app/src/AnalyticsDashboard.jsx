@@ -178,8 +178,10 @@ const getMenuSections = (role) => [
 
   ...(role !== 'hub_receiver' ? [{
     label: 'Admin',
-    items: [
-      ...(role === 'super_admin' ? [{ label: 'Accounts', key: 'manage-accounts' }] : []),
+    items: [      ...(role === 'super_admin' ? [{
+        label: 'Accounts', key: 'manage-accounts'
+      }] : []),
+      ...(role === 'super_admin' ? [{ label: 'Archives', key: 'settings' }] : []),
       { label: 'Activity Log', key: 'activity-log' },
     ],
   }] : []),
@@ -609,9 +611,11 @@ export default function AnalyticsDashboard({ onLogout, currentUser, activePage =
   // Per-page prop contracts. Every page gets currentUser from the common base
   // below; this adds only the extras. key -> component lives in pageMap.js,
   // key -> extra props lives here — one registry each, no duplicated switch.
+  // (The two verification pages are also handed onNavigateToSettings by the
+  // historical code, but neither consumes it — not carried forward.)
   const pagePropsFor = (key) => ({
-    'process-seller': { pendingSellers, setPendingSellers, onNavigateToSettings: goToSettings },
-    'process-rider':  { pendingRiders,  setPendingRiders,  onNavigateToSettings: goToSettings },
+    'process-seller': { pendingSellers, setPendingSellers },
+    'process-rider':  { pendingRiders,  setPendingRiders  },
     'tracking-info':  { reports: trackingReports, onReportsChange: setTrackingReports },
     'settings':       { archivedReports },
     'logout':         { setActivePage: setActiveMenuItem, onLogout, onCancel: () => setActiveMenuItem('dashboard') },
@@ -818,14 +822,8 @@ export default function AnalyticsDashboard({ onLogout, currentUser, activePage =
                   </div>
                 </div>
 
-                {/* Peak Connection Alert Banner */}
-                <PeakAlertBanner />
-
-                {/* SSE Connection History Chart */}
-                <div style={{ marginBottom: 20 }}>
-                  <ConnectionHistoryChart />
-                </div>
-
+                {/* Core logistics work first; connection diagnostics are
+                    secondary and live at the bottom of the page. */}
                 <div className="ed-canvas-grid">
                   <section className="ed-canvas">
                     <div className="ed-panel-head">
@@ -989,6 +987,13 @@ export default function AnalyticsDashboard({ onLogout, currentUser, activePage =
                       </Tooltip>
                     </div>
                   </aside>
+                </div>
+
+                {/* Connection monitoring — secondary diagnostics, kept below
+                    the operational sections so triage work comes first. */}
+                <PeakAlertBanner />
+                <div style={{ marginBottom: 20 }}>
+                  <ConnectionHistoryChart />
                 </div>
               </>
             )}

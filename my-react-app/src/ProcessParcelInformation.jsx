@@ -201,7 +201,7 @@ export default function ProcessParcelInformation() {
           <p className="ppi-page-sub">Add, update, delete, and retrieve parcel records</p>
           <nav className="ppi-breadcrumb">
             <span>Dashboard</span><span className="ppi-bc-sep">/</span>
-            <span>Parcel Information Management</span><span className="ppi-bc-sep">/</span>
+            <span>Shipments</span><span className="ppi-bc-sep">/</span>
             <span className="ppi-bc-active">Process Parcel Information</span>
           </nav>
         </div>

@@ -3,6 +3,7 @@ import { apiFetch } from './services/api';
 import StatusBadge from './components/ui/StatusBadge';
 import { PARCEL_STATUS_COLORS } from './components/ui/statusColors';
 import Modal from './components/ui/Modal';
+import PageHeader from './components/ui/PageHeader';
 import Tooltip from './components/ui/Tooltip';
 import { AlertTriangle, Check, CheckCircle2, CircleDot, FileDown, FileText, X, XCircle } from 'lucide-react';
 import { normalizeParcelStatus } from './utils/parcelStatus';
@@ -885,18 +886,13 @@ export default function ManageParcels() {
 
       {viewParcel && <ParcelModal key={viewParcel.id} parcel={viewParcel} onClose={() => setViewParcel(null)} allParcels={parcels} />}
 
-      {/* Header */}
-      <header style={{ background: 'white', borderBottom: '1px solid #e0d5f0', padding: '24px 32px 20px' }}>
-        <h1 style={{ fontSize: 26, fontWeight: 800, color: '#1a1a1a', letterSpacing: -0.5, margin: '0 0 4px 0' }}>Manage Parcels</h1>
-        <p style={{ fontSize: 13, color: '#666', margin: '2px 0 0 0' }}>Peer-to-peer parcel registry, delivery status &amp; rider assignment in one view</p>
-        <nav style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 10 }}>
-          <span style={{ fontSize: 12, color: '#666', fontWeight: 500 }}>Dashboard</span>
-          <span style={{ fontSize: 12, color: '#d4c8e8' }}>/</span>
-          <span style={{ fontSize: 12, color: '#666', fontWeight: 500 }}>Parcel Information Management</span>
-          <span style={{ fontSize: 12, color: '#d4c8e8' }}>/</span>
-          <span style={{ fontSize: 12, color: '#390955', fontWeight: 600 }}>Manage Parcels</span>
-        </nav>
-      </header>
+      {/* Header — shared PageHeader pattern (title / subtitle / breadcrumb)
+          so every page presents the same header hierarchy. */}
+      <PageHeader
+        title="Manage Parcels"
+        subtitle="Parcel registry, delivery status &amp; rider assignment in one view"
+        breadcrumb={['Dashboard', 'Shipments', 'Manage Parcels']}
+      />
 
       {/* Body */}
       <div style={{ padding: '24px 32px', display: 'flex', flexDirection: 'column', gap: 20 }}>

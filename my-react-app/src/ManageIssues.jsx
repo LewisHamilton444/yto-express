@@ -38,17 +38,16 @@ const STATUS_TABS = ['All', 'Open', 'Under Investigation', 'Resolved', 'Closed']
 
 const TABLE_HEADERS = [
   { label: 'Ticket ID', width: 'min-w-[140px]' },
-  { label: 'Type', width: 'min-w-[160px]' },
-  { label: 'Tracking ID', width: 'min-w-[160px]' },
-  { label: 'Category', width: 'min-w-[100px]' },
+  { label: 'Type', width: 'min-w-[130px]' },
+  { label: 'Tracking ID', width: 'min-w-[150px]' },
   { label: 'Reporter', width: 'min-w-[200px]' },
-  { label: 'Product Name', width: 'min-w-[170px]' },
-  { label: 'Product Category', width: 'min-w-[150px]' },
-  { label: 'ETA', width: 'min-w-[120px]' },
-  { label: 'Evidence', width: 'min-w-[110px]' },
-  { label: 'Status', width: 'min-w-[140px]' },
-  { label: 'Date Reported', width: 'min-w-[170px]' },
+  { label: 'Status', width: 'min-w-[120px]' },
+  { label: 'Date Reported', width: 'min-w-[160px]' },
 ];
+// Triage columns only. Product name/category, ETA, the REAL/DEMO badge, and
+// evidence-photo counts were removed from the grid — each still lives in the
+// View & Resolve detail modal, so triage no longer needs side-to-side
+// scrolling inside the page's max-width container.
 
 export default function ManageIssues() {
   const [issues, setIssues] = useState([]);
@@ -180,10 +179,10 @@ export default function ManageIssues() {
         <div className="flex flex-row flex-wrap items-center justify-between gap-3 px-6 py-4 border-b border-slate-100">
           <div className="flex flex-wrap items-center gap-3">
             <div className="relative">
-              <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Search ticket #, tracking #, reporter..."
+              <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />                <input
+                  type="text"
+                  aria-label="Search tickets by ticket number, tracking number, or reporter"
+                  placeholder="Search ticket #, tracking #, reporter..."
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 className="pl-10 pr-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 w-72"
@@ -247,7 +246,7 @@ export default function ManageIssues() {
 
         {/* Tickets Table */}
         <div className="overflow-x-auto w-full custom-issues-table-scroll rounded-lg border border-slate-100">
-          <table className="w-full min-w-[1720px] border-collapse text-left">
+          <table className="w-full border-collapse text-left">
             <thead className="bg-[#390955] text-white">
               <tr>
                 {TABLE_HEADERS.map(h => (
@@ -277,39 +276,14 @@ export default function ManageIssues() {
               ) : (
                 currentIssues.map((issue, idx) => {
                   const dateStr = issue.createdAt ? new Date(issue.createdAt).toLocaleString() : 'N/A';
-                  const isDemo = issue.accountCategory === 'DEMO' || isDemoEmail(issue.reporterEmail);
                   return (
                     <tr key={issue._id || idx} className="border-b border-slate-100 text-[13px] transition hover:bg-slate-50">
                       <td className="whitespace-nowrap px-4 py-3.5 font-extrabold text-brand-purple font-mono">{issue.ticketId}</td>
                       <td className="whitespace-nowrap px-4 py-3.5 font-semibold text-gray-700">{issue.category}</td>
                       <td className="whitespace-nowrap px-4 py-3.5 font-bold text-brand-orange">{issue.trackingNumber}</td>
                       <td className="whitespace-nowrap px-4 py-3.5">
-                        <span style={{
-                          fontSize: '10px',
-                          fontWeight: 800,
-                          padding: '3px 8px',
-                          borderRadius: '6px',
-                          background: isDemo ? '#f3f4f6' : '#ecfdf5',
-                          color: isDemo ? '#6b7280' : '#059669',
-                          border: `1px solid ${isDemo ? '#d1d5db' : '#a7f3d0'}`,
-                          textTransform: 'uppercase',
-                        }}>
-                          {isDemo ? 'DEMO' : 'REAL'}
-                        </span>
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3.5">
                         <div className="font-bold text-gray-800">{issue.reporterName || 'Customer'}</div>
                         <div className="text-[11px] text-gray-500">{issue.reporterEmail || issue.reporterPhone || 'Mobile App'}</div>
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3.5 text-xs font-semibold text-gray-800">{issue.productName || '—'}</td>
-                      <td className="whitespace-nowrap px-4 py-3.5 text-xs text-gray-600">{issue.productCategory || '—'}</td>
-                      <td className="whitespace-nowrap px-4 py-3.5 text-xs text-gray-600">{issue.eta || '—'}</td>
-                      <td className="whitespace-nowrap px-4 py-3.5">
-                        {issue.evidenceImages && issue.evidenceImages.length > 0 ? (
-                          <Badge tone="purple" icon={Camera} hint={`${issue.evidenceImages.length} attached evidence image${issue.evidenceImages.length > 1 ? 's' : ''} — click View & Resolve to inspect`}>{issue.evidenceImages.length} Photo{issue.evidenceImages.length > 1 ? 's' : ''}</Badge>
-                        ) : (
-                          <span className="text-[11px] text-gray-400">None</span>
-                        )}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3.5"><Badge tone={STATUS_TONE[issue.status] || 'red'} hint={{ Open: 'Reported — awaiting first action', Investigating: 'Being investigated by operations staff', Resolved: 'Closed after a resolution was confirmed' }[issue.status]}>{issue.status}</Badge></td>
                       <td className="whitespace-nowrap px-4 py-3.5 text-xs text-gray-500">{dateStr}</td>

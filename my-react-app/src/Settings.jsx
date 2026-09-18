@@ -3,6 +3,7 @@ import SettingsArchiveView from './SettingsArchiveView';
 import { FileText } from 'lucide-react';
 import { useToast } from './components/ui/useToast';
 import Tooltip from './components/ui/Tooltip';
+import PageHeader from './components/ui/PageHeader';
 
 export default function Settings({
   /* ── Archived tracking reports still come from AnalyticsDashboard; archived
@@ -17,9 +18,6 @@ export default function Settings({
 
   const s = {
     wrapper:      { padding: '30px', background: '#f7f4fa', minHeight: '100vh' },
-    header:       { marginBottom: 28, paddingBottom: 24, borderBottom: '1px solid #e0d0f0' },
-    h1:           { fontSize: 28, fontWeight: 700, color: '#1a1a1a', margin: 0 },
-    subtitle:     { fontSize: 14, color: '#888', margin: '6px 0 0' },
     section:      { background: 'white', borderRadius: 12, padding: 28, marginBottom: 20, border: '1px solid #d5cbe4', position: 'relative', overflow: 'hidden' },
     sectionH2:    { fontSize: 16, fontWeight: 700, color: '#1a1a1a', margin: '0 0 4px' },
     sectionP:     { fontSize: 12, color: '#999', margin: '0 0 20px' },
@@ -34,10 +32,11 @@ export default function Settings({
   return (
     <div style={s.wrapper}>
 
-      <div style={s.header}>
-        <h1 style={s.h1}>Settings</h1>
-        <p style={s.subtitle}>Inspect and manage archived sellers, riders, and tracking reports</p>
-      </div>
+      <PageHeader
+        title="Archives"
+        subtitle="Inspect and manage archived sellers, riders, and tracking reports"
+        breadcrumb={['Dashboard', 'Admin', 'Archives']}
+      />
 
       {/* ══════════════════════════════════════════════
           ARCHIVED RECORDS — the sole view on this page
