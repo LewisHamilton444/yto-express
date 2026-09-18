@@ -459,15 +459,24 @@ html, body, #root {
 .ed-kpi-trend.up   { color: #16a34a; background: rgba(34, 197, 94, 0.12); }
 .ed-kpi-trend.down { color: #dc2626; background: rgba(239, 68, 68, 0.10); }
 
-/* Dominant operational canvas (2.2fr) + compact data rail (1fr) */
+/* Operational canvas (2.2fr) + compact data rail (1fr), then a balanced
+   two-column row for the secondary analytics so the rail never stacks
+   three blocks under a lone wide chart. */
 .ed-canvas-grid {
   display: grid;
   grid-template-columns: 2.2fr 1fr;
   gap: 12px;
   align-items: start;
 }
+.ed-secondary-row {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr;
+  gap: 12px;
+  align-items: start;
+}
 .ed-canvas,
-.ed-rail .ed-rail-block {
+.ed-rail > .ed-rail-block,
+.ed-secondary-row > .ed-rail-block {
   background: white;
   border: 1px solid #d5cbe4;
   border-radius: 12px;
@@ -760,5 +769,6 @@ html, body, #root {
   .ed-ticker:nth-child(n+3) { border-top: 1px solid #e8e1f2; }
 }
 @media (max-width: 1080px) {
-  .ed-canvas-grid { grid-template-columns: 1fr; }
+  .ed-canvas-grid,
+  .ed-secondary-row { grid-template-columns: 1fr; }
 }
