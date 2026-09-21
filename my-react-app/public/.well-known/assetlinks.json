@@ -1,0 +1,8 @@
+{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "com.example.yto_express_app",
+    "sha256_cert_fingerprints": ["C8FF34AEA92D052670D84C19BC17AB4079E52028DD21D44A6877D84D056D132E"]
+  }
+}
