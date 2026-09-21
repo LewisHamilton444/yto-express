@@ -5,6 +5,8 @@ dns.setServers(['8.8.8.8', '8.8.4.4']);
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const jwt = require('jsonwebtoken');
 const twilio = require('twilio');
 const nodemailer = require('nodemailer');
@@ -18,11 +20,43 @@ dotenv.config({ path: path.resolve(__dirname, '.env') });
 
 const app = express();
 
-// Ensure CORS headers are attached to EVERY response (even on errors)
+// Security HTTP headers (2026 audit H3): packaged via helmet with a CSP that
+// tolerates the admin's inline-style design system while blocking frame
+// embedding, MIME sniffing, and mixed content downgrades.
+app.use(helmet({
+    contentSecurityPolicy: {
+        directives: {
+            defaultSrc: ["'self'"],
+            scriptSrc: ["'self'"],
+            styleSrc: ["'self'", "'unsafe-inline'"],
+            imgSrc: ["'self'", 'data:', 'https:', 'http:'],
+            connectSrc: ["'self'", 'https:', 'http:', 'ws:', 'wss:'],
+            fontSrc: ["'self'", 'https:', 'data:'],
+            frameAncestors: ["'none'"],
+            objectSrc: ["'none'"],
+        },
+    },
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+    strictTransportSecurity: { maxAge: 15552000 },
+}));
+
+// CORS (2026 audit M1): no wildcard. Same-origin and localhost dev origins are
+// always allowed; production origins come from CORS_ORIGIN (comma-separated)
+// and any *.onrender.com host. Disallowed origins get no ACAO header at all.
+const isAllowedCorsOrigin = (origin) => {
+    if (!origin) return true; // same-origin requests, curl, native clients
+    try {
+        const { hostname } = new URL(origin);
+        if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname.endsWith('.onrender.com')) return true;
+    } catch { return false; }
+    const allowed = (process.env.CORS_ORIGIN || '').split(',').map((s) => s.trim()).filter(Boolean);
+    return allowed.includes(origin);
+};
+
 app.use(cors({
-    origin: '*',
+    origin: isAllowedCorsOrigin,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization']
+    allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 app.use(express.json());
 
@@ -98,7 +132,16 @@ if (!JWT_SECRET || !JWT_SECRET.trim()) {
   process.exit(1);
 }
 
-function authenticateToken(req, res, next) {
+// 2026 audit L1: HS256 only. A forged/rewritten alg claim is rejected before
+// the payload is trusted.
+function verifyJwtToken(token) {
+  return jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] });
+}
+
+// 2026 audit M2: an account's Deactivated status is enforced on EVERY
+// authenticated request, not just at login — an existing token cannot keep
+// working after an admin neutralizes the account.
+async function authenticateToken(req, res, next) {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
 
@@ -106,16 +149,67 @@ function authenticateToken(req, res, next) {
         return res.status(401).json({ error: 'Access denied. No token provided.' });
     }
 
+    let decoded;
     try {
-        const decoded = jwt.verify(token, JWT_SECRET);
-        req.user = decoded;
-        next();
+        decoded = verifyJwtToken(token);
     } catch (error) {
         if (error.name === 'TokenExpiredError') {
             return res.status(401).json({ error: 'Token expired. Please log in again.' });
         }
         return res.status(403).json({ error: 'Invalid token.' });
     }
+
+    const account = await Account.findById(decoded.id);
+    if (!account) {
+        return res.status(401).json({ error: 'Account no longer exists. Please log in again.' });
+    }
+    if (account.status !== 'Active') {
+        return res.status(403).json({ error: 'This account is deactivated. Contact your Super Admin.' });
+    }
+
+    req.user = { ...decoded, status: account.status };
+    next();
+}
+
+// 2026 audit C1/C2: with the exception of the account routes, every admin
+// route previously trusted ANY authenticated role. requireRole closes the
+// staff/hub_receiver privilege-escalation surface.
+function requireRole(...allowedRoles) {
+    return (req, res, next) => {
+        if (!req.user || !allowedRoles.includes(req.user.role)) {
+            return res.status(403).json({ error: 'Access denied. You do not have permission for this action.' });
+        }
+        next();
+    };
+}
+
+// Rate limiting (2026 audit H1/M4): brute-force guard on sign-in and the
+// messaging endpoints that burn money (SMS) or can be abused for spoofing.
+const loginLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 10,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Too many sign-in attempts. Please try again in 15 minutes.' },
+});
+const messageLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 30,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Too many messages sent. Please try again later.' },
+});
+
+// 2026 audit L3: server-side password floor for admin accounts created/reset
+// through the API. The bootstrap accounts (env-seeded) bypass this route.
+function validateAdminPassword(password) {
+    if (!password || typeof password !== 'string' || password.length < 8) {
+        return 'Password must be at least 8 characters';
+    }
+    if (!/[A-Za-z]/.test(password) || !/\d/.test(password)) {
+        return 'Password must include at least one letter and one number';
+    }
+    return null;
 }
 
 // ── ROOT ROUTE ──
@@ -124,7 +218,28 @@ app.get('/', (req, res) => {
 });
 
 // ── SSE EVENT STREAM ───────────────────────────────────────────────────
-app.get('/api/events/stream', (req, res) => {
+// 2026 audit H2: the stream is now authenticated. A browser EventSource cannot
+// send request headers, so the dashboard already rides the JWT as ?token=; the
+// server validates it (HS256 + real Active Account) BEFORE opening the stream,
+// and rejects anonymous/expired tokens with 401/403. Residual: the token rides
+// the query string (visible in access logs) — swapping the frontend to a
+// fetch()-based reader with an Authorization header removes that residual.
+app.get('/api/events/stream', async (req, res) => {
+    const token = req.query.token;
+    let decoded;
+    if (token) {
+        try {
+            decoded = verifyJwtToken(token);
+        } catch { decoded = null; }
+    }
+    if (!decoded) {
+        return res.status(401).json({ error: 'Authentication required.' });
+    }
+    const streamAccount = await Account.findById(decoded.id);
+    if (!streamAccount || streamAccount.status !== 'Active') {
+        return res.status(403).json({ error: 'Account unavailable.' });
+    }
+
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
@@ -374,6 +489,18 @@ app.put('/api/customers/:id', authenticateToken, async (req, res) => {
     }
 });
 
+app.delete('/api/customers/:id', authenticateToken, async (req, res) => {
+    try {
+        const query = mongoose.isValidObjectId(req.params.id)
+            ? { _id: req.params.id }
+            : { customerId: req.params.id };
+        await Customer.findOneAndDelete(query);
+        res.json({ message: "Customer record deleted!" });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 app.get('/api/customers/stats', authenticateToken, async (req, res) => {
     try {
         const total = await Customer.countDocuments();
@@ -385,11 +512,28 @@ app.get('/api/customers/stats', authenticateToken, async (req, res) => {
 
 app.get('/api/customers/:id/orders', authenticateToken, async (req, res) => {
     try {
-        const customer = await Customer.findOne({ customerId: req.params.id });
+        const query = mongoose.isValidObjectId(req.params.id)
+            ? { $or: [{ customerId: req.params.id }, { _id: req.params.id }] }
+            : { customerId: req.params.id };
+
+        const customer = await Customer.findOne(query);
         if (!customer) {
             return res.status(404).json({ error: 'Customer not found.' });
         }
-        const orders = await Parcel.find({ recipientEmail: customer.email }).sort({ createdAt: -1 });
+
+        const matchConditions = [
+            { customerEnterpriseId: customer.customerId },
+            { recipientEmail: new RegExp(`^${customer.email.trim()}$`, 'i') },
+        ];
+
+        if (customer.phone) {
+            const cleanPhone = customer.phone.replace(/\D/g, '');
+            if (cleanPhone.length >= 7) {
+                matchConditions.push({ receiverPhone: new RegExp(cleanPhone + '$') });
+            }
+        }
+
+        const orders = await Parcel.find({ $or: matchConditions }).sort({ createdAt: -1 });
         res.json(orders);
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -844,7 +988,7 @@ app.get('/api/dashboard/stats', authenticateToken, async (req, res) => {
 });
 
 // ── ACCOUNT ROUTES ──
-app.get('/api/accounts', authenticateToken, async (req, res) => {
+app.get('/api/accounts', authenticateToken, requireRole('super_admin'), async (req, res) => {
     try {
         const accounts = await Account.find({}).select('-password');
         res.json(accounts);
@@ -853,18 +997,31 @@ app.get('/api/accounts', authenticateToken, async (req, res) => {
     }
 });
 
-app.post('/api/accounts', authenticateToken, async (req, res) => {
+app.post('/api/accounts', authenticateToken, requireRole('super_admin'), async (req, res) => {
     try {
         const email = req.body.email.toLowerCase().trim();
         const existing = await Account.findOne({ email });
         if (existing) {
             return res.status(400).json({ error: 'An account with this email already exists.' });
         }
-        let adminId = req.body.adminId;
-        if (!adminId) {
+        // 2026 audit L3: enforce a sane password floor on self-service account
+        // creation (bootstrap accounts are unaffected — they bypass this route).
+        const passwordError = validateAdminPassword(req.body.password);
+        if (passwordError) {
+            return res.status(400).json({ error: passwordError });
+        }
+        // 2026 audit M6: adminId is now server-minted only (client-supplied
+        // values are ignored) and collision-checked instead of count-guessed.
+        let adminId = null;
+        const year = new Date().getFullYear();
+        for (let attempt = 0; attempt < 5 && !adminId; attempt++) {
             const count = await Account.countDocuments();
-            const year = new Date().getFullYear();
-            adminId = `YTOA${year}${String(count + 1).padStart(4, '0')}`;
+            const candidate = `YTOA${year}${String(count + 1 + attempt).padStart(4, '0')}`;
+            const taken = await Account.exists({ adminId: candidate });
+            if (!taken) adminId = candidate;
+        }
+        if (!adminId) {
+            adminId = `YTOA${year}${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
         }
         const newAccount = new Account({
             ...req.body,
@@ -886,13 +1043,18 @@ app.post('/api/accounts', authenticateToken, async (req, res) => {
     }
 });
 
-app.put('/api/accounts/:id', authenticateToken, async (req, res) => {
+app.put('/api/accounts/:id', authenticateToken, requireRole('super_admin'), async (req, res) => {
     try {
         const updateData = { ...req.body };
         if (updateData.email) {
             updateData.email = updateData.email.toLowerCase().trim();
         }
         if (updateData.password && updateData.password.trim()) {
+            // 2026 audit L3: the same strength floor applies to resets.
+            const passwordError = validateAdminPassword(updateData.password);
+            if (passwordError) {
+                return res.status(400).json({ error: passwordError });
+            }
             const salt = await bcrypt.genSalt(10);
             updateData.password = await bcrypt.hash(updateData.password, salt);
         } else {
@@ -901,6 +1063,19 @@ app.put('/api/accounts/:id', authenticateToken, async (req, res) => {
         delete updateData.statusHistory;
         const account = await Account.findById(req.params.id);
         if (!account) return res.status(404).json({ error: 'Account not found' });
+
+        // 2026 audit C2: nobody may promote/demote themselves.
+        if (updateData.role && String(req.user.id) === String(account._id) && updateData.role !== account.role) {
+            return res.status(400).json({ error: 'You cannot change your own role.' });
+        }
+        // The last standing Super Admin can never be demoted or disabled.
+        if (account.role === 'super_admin' && updateData.role && updateData.role !== 'super_admin') {
+            const activeSupers = await Account.countDocuments({ role: 'super_admin', status: 'Active' });
+            if (activeSupers <= 1) {
+                return res.status(400).json({ error: 'The last active Super Admin cannot be demoted.' });
+            }
+        }
+
         Object.assign(account, updateData);
         account.statusHistory = account.statusHistory || [];
         account.statusHistory.push({
@@ -918,7 +1093,7 @@ app.put('/api/accounts/:id', authenticateToken, async (req, res) => {
     }
 });
 
-app.patch('/api/accounts/:id/status', authenticateToken, async (req, res) => {
+app.patch('/api/accounts/:id/status', authenticateToken, requireRole('super_admin'), async (req, res) => {
     try {
         const account = await Account.findById(req.params.id);
         if (!account) return res.status(404).json({ error: 'Account not found' });
@@ -942,7 +1117,7 @@ app.patch('/api/accounts/:id/status', authenticateToken, async (req, res) => {
     }
 });
 
-app.post('/api/accounts/login', async (req, res) => {
+app.post('/api/accounts/login', loginLimiter, async (req, res) => {
     try {
         const { email, password } = req.body;
         const account = await Account.findOne({ email: email.toLowerCase().trim() });
@@ -989,10 +1164,13 @@ app.get('/api/notifications', authenticateToken, async (req, res) => {
 
 app.patch('/api/notifications/:id/read', authenticateToken, async (req, res) => {
     try {
-        // Read-state lives client-side in localStorage per admin session —
-        // this endpoint exists for parity/future multi-admin read tracking
-        // and simply confirms the notification exists.
-        const notification = await AdminNotification.findById(req.params.id).lean();
+        // Server is the source of truth for read state (shared across admin
+        // sessions/devices). Marks the row read; dedupes harmlessly on repeat.
+        const notification = await AdminNotification.findByIdAndUpdate(
+            req.params.id,
+            { $set: { read: true, readAt: new Date() } },
+            { new: true }
+        ).lean();
         if (!notification) {
             return res.status(404).json({ error: 'Notification not found' });
         }
@@ -1020,8 +1198,6 @@ app.get('/api/issues', authenticateToken, async (req, res) => {
             linked.forEach(p => parcelByTracking.set(p.trackingNumber, p));
         }
 
-        const DEMO_REPORTER_EMAILS = ['customer@gmail.com', 'seller@gmail.com', 'rider@gmail.com'];
-
         // Read-only projection. This route used to mint a random ticket id and persist
         // its own enrichment through issue.save(), which made a GET write to the database
         // and gave a legacy ticket a different id on every request. Missing values are now
@@ -1033,11 +1209,6 @@ app.get('/api/issues', authenticateToken, async (req, res) => {
                 const year = new Date(obj.createdAt || Date.now()).getFullYear();
                 const suffix = String(parseInt(String(obj._id).slice(-6), 16) % 100000).padStart(5, '0');
                 obj.ticketId = `TICK-${year}-${suffix}`;
-            }
-
-            if (!obj.accountCategory) {
-                const reporterEmail = (obj.reporterEmail || '').toLowerCase().trim();
-                obj.accountCategory = DEMO_REPORTER_EMAILS.includes(reporterEmail) ? 'DEMO' : 'REAL';
             }
 
             if (!obj.productName || !obj.productCategory || !obj.eta) {
@@ -1090,6 +1261,8 @@ app.put('/api/issues/:id/status', authenticateToken, async (req, res) => {
 });
 
 // ── SMS ROUTES ──
+// 2026 audit M4: sending SMS burns Twilio/Semaphore credit and can spoof the
+// YTO sender ID — restricted to super_admin + staff and rate-capped.
 function toE164PH(number) {
     const digits = number.replace(/\D/g, '');
     if (number.trim().startsWith('+')) return '+' + digits;
@@ -1144,7 +1317,7 @@ async function sendViaSemaphore(number, message) {
     return { success: true, provider: 'semaphore', result: data };
 }
 
-app.post('/api/sms/send', authenticateToken, async (req, res) => {
+app.post('/api/sms/send', authenticateToken, requireRole('super_admin', 'staff'), messageLimiter, async (req, res) => {
     try {
         const { number, message } = req.body;
         if (!number || !message) {
@@ -1191,16 +1364,17 @@ function getEmailTransporter() {
             user: process.env.EMAIL_USER,
             pass: process.env.EMAIL_APP_PASSWORD,
         },
-        tls: {
-            rejectUnauthorized: false
-        }
+        // 2026 audit M3: TLS certificate verification stays ON (default) — the
+        // previous rejectUnauthorized:false opened a MITM window for the Gmail
+        // app password. The IPv4-only family:4 + dnsLookup overrides above already
+        // solve the ESOCKET IPv6 drop this was originally working around.
     });
 
     return emailTransporter;
 }
 
 // ── BULLETPROOF EMAIL ROUTE (NON-BLOCKING BACKGROUND DISPATCH) ──
-app.post('/api/email/send', authenticateToken, async (req, res) => {
+app.post('/api/email/send', authenticateToken, requireRole('super_admin', 'staff'), messageLimiter, async (req, res) => {
     const { to, subject, message } = req.body;
 
     if (!to || !message) {
@@ -1264,6 +1438,25 @@ app.delete('/api/admin/reset-database', authenticateToken, async (req, res) => {
     }
 });
 
+// 2026 bridge audit F5: the bridge contract spans THREE env names on TWO
+// deploys that must all agree. Assert the wiring loudly at startup so a
+// silent 401 on every bridge call (wrong/rotated secret on one side) can
+// never masquerade as "sync just stopped working".
+//   App→Web outbound:  WEB_BACKEND_URL + WEB_BRIDGE_API_KEY
+//   Web inbound gate:  BRIDGE_API_KEY            ← must EQUAL WEB_BRIDGE_API_KEY
+//   Web→App outbound:  ANDROID_BACKEND_URL + ANDROID_BRIDGE_API_KEY
+//   App inbound gate:  BRIDGE_API_KEY || WEB_BRIDGE_API_KEY
+//                      ← must EQUAL ANDROID_BRIDGE_API_KEY
+// Conclusion: set ALL FOUR names to the SAME secret value on BOTH deploys.
+if (!process.env.BRIDGE_API_KEY) {
+  console.warn('[Bridge config] BRIDGE_API_KEY not set — ALL inbound bridge writes are denied with 503. Set it to the SAME secret as the App backend\'s WEB_BRIDGE_API_KEY.');
+}
+if (!process.env.ANDROID_BACKEND_URL) {
+  console.warn('[Bridge config] ANDROID_BACKEND_URL not set — Web-to-App bridge pushes (approvals, parcels, issue statuses) are DISABLED.');
+} else if (!process.env.ANDROID_BRIDGE_API_KEY) {
+  console.warn('[Bridge config] ANDROID_BRIDGE_API_KEY not set — outbound bridge pushes will 401. Set it to the SAME secret as the App backend\'s WEB_BRIDGE_API_KEY.');
+}
+
 // ── PORT & DATABASE STARTUP ──
 const PORT = process.env.PORT || 3001;
 const MONGO_URI = process.env.MONGO_URI;
@@ -1310,20 +1503,15 @@ async function ensureAdminAccounts() {
             role: d.role,
             password: passwordHash,
             status: 'Active',
-            accountCategory: 'REAL',
             createdDate: today,
           },
         },
         { upsert: true }
       );
-      // Ensure adminId and accountCategory are set on existing accounts as well
+      // Ensure adminId is set on existing accounts as well
       await Account.collection.updateOne(
         { email: d.email, $or: [{ adminId: { $exists: false } }, { adminId: null }] },
         { $set: { adminId: d.adminId } }
-      );
-      await Account.collection.updateOne(
-        { email: d.email, accountCategory: { $exists: false } },
-        { $set: { accountCategory: 'REAL' } }
       );
       if (source !== d.passwordEnv) console.log(`[Bootstrap] ${d.email}: password sourced from ${source}.`);
     }
@@ -1334,101 +1522,11 @@ async function ensureAdminAccounts() {
 }
 
 async function ensureOfficialDemoAccounts() {
-  try {
-    await Seller.updateOne(
-      { email: 'seller@gmail.com' },
-      {
-        $setOnInsert: {
-          registrationId: 'YTOS2026DEMO1',
-          accountNumber: '9876543210',
-          fullName: 'YTO Merchant',
-          storeName: 'YTO Official Store',
-          email: 'seller@gmail.com',
-          phone: '09876543210',
-          idType: 'National ID',
-          idNumber: 'PH-ID-98765',
-          address: 'YTO Central Warehouse, Pulilan, Bulacan',
-          city: 'Pulilan',
-          state: 'Bulacan',
-          country: 'Philippines',
-          postalCode: '3005',
-          bankName: 'BDO Unibank',
-          paymentCycle: 'Weekly',
-          commissionRate: 10,
-          status: 'ACTIVE',
-          statusHistory: [{ status: 'ACTIVE', changedAt: new Date(), reason: 'Official Demo Seller Initialization' }],
-        },
-        $set: { accountCategory: 'DEMO', fullName: 'YTO Merchant', storeName: 'YTO Official Store' },
-      },
-      { upsert: true }
-    );
-
-    await Customer.updateOne(
-      { email: 'customer@gmail.com' },
-      {
-        $setOnInsert: {
-          customerId: 'YTOC2026DEMO1',
-          fullName: 'YTO Buyer',
-          email: 'customer@gmail.com',
-          phone: '01234567890',
-          status: 'Active',
-          source: 'mobile-app',
-          statusHistory: [{ status: 'Active', changedAt: new Date(), reason: 'Official Demo Customer Initialization' }],
-        },
-        $set: { accountCategory: 'DEMO', fullName: 'YTO Buyer' },
-      },
-      { upsert: true }
-    );
-
-    await Rider.updateOne(
-      { email: 'rider@gmail.com' },
-      {
-        $setOnInsert: {
-          registrationId: 'YTOR2026DEMO1',
-          accountNumber: '2468101214',
-          riderName: 'YTO Rider',
-          email: 'rider@gmail.com',
-          phone: '02468101214',
-          vehicleType: 'Yamaha NMAX 155',
-          vehiclePlate: 'ABC-1234',
-          licenseNumber: 'N01-23-456789',
-          address: 'Pulilan Hub, Pulilan, Bulacan',
-          city: 'Pulilan',
-          state: 'Bulacan',
-          country: 'Philippines',
-          postalCode: '3005',
-          bankName: 'BPI',
-          payoutRate: 80,
-          payoutCycle: 'Weekly',
-          status: 'Active',
-          isOnDuty: true,
-          deliveries: 120,
-          rating: 5.0,
-          statusHistory: [{ status: 'Active', changedAt: new Date(), reason: 'Official Demo Rider Initialization' }],
-        },
-        $set: { accountCategory: 'DEMO', riderName: 'YTO Rider' },
-      },
-      { upsert: true }
-    );
-
-    // Backfill accountCategory: 'REAL' for any non-demo records missing it
-    await Seller.updateMany(
-      { email: { $ne: 'seller@gmail.com' }, accountCategory: { $exists: false } },
-      { $set: { accountCategory: 'REAL' } }
-    );
-    await Customer.updateMany(
-      { email: { $ne: 'customer@gmail.com' }, accountCategory: { $exists: false } },
-      { $set: { accountCategory: 'REAL' } }
-    );
-    await Rider.updateMany(
-      { email: { $ne: 'rider@gmail.com' }, accountCategory: { $exists: false } },
-      { $set: { accountCategory: 'REAL' } }
-    );
-
-    console.log('[Bootstrap] Official demo accounts ensured (Seller, Customer, Rider) with DEMO category.');
-  } catch (err) {
-    console.error('[Bootstrap Warning] Could not ensure official demo accounts:', err.message);
-  }
+  // RETIRED 2026-09-18: the Web portal is REAL-only. The three canonical demo
+  // rows (seller/customer/rider@gmail.com) must NOT be created here — mobile
+  // testing keeps its own copies in the App database. This function is kept
+  // as a no-op so existing bootstrap call sites need no change.
+  console.log('[Bootstrap] Official demo-account seeding is retired (Web is REAL-only); skipping.');
 }
 
 const bootstrapRequested = process.env.ENABLE_ADMIN_BOOTSTRAP === '1' || process.env.ENABLE_DEMO_BOOTSTRAP === '1';
