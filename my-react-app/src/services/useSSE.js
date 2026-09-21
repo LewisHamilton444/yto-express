@@ -38,7 +38,6 @@ export default function useSSE() {
     const [mode, setMode] = useState('sse'); // 'sse' | 'polling' | 'offline'
     const [lastEvent, setLastEvent] = useState(null);
 
-    const eventSourceRef = useRef(null);
     const reconnectTimeoutRef = useRef(null);
     const pollingIntervalRef = useRef(null);
     const reconnectAttemptsRef = useRef(0);
@@ -86,7 +85,6 @@ export default function useSSE() {
         if (pollingIntervalRef.current) return; // already polling
         setMode('polling');
         setConnected(false);
-        console.log('[SSE] Falling back to HTTP polling');
 
         const poll = async () => {
             if (!mountedRef.current) return;
@@ -125,51 +123,93 @@ export default function useSSE() {
         }
     }, []);
 
+    // ── Fetch-based SSE reader (2026 audit M5) ─────────────────────────────
+    // EventSource cannot send request headers, so the JWT previously rode the
+    // query string (?token=) where it leaks into access logs/proxies/history.
+    // fetch() CAN set an Authorization header, so the token travels in the
+    // header instead and never appears in the URL. Frame parsing (event:/data:
+    // lines, blank-line dispatch) matches the SSE spec subset the server
+    // emits; the reconnect/polling state machine below is unchanged.
+    const abortRef = useRef(null);
+
+    const readStream = useCallback(async (reader, decoder, onFrame) => {
+        let buffer = '';
+        let eventName = null;
+        for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            let idx;
+            while ((idx = buffer.indexOf('\n')) >= 0) {
+                const line = buffer.slice(0, idx).replace(/\r$/, '');
+                buffer = buffer.slice(idx + 1);
+                if (line === '') {
+                    eventName = null; // blank line: dispatch boundary
+                } else if (line.startsWith(':')) {
+                    // comment/heartbeat — ignore
+                } else if (line.startsWith('event:')) {
+                    eventName = line.slice(6).trim();
+                } else if (line.startsWith('data:')) {
+                    onFrame(eventName || 'message', line.slice(5).trim());
+                }
+            }
+        }
+    }, []);
+
     // ── SSE connection ───────────────────────────────────────────────────
     const connect = useCallback(() => {
         if (!mountedRef.current) return;
 
         // Clean up existing connection
-        if (eventSourceRef.current) {
-            eventSourceRef.current.close();
+        if (abortRef.current) {
+            abortRef.current.abort();
+            abortRef.current = null;
         }
 
         const token = getAuthToken();
         const baseUrl = import.meta.env.VITE_API_URL || 'https://yto-express-backend.onrender.com';
+        const url = `${baseUrl}/api/events/stream`;
 
-        // SSE doesn't support custom headers, so we pass token as query param
-        const url = token
-            ? `${baseUrl}/api/events/stream?token=${token}`
-            : `${baseUrl}/api/events/stream`;
+        const controller = new AbortController();
+        abortRef.current = controller;
 
-        const es = new EventSource(url);
-        eventSourceRef.current = es;
+        (async () => {
+            try {
+                const res = await fetch(url, {
+                    headers: token ? { Authorization: `Bearer ${token}` } : {},
+                    signal: controller.signal,
+                });
+                if (!res.ok || !res.body) throw new Error(`stream rejected: ${res.status}`);
 
-        es.onopen = () => {
+                esOpen();
+                const reader = res.body.getReader();
+                const decoder = new TextDecoder();
+                await readStream(reader, decoder, (type, raw) => {
+                    if (!mountedRef.current) return;
+                    try {
+                        const data = JSON.parse(raw);
+                        if (EVENT_TYPES.includes(type)) dispatchEvent(type, data);
+                    } catch { /* non-JSON frame: ignore */ }
+                });
+                throw new Error('stream closed by server');
+            } catch (err) {
+                if (!mountedRef.current || controller.signal.aborted) return;
+                esError();
+            }
+        })();
+
+        const esOpen = () => {
+            if (!mountedRef.current) return;
             setConnected(true);
             setMode('sse');
             reconnectAttemptsRef.current = 0;
             stopPolling(); // Switch back from polling to SSE
             requestNotificationPermission();
-            console.log('[SSE] Connected to event stream');
         };
 
-        es.addEventListener('connected', (e) => {
-            const data = JSON.parse(e.data);
-            console.log('[SSE] Server confirmed:', data.message);
-        });
-
-        // Listen for bridge sync events
-        EVENT_TYPES.forEach(type => {
-            es.addEventListener(type, (e) => {
-                const data = JSON.parse(e.data);
-                dispatchEvent(type, data);
-            });
-        });
-
-        es.onerror = () => {
+        const esError = () => {
+            if (!mountedRef.current) return;
             setConnected(false);
-            es.close();
             reconnectAttemptsRef.current += 1;
 
             if (reconnectAttemptsRef.current >= SSE_MAX_RETRIES) {
@@ -183,7 +223,7 @@ export default function useSSE() {
                 }, SSE_RECONNECT_DELAY);
             }
         };
-    }, [dispatchEvent, startPolling, stopPolling, requestNotificationPermission]);
+    }, [dispatchEvent, startPolling, stopPolling, requestNotificationPermission, readStream]);
 
     // ── Lifecycle ────────────────────────────────────────────────────────
     useEffect(() => {
@@ -191,7 +231,10 @@ export default function useSSE() {
         connect();
         return () => {
             mountedRef.current = false;
-            if (eventSourceRef.current) eventSourceRef.current.close();
+            if (abortRef.current) {
+                abortRef.current.abort();
+                abortRef.current = null;
+            }
             if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
             stopPolling();
         };

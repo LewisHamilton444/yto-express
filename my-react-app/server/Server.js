@@ -225,7 +225,13 @@ app.get('/', (req, res) => {
 // the query string (visible in access logs) — swapping the frontend to a
 // fetch()-based reader with an Authorization header removes that residual.
 app.get('/api/events/stream', async (req, res) => {
-    const token = req.query.token;
+    // 2026 audit M5: Authorization header is the preferred carrier (the
+    // dashboard reads the stream with fetch()+ReadableStream, so the JWT stays
+    // out of the URL). The ?token= query path remains as a legacy fallback for
+    // any older client build still in the field; remove it once retired.
+    const authHeader = req.headers['authorization'];
+    const headerToken = authHeader && authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+    const token = headerToken || req.query.token;
     let decoded;
     if (token) {
         try {
