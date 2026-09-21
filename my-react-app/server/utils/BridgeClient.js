@@ -191,6 +191,9 @@ async function syncParcel(parcelData) {
 
 /**
  * Poll the Android backend for changes since a timestamp.
+ * NOTE (2026 bridge audit F3): no in-repo caller or pull orchestrator exists
+ * yet, so this stays a documented utility for an explicit sync job; it has a
+ * matching route (GET /api/bridge/poll-changes) when one is written.
  */
 async function pollChanges(since) {
     return get(`/poll-changes?since=${encodeURIComponent(since)}`);
@@ -212,6 +215,8 @@ async function sendUserUpdate(email, role, updates) {
 
 /**
  * Health check — tests connectivity to the Android backend.
+ * NOTE (2026 bridge audit F7): no in-repo caller exists yet; kept as a
+ * documented utility for a future health/status screen.
  */
 async function healthCheck() {
     if (!isBridgeEnabled()) return { success: false, error: 'Bridge not configured' };
