@@ -17,6 +17,45 @@
 export const API_ROOT = import.meta.env.VITE_API_URL || 'https://yto-express-backend.onrender.com';
 const API_BASE = `${API_ROOT}/api`;
 
+// ── Demo/UAT fallback (opt-in, build-time only, OFF unless explicitly set) ─
+// A plain `vite build` never activates this — VITE_DEMO_MODE must be set to
+// '1' in the environment that RUNS the build (e.g. a Render static-site
+// build step for a pre-launch UAT deployment), which bakes the flag in at
+// build time. When on, a GET to a known collection route whose real
+// response comes back empty (no mobile-app data synced yet) is transparently
+// swapped for the same realistic, linked fixture set scripts/qa/seedServer.mjs
+// uses locally — never for mutations, and never overriding a real non-empty
+// response. Pairs with the "Demo Data" banner in AnalyticsDashboard.jsx so
+// fabricated rows are never mistaken for real ones. See AGENTS2.md §7 — the
+// Web app is REAL-only outside this explicit, reversible opt-in.
+import {
+  DEMO_RIDERS, DEMO_SELLERS, DEMO_CUSTOMERS, DEMO_PARCELS, DEMO_ISSUES,
+  DEMO_ACCOUNTS, DEMO_PARCEL_LOCATIONS, DEMO_ACTIVITY_LOG, DEMO_NOTIFICATIONS,
+  DEMO_DASHBOARD_STATS, filterByStatus,
+} from './demoFixtures';
+
+export const isDemoMode = import.meta.env.VITE_DEMO_MODE === '1';
+
+const DEMO_ROUTES = {
+  '/customers': () => DEMO_CUSTOMERS,
+  '/sellers': (params) => filterByStatus(DEMO_SELLERS, params.get('status')),
+  '/riders': (params) => filterByStatus(DEMO_RIDERS, params.get('status')),
+  '/parcels': () => DEMO_PARCELS,
+  '/issues': () => DEMO_ISSUES,
+  '/accounts': () => DEMO_ACCOUNTS,
+  '/parcel-locations': () => DEMO_PARCEL_LOCATIONS,
+  '/activity-log': () => DEMO_ACTIVITY_LOG,
+  '/notifications': () => DEMO_NOTIFICATIONS,
+  '/dashboard/stats': () => DEMO_DASHBOARD_STATS,
+};
+
+function isEmptyPayload(pathname, body) {
+  if (pathname === '/dashboard/stats') {
+    return !body || (!body.totalParcels && !body.totalRiders && !body.totalSellers && !body.totalCustomers);
+  }
+  return !Array.isArray(body) || body.length === 0;
+}
+
 /** fetch(), with `path` resolved against the shared API base and JWT token attached. */
 export async function apiFetch(path, options = {}) {
   // Per-call timeout (default 60s): without this a hanging connection leaves
@@ -43,6 +82,22 @@ export async function apiFetch(path, options = {}) {
           window.dispatchEvent(new Event('yto:auth_expired'));
         }
       } catch { /* non-JSON 401 body: nothing to inspect */ }
+    }
+    if (isDemoMode && res.ok && (!fetchOptions.method || fetchOptions.method === 'GET')) {
+      const [pathname, search = ''] = path.split('?');
+      const demoRoute = DEMO_ROUTES[pathname];
+      if (demoRoute) {
+        try {
+          const body = await res.clone().json();
+          if (isEmptyPayload(pathname, body)) {
+            const fixture = demoRoute(new URLSearchParams(search));
+            return new Response(JSON.stringify(fixture), {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
+            });
+          }
+        } catch { /* non-JSON body: leave the real response alone */ }
+      }
     }
     return res;
   } catch (err) {

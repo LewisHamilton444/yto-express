@@ -8,6 +8,7 @@
     "dev:web": "vite",
     "dev:server": "npm --prefix server start",
     "dev:all": "node scripts/dev.cjs",
+    "dev:mock": "node scripts/dev-mock.mjs",
     "start": "node scripts/dev.cjs",
     "build": "vite build",
     "qa:layout": "node scripts/qa/layoutSweep.mjs",

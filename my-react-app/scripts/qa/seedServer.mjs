@@ -1,242 +1,57 @@
-// QA seed server — serves realistic-but-synthetic payloads for every /api/*
-// endpoint the admin portal reads, so the headless layout sweep can render
-// real tables/charts without touching the live backend on render.com.
+// QA / local-dev seed server — serves realistic-but-synthetic payloads for
+// every /api/* endpoint the admin portal reads, so pages render populated
+// tables/charts/dashboards without touching the live backend or MongoDB.
 //
-// Run only from scripts/qa/layoutSweep.mjs (npm run qa:layout). It answers
-// on an ephemeral localhost port and is closed when the sweep finishes.
+// The dataset itself lives in src/services/demoFixtures.js (shared with the
+// frontend's opt-in VITE_DEMO_MODE fallback — see that file's header) so
+// there is exactly one synthetic dataset in this repo, not two that can
+// silently drift apart.
+//
+// Two consumers:
+//  - scripts/qa/layoutSweep.mjs (npm run qa:layout) — headless layout sweep.
+//  - scripts/dev-mock.mjs (npm run dev:mock) — local dev against a fake API
+//    instead of the real server/Server.js + Atlas, so nothing synthetic ever
+//    touches the REAL-only Web database (see AGENTS2.md §7).
 //
 // Design notes:
 //  - GET collections return bare arrays (40 parcels, 12 riders, ...) so wide
 //    tables have rows to stretch layout with.
-//  - Chart/telemetry endpoints return small objects or empty arrays — those
-//    pages have empty states, and the app's consumers were hardened against
-//    exactly these shapes.
 //  - /api/events/stream is a real text/event-stream so useSSE connects
 //    (instead of erroring, falling back to polling and spamming console
 //    warnings that would trip the sweep's error assertions).
 //  - POST/PUT/DELETE answer { ok: true } so stray mutations never crash.
-//  - Rows are LINKED the way the real bridge links them: every parcel that has
-//    moved past Pending carries the assigned rider's registrationId in riderId,
-//    and riders carry registrationId + isOnDuty but no stored successRate (the
-//    dashboard must compute it). Unlinked rows silently empty the ranked
-//    leaderboard, which CONTENT_CHECKS in layoutSweep.mjs now fails on.
+//  - `/sellers` and `/riders` honor `?status=` the same way the real routes
+//    do (case-insensitive exact match), since the pending-verification
+//    queues (ProcessSellerInformation.jsx, ProcessRiderInformation.jsx) fetch
+//    with that filter.
 
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-
-// ── Deterministic pseudo-random rows ────────────────────────────────────
-function lcg(seed) {
-  let s = seed >>> 0;
-  return () => {
-    s = (s * 1664525 + 1013904223) >>> 0;
-    return s / 4294967296;
-  };
-}
-
-const PARCEL_STATUSES = ['Delivered', 'In Transit', 'Pending', 'Out for Delivery', 'Cancelled'];
-const RIDER_STATUSES  = ['Active', 'On Delivery', 'Idle', 'Offline'];
-const ISSUE_STATUSES  = ['Open', 'In Progress', 'Resolved'];
-const rnd = lcg(20260903);
-
-function pick(arr) { return arr[Math.floor(rnd() * arr.length)]; }
-
-function makeParcels(n, riders = []) {
-  const items = ['Electronics', 'Apparel', 'Documents', 'Fragile Glassware', 'Spare Parts', 'Perishables', 'Books', 'Footwear'];
-  const origins = ['Manila', 'Quezon City', 'Makati', 'Pasig', 'Pulilan', 'Caloocan'];
-  const dests   = ['Pulilan', 'Baliuag', 'Malolos', 'Angeles', 'Cabanatuan', 'San Fernando'];
-  const senders = ['Juan Dela Cruz', 'Maria Santos', 'Pedro Reyes', 'Ana Garcia', 'Luis Mendoza', 'Carla Torres'];
-  const recvs   = ['Ramon Bautista', 'Liza Villanueva', 'Marco Aquino', 'Nina Ramos', 'Paolo Fernandez', 'Gina Salazar'];
-  const out = [];
-  for (let i = 1; i <= n; i++) {
-    const status = pick(PARCEL_STATUSES);
-    const daysAgo = Math.floor(rnd() * 12);
-    const createdAt = new Date(Date.now() - daysAgo * 86400000).toISOString();
-    const events = [];
-    events.push({ time: createdAt, status: 'Registered', event: 'Parcel registered', location: origins[0] });
-    if (status !== 'Pending') {
-      events.push({
-        time: new Date(Date.now() - daysAgo * 86400000 + 3600000).toISOString(),
-        status: 'In Transit', event: 'Picked up by courier', location: 'Pulilan Main Hub',
-      });
-    }
-    if (status === 'Delivered' || status === 'Out for Delivery') {
-      events.push({
-        time: new Date(Date.now() - 600000).toISOString(),
-        status, event: status === 'Delivered' ? 'Delivered to recipient' : 'Out for delivery',
-        location: dests[0],
-      });
-    }
-    // A parcel that has moved past Pending is carried by a rider. The dashboard
-    // leaderboard matches a parcel to a rider on riderId (the bridge writes the
-    // rider's registrationId there), so without this link the ranked table could
-    // only ever render its empty state under QA — a populated path no gate
-    // exercised. The assignment is index-derived, so the seed stays deterministic.
-    const rider = status === 'Pending' || !riders.length ? null : riders[(i - 1) % riders.length];
-    const pickedUpAt = new Date(new Date(createdAt).getTime() + 3600000).toISOString();
-
-    out.push({
-      _id: `QA-PARCEL-${String(i).padStart(4, '0')}`,
-      trackingNumber: `YTO-QA-${String(1000 + i)}`,
-      parcelId: `YTO-QA-${String(1000 + i)}`,
-      senderName: pick(senders), receiverName: pick(recvs),
-      origin: pick(origins), destination: pick(dests),
-      item: pick(items),
-      weightKg: Math.round((rnd() * 9 + 0.5) * 10) / 10,
-      declaredValue: Math.round(rnd() * 9000 + 500),
-      status, createdAt,
-      // Real parcel rows carry updatedAt (it is what the hourly view buckets a
-      // delivery by). Delivered rows land in the last few minutes so "delivered
-      // today" is non-zero instead of depending on a missing field.
-      updatedAt: status === 'Delivered' ? new Date(Date.now() - Math.floor(rnd() * 600000)).toISOString() : pickedUpAt,
-      riderId: rider ? rider.registrationId : null,
-      riderName: rider ? rider.riderName : null,
-      sender: { name: senders[i % senders.length], address: origins[i % origins.length] },
-      events,
-    });
-  }
-  return out;
-}
-
-function makeRiders(n) {
-  const out = [];
-  for (let i = 1; i <= n; i++) {
-    out.push({
-      _id: `QA-RIDER-${String(i).padStart(4, '0')}`,
-      registrationId: `YTO-RIDER-2026-${String(i).padStart(5, '0')}`,
-      accountNumber: `YTO-RIDER-2026-${String(i).padStart(5, '0')}`,
-      // Deliberately no stored successRate or deliveries count: the dashboard is
-      // supposed to compute both from the parcels each rider was given, so a
-      // seed that pre-fills them would hide a broken computation behind a
-      // plausible stored number. successRate null = unranked until linked.
-      successRate: null,
-      isOnDuty: i % 3 !== 0,
-      riderName: ['Marco Aquino', 'Nina Ramos', 'Paolo Fernandez', 'Gina Salazar', 'Leo Ramirez', 'Sofia Diaz', 'Miguel Ocampo', 'Ava Cruz', 'Josh Reyes', 'Ella Navarro', 'Rafael Lim', 'Zoe Tan'][i - 1] || `Rider ${i}`,
-      email: `rider.qa${i}@yto.com`,
-      phone: '0917' + String(1000000 + i * 137),
-      status: pick(RIDER_STATUSES),
-      vehicleType: pick(['Motorcycle', 'Van', 'Tricycle', 'E-Bike']),
-      rating: Math.round((rnd() * 2 + 3.5) * 10) / 10,
-      currentLocation: { lat: 14.9 + rnd() * 0.1, lng: 120.85 + rnd() * 0.12 },
-      lastSeen: new Date(Date.now() - Math.floor(rnd() * 600000)).toISOString(),
-    });
-  }
-  return out;
-}
-
-function makeAccounts(n) {
-  const roles = ['super_admin', 'admin', 'moderator'];
-  const out = [];
-  for (let i = 1; i <= n; i++) {
-    out.push({
-      _id: `QA-ACC-${i}`,
-      name: i === 1 ? 'QA Super Admin' : `Admin ${i}`,
-      email: i === 1 ? 'qa.superadmin@yto.com' : `admin.qa${i}@yto.com`,
-      role: pick(roles),
-      accountType: 'Admin Account',
-      status: 'Active',
-      createdAt: new Date(Date.now() - i * 86400000).toISOString(),
-    });
-  }
-  return out;
-}
-
-function makeCustomers(n) {
-  const out = [];
-  for (let i = 1; i <= n; i++) {
-    out.push({
-      _id: `QA-CUST-${i}`,
-      customerId: `CUST-2026-${String(i).padStart(5, '0')}`,
-      name: pick(['Liza Villanueva', 'Marco Aquino', 'Nina Ramos', 'Paolo Fernandez', 'Gina Salazar', 'Leo Ramirez']),
-      email: `customer.qa${i}@gmail.com`,
-      phone: '0918' + String(2000000 + i * 211),
-      statusHistory: [{ status: 'Registered', reason: 'Account created', changedAt: new Date(Date.now() - i * 86400000).toISOString() }],
-    });
-  }
-  return out;
-}
-
-function makeIssues(n) {
-  const out = [];
-  for (let i = 1; i <= n; i++) {
-    out.push({
-      _id: `QA-ISSUE-${i}`,
-      ticketId: `TICK-2026-${String(10000 + i)}`,
-      customerName: pick(['Liza Villanueva', 'Marco Aquino', 'Nina Ramos']),
-      customerId: `CUST-2026-${String(10000 + i)}`,
-      subject: pick(['Lost package', 'Damaged item', 'Delayed delivery', 'Wrong address', 'Billing question']),
-      description: 'QA-seeded customer issue used by the layout sweep.',
-      status: pick(ISSUE_STATUSES),
-      priority: pick(['Low', 'Medium', 'High']),
-      createdAt: new Date(Date.now() - i * 3600000).toISOString(),
-    });
-  }
-  return out;
-}
-
-function makeSellers(n) {
-  const out = [];
-  for (let i = 1; i <= n; i++) {
-    out.push({
-      _id: `QA-SELL-${i}`,
-      accountNumber: `YTO-SELL-2026-${String(i).padStart(5, '0')}`,
-      fullName: pick(['Juan Dela Cruz', 'Maria Santos', 'Pedro Reyes', 'Ana Garcia']),
-      storeName: `QA Store ${i}`,
-      email: `seller.qa${i}@yto.com`,
-      phone: '0919' + String(3000000 + i * 317),
-      status: 'Active',
-      createdAt: new Date(Date.now() - i * 86400000).toISOString(),
-    });
-  }
-  return out;
-}
-
-// Riders before parcels: each moved parcel is assigned to a rider by index.
-const riders  = makeRiders(12);
-const parcels = makeParcels(40, riders);
-const accounts = makeAccounts(4);
-const customers = makeCustomers(14);
-const issues  = makeIssues(14);
-const sellers = makeSellers(8);
-
-const STATS = {
-  totalParcels: parcels.length,
-  totalRiders: riders.length,
-  totalSellers: sellers.length,
-  totalCustomers: customers.length,
-  totalIssues: issues.length,
-  inTransit: 11, delivered: 14, pending: 9, cancelled: 3, returned: 3,
-  deliverySuccessPct: 92.5,
-  avgRiderRating: 4.6,
-  activeRiders: 9,
-  pendingVerifications: 3,
-  peakToday: 21,
-  revenue: 182450,
-  history: [],
-};
+import {
+  DEMO_RIDERS, DEMO_SELLERS, DEMO_CUSTOMERS, DEMO_PARCELS, DEMO_ISSUES,
+  DEMO_ACCOUNTS, DEMO_PARCEL_LOCATIONS, DEMO_ACTIVITY_LOG, DEMO_NOTIFICATIONS,
+  DEMO_DASHBOARD_STATS, filterByStatus,
+} from '../../src/services/demoFixtures.js';
 
 const collectionRoutes = {
-  '/parcels': parcels,
-  '/riders': riders,
-  '/sellers': sellers,
-  '/accounts': accounts,
-  '/customers': customers,
-  '/issues': issues,
-  '/parcel-locations': parcels.map((p) => ({
-    _id: `QA-PL-${p._id}`, parcelId: p.parcelId, trackingNumber: p.trackingNumber,
-    lat: 14.9085 + (rnd() - 0.5) * 0.05, lng: 120.8545 + (rnd() - 0.5) * 0.05,
-    status: p.status, timestamp: p.createdAt,
-  })),
-  '/notifications': [],
-  '/activity-log': [],
+  '/parcels': DEMO_PARCELS,
+  '/riders': DEMO_RIDERS,
+  '/sellers': DEMO_SELLERS,
+  '/accounts': DEMO_ACCOUNTS,
+  '/customers': DEMO_CUSTOMERS,
+  '/issues': DEMO_ISSUES,
+  '/parcel-locations': DEMO_PARCEL_LOCATIONS,
+  '/notifications': DEMO_NOTIFICATIONS,
+  '/activity-log': DEMO_ACTIVITY_LOG,
   '/events/alerts': [],
   '/events/history': [],
 };
 
 // Object-shaped (non-collection) routes.
 const objectRoutes = {
-  '/dashboard/stats': STATS,
+  '/dashboard/stats': DEMO_DASHBOARD_STATS,
   '/events/stats': { threshold: 5, concurrent: 0 },
 };
 
@@ -356,8 +171,11 @@ export function startSeedServer() {
       // /customers/:id/orders and similar detail reads -> empty array.
       const suffix = '/' + api.split('/').filter(Boolean).slice(-1)[0];
       if (objectRoutes[api]) { json(res, 200, objectRoutes[api]); return; }
-      if (collectionRoutes[api]) { json(res, 200, collectionRoutes[api]); return; }
-      if (collectionRoutes[suffix]) { json(res, 200, collectionRoutes[suffix]); return; }
+      let rows = collectionRoutes[api] || collectionRoutes[suffix];
+      if (rows && (api === '/sellers' || api === '/riders')) {
+        rows = filterByStatus(rows, url.searchParams.get('status'));
+      }
+      if (rows) { json(res, 200, rows); return; }
       json(res, 200, []);
       return;
     }

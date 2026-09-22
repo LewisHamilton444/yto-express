@@ -4,7 +4,7 @@ import {
   ClipboardList, Download, Share2,
   Users, PackageSearch, AlertTriangle,
 } from 'lucide-react';
-import { apiFetch, parcelsApi, ridersApi, sellersApi, customersApi } from './services/api';
+import { apiFetch, parcelsApi, ridersApi, sellersApi, customersApi, isDemoMode } from './services/api';
 import { exportToCSV } from './exportUtils';
 import { barHeightPercent, niceAxisMax, axisTicks } from './utils/barHeight';
 import useSSE from './services/useSSE';
@@ -990,6 +990,23 @@ export default function AnalyticsDashboard({
           onNavigateSettings={goToSettings}
           onLogoutClick={() => handleMenuClick('logout')}
         />
+        {isDemoMode && (
+          // Visible on every page (outside the dashboard/renderPage split
+          // below) so fabricated fallback rows — see VITE_DEMO_MODE in
+          // services/api.js — are never mistaken for real records.
+          <div
+            role="status"
+            style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              background: '#fef3c7', borderBottom: '1px solid #f59e0b',
+              color: '#92400e', fontSize: 13, fontWeight: 600,
+              padding: '8px 20px',
+            }}
+          >
+            <AlertTriangle size={15} aria-hidden="true" />
+            Demo Data — showing sample records because no live data has synced yet. These are not real customers, parcels, or riders.
+          </div>
+        )}
         {activeMenuItem !== 'dashboard' ? (
           <ErrorBoundary
             key={`${activeMenuItem}:${retryNonce}`}
