@@ -62,11 +62,19 @@ function statusForError(err) {
   return 500;
 }
 
-// ── Account category (removed 2026-09-13) ─────────────────────────────
-// The REAL/DEMO realm partition was removed — the platform is single-realm
-// (REAL only). categorizeEmail is kept as a one-liner purely for wire-format
-// compatibility with the Android bridge client.
-const categorizeEmail = () => 'REAL';
+// ── Demo-email guard (REAL-only Web, 2026-09-18) ──────────────────────────
+// The canonical mobile test logins (seller/customer/rider@gmail.com) keep
+// their copies in the APP database for testing — they must NOT resurrect in
+// the WEB database via the bridge. The gate below rejects them:
+const DEMO_SYNC_EMAILS = new Set([
+  'seller@gmail.com',
+  'customer@gmail.com',
+  'rider@gmail.com',
+]);
+
+function isDemoSyncEmail(email) {
+  return DEMO_SYNC_EMAILS.has(String(email || '').trim().toLowerCase());
+}
 
 // ── Enterprise ID generation ─────────────────────────────────────────────
 // NEW FORMAT (2026-09-11, approved): compact Web-minted enterprise IDs —
@@ -76,8 +84,9 @@ const categorizeEmail = () => 'REAL';
 // Sequence continues per collection per year across the migration: rows in
 // BOTH the legacy (YTO-SELL-YYYY-#####) and compact (YTOSYYYY####) shapes
 // are counted so new IDs never collide with grandfathered ones. Legacy rows
-// (incl. the pinned DEMO1 seed fixtures) remain valid and still resolve via
-// the find-by-email merge in the sync* helpers. YTO-ADM-XXX (3-digit, no
+// remain valid and still resolve via the find-by-email merge in the sync*
+// helpers (demo-email senders are rejected earlier at the route gate, so no
+// new demo rows can be created through the bridge). YTO-ADM-XXX (3-digit, no
 // year) is kept for completeness — the mobile app never registers admins.
 // Collision-safe: each candidate is probed against the collection before
 // being returned; a racing duplicate insert still answers 409 via
@@ -208,10 +217,18 @@ router.post('/sync-user', async (req, res) => {
     }
 
     const normalizedEmail = email.trim().toLowerCase();
-    const accountCategory = categorizeEmail(normalizedEmail);
+
+    // REAL-only Web: canonical mobile demo logins must not create Web rows.
+    if (isDemoSyncEmail(normalizedEmail)) {
+      return res.status(200).json({
+        success: true,
+        message: 'Demo account skipped (Web portal keeps real records only).',
+        data: { skipped: true, reason: 'demo-account', email: normalizedEmail },
+      });
+    }
 
     const syncByRole = { seller: syncSeller, rider: syncRider, customer: syncCustomer };
-    const result = await syncByRole[normalizedRole](body, normalizedEmail, accountCategory);
+    const result = await syncByRole[normalizedRole](body, normalizedEmail);
 
     // Broadcast SSE event to connected admin clients
     sseBroadcaster.broadcast('user-synced', {
@@ -230,7 +247,6 @@ router.post('/sync-user', async (req, res) => {
         collection: result.collection,
         enterpriseId: result.enterpriseId,
         _id: result.doc._id,
-        accountCategory,
         created: result.created,
       },
     });
@@ -240,7 +256,31 @@ router.post('/sync-user', async (req, res) => {
   }
 });
 
-async function syncSeller(body, email, accountCategory) {
+const KNOWN_PH_CITIES = [
+  'Pulilan', 'Malolos', 'Baliuag', 'Baliwag', 'Calumpit', 'Plaridel',
+  'Guiguinto', 'Bocaue', 'Meycauayan', 'Marilao', 'San Jose del Monte',
+  'Santa Maria', 'Angat', 'Norzagaray', 'San Ildefonso', 'San Miguel',
+  'San Rafael', 'Pandi', 'Paombong', 'Hagonoy', 'Bulakan', 'Balagtas',
+  'Obando', 'Bustos', 'Doña Remedios Trinidad', 'Quezon City', 'Manila',
+  'Caloocan', 'Pasig', 'Taguig', 'Valenzuela', 'Makati', 'Pasay', 'Mandaluyong'
+];
+
+function extractCityFromAddress(address) {
+  if (!address || typeof address !== 'string') return '';
+  for (const city of KNOWN_PH_CITIES) {
+    const regex = new RegExp(`\\b${city}\\b`, 'i');
+    if (regex.test(address)) {
+      return city;
+    }
+  }
+  const parts = address.split(',').map(p => p.trim()).filter(Boolean);
+  if (parts.length >= 3) {
+    return parts[parts.length - 2];
+  }
+  return '';
+}
+
+async function syncSeller(body, email) {
   const updates = { fullName: body.name, email };
   if (body.phone !== undefined) updates.phone = body.phone;
   if (body.idNumber !== undefined) updates.idNumber = body.idNumber;
@@ -248,6 +288,17 @@ async function syncSeller(body, email, accountCategory) {
   if (body.storeName !== undefined) updates.storeName = body.storeName;
   if (body.accountNumber !== undefined) updates.accountNumber = body.accountNumber;
   Object.assign(updates, pickDefined(body, ['address', 'city', 'state', 'country', 'postalCode', 'bankName', 'commissionRate', 'paymentCycle', 'warehouseAddress', 'operatingHours']));
+
+  // Mirror warehouseAddress to address if address omitted, and auto-derive city
+  if (!updates.address && body.warehouseAddress) {
+    updates.address = body.warehouseAddress;
+  }
+  if (!updates.city && updates.address) {
+    updates.city = extractCityFromAddress(updates.address);
+  }
+  if (!updates.city && updates.warehouseAddress) {
+    updates.city = extractCityFromAddress(updates.warehouseAddress);
+  }
 
   const existing = await Seller.findOne({ email });
   if (existing) {
@@ -269,13 +320,15 @@ async function syncSeller(body, email, accountCategory) {
 
   const registrationId = await generateEnterpriseId('seller', Seller, 'registrationId');
   const accountNumber = body.accountNumber || String(Math.floor(1000000000 + Math.random() * 9000000000));
+  const initialStatus = body.status || 'PENDING_VERIFICATION';
   const doc = await Seller.create({
     registrationId,
     accountNumber,
     phone: body.phone || '',
     ...updates,
+    status: initialStatus,
     statusHistory: [{
-      status: body.status || 'ACTIVE',
+      status: initialStatus,
       changedAt: new Date(),
       reason: 'Seller registered',
     }],
@@ -283,7 +336,7 @@ async function syncSeller(body, email, accountCategory) {
   return { doc, created: true, collection: 'Seller', enterpriseId: registrationId };
 }
 
-async function syncRider(body, email, accountCategory) {
+async function syncRider(body, email) {
   const updates = { riderName: body.name, email };
   if (body.phone !== undefined) updates.phone = body.phone;
   // Real-time duty flag from the Android rider profile toggle. Guarded with
@@ -293,7 +346,16 @@ async function syncRider(body, email, accountCategory) {
   if (body.plateNumber !== undefined) updates.vehiclePlate = body.plateNumber;   // mobile plateNumber -> web vehiclePlate
   if (body.vehicleModel !== undefined) updates.vehicleType = body.vehicleModel;  // mobile vehicleModel -> web vehicleType
   if (body.accountNumber !== undefined) updates.accountNumber = body.accountNumber;
+  if (body.deliveries !== undefined) updates.deliveries = Number(body.deliveries);
+  else if (body.totalDeliveries !== undefined) updates.deliveries = Number(body.totalDeliveries);
+  if (body.rating !== undefined) updates.rating = Number(body.rating);
+  else if (body.riderRating !== undefined) updates.rating = Number(body.riderRating);
   Object.assign(updates, pickDefined(body, ['address', 'city', 'state', 'country', 'postalCode', 'bankName', 'licenseNumber', 'emergencyContactName', 'emergencyContactPhone', 'payoutRate', 'payoutCycle', 'assignedHub']));
+
+  // Auto-derive city from address if omitted
+  if (!updates.city && updates.address) {
+    updates.city = extractCityFromAddress(updates.address);
+  }
 
   const existing = await Rider.findOne({ email });
   if (existing) {
@@ -315,13 +377,15 @@ async function syncRider(body, email, accountCategory) {
 
   const registrationId = await generateEnterpriseId('rider', Rider, 'registrationId');
   const accountNumber = body.accountNumber || String(Math.floor(1000000000 + Math.random() * 9000000000));
+  const initialStatus = body.status || 'Pending';
   const doc = await Rider.create({
     registrationId,
     accountNumber,
     phone: body.phone || '',
     ...updates,
+    status: initialStatus,
     statusHistory: [{
-      status: body.status || 'Active',
+      status: initialStatus,
       changedAt: new Date(),
       reason: 'Rider registered',
     }],
@@ -329,9 +393,17 @@ async function syncRider(body, email, accountCategory) {
   return { doc, created: true, collection: 'Rider', enterpriseId: registrationId };
 }
 
-async function syncCustomer(body, email, accountCategory) {
+async function syncCustomer(body, email) {
   const updates = { fullName: body.name, email };
   Object.assign(updates, pickDefined(body, ['phone', 'address', 'city', 'deliveryInstructions']));
+
+  // Auto-derive city from address/instructions if not explicitly passed
+  if (!updates.city && updates.address) {
+    updates.city = extractCityFromAddress(updates.address);
+  }
+  if (!updates.city && updates.deliveryInstructions) {
+    updates.city = extractCityFromAddress(updates.deliveryInstructions);
+  }
 
   const existing = await Customer.findOne({ email });
   if (existing) {
@@ -352,11 +424,13 @@ async function syncCustomer(body, email, accountCategory) {
   }
 
   const customerId = await generateEnterpriseId('customer', Customer, 'customerId');
+  const initialStatus = body.status || 'Active';
   const doc = await Customer.create({
     customerId,
     ...updates,
+    status: initialStatus,
     statusHistory: [{
-      status: body.status || 'Active',
+      status: initialStatus,
       changedAt: new Date(),
       reason: 'Customer registered',
     }],
@@ -409,6 +483,16 @@ router.post('/sync-parcel', async (req, res) => {
     // recipient maps to the receiverPhone column.
     const senderPhone = (body.sender?.phone || body.senderPhone || '').toString().trim();
     const receiverPhone = (body.recipient?.phone || body.recipientPhone || '').toString().trim();
+
+    // REAL-only Web: parcels routed through the canonical mobile demo logins
+    // stay in the App database — do not materialize demo parcels here.
+    if (isDemoSyncEmail(resolvedSenderEmail) || isDemoSyncEmail(recipientEmail)) {
+      return res.status(200).json({
+        success: true,
+        message: 'Demo parcel skipped (Web portal keeps real records only).',
+        data: { skipped: true, reason: 'demo-account', trackingNumber },
+      });
+    }
 
     // Web-generated identity artifacts (see helpers above): canonical QR
     // payload + POD geofence spec. Persisted on the Parcel doc AND echoed in
@@ -502,6 +586,16 @@ router.post('/sync-duty-status', async (req, res) => {
     }
 
     const normalizedEmail = String(body.email).trim().toLowerCase();
+
+    // REAL-only Web: the demo rider's duty toggle stays in the App database.
+    if (isDemoSyncEmail(normalizedEmail)) {
+      return res.status(200).json({
+        success: true,
+        message: 'Demo rider skipped (Web portal keeps real records only).',
+        data: { skipped: true, reason: 'demo-account', email: normalizedEmail },
+      });
+    }
+
     let rider = await Rider.findOne({ email: normalizedEmail });
     let created = false;
     if (rider) {
@@ -775,6 +869,16 @@ router.post('/receive-status', async (req, res) => {
       status: status,
     });
     await parcel.save();
+
+    // Increment rider completed deliveries on live delivery transition
+    if (status === 'Delivered') {
+      const riderQuery = [];
+      if (riderId) riderQuery.push({ registrationId: riderId }, { _id: riderId });
+      if (riderName) riderQuery.push({ riderName: new RegExp(`^${riderName}$`, 'i') });
+      if (riderQuery.length > 0) {
+        Rider.updateOne({ $or: riderQuery }, { $inc: { deliveries: 1 } }).catch(() => {});
+      }
+    }
 
     sseBroadcaster.broadcast('parcel-synced', {
       trackingNumber: parcel.trackingNumber,

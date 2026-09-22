@@ -76,7 +76,7 @@ function App() {
     <div style={{ flex: 1 }}>
       <ToastProvider>
         <ErrorBoundary
-          key={`${activePage}:${retryNonce}`}
+          key={`shell:${retryNonce}`}
           onReset={() => setRetryNonce(n => n + 1)}
           onHome={() => { setActivePage('dashboard'); setRetryNonce(n => n + 1); }}
         >
@@ -92,6 +92,8 @@ function App() {
             }}
             activePage={activePage}
             setActivePage={setActivePage}
+            retryNonce={retryNonce}
+            setRetryNonce={setRetryNonce}
           />
         </ErrorBoundary>
       </ToastProvider>

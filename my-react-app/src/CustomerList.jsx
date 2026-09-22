@@ -2,25 +2,27 @@ import React, { useState, useEffect } from 'react';
 import { apiFetch } from './services/api';
 import useSSE from './services/useSSE';
 import PaginationControls from './PaginationControls';
-import { exportToCSV } from './exportUtils';
+import { exportToCSV, exportToExcel, exportToWord, exportToPDF } from './exportUtils';
+import ExportDropdown from './components/ui/ExportDropdown';
+import RefreshButton from './components/ui/RefreshButton';
 import Modal from './components/ui/Modal';
 import Badge from './components/ui/Badge';
 import PageHeader from './components/ui/PageHeader';
 import CardSectionHeader from './components/ui/CardSectionHeader';
 import CardFooter from './components/ui/CardFooter';
+import SectionCard from './components/ui/SectionCard';
+import DataTable from './components/ui/DataTable';
+import FilterBar from './components/ui/FilterBar';
 import TableSkeleton from './components/ui/TableSkeleton';
 import EmptyState from './components/ui/EmptyState';
-import { ACCOUNT_CATEGORY_TONE, ACCOUNT_CATEGORY_LABEL } from './components/ui/statusColors';
-import { isDemoEmail } from './demoUtils';
 import {
   Users, Search, X,
-  Hash, User, Mail, Phone, Tag, Activity, Globe, Calendar,
+  Hash, User, Mail, Phone, Activity, Globe, Calendar,
   PackageSearch, History, Info, Shield, Eye,
 } from 'lucide-react';
 
 const CUSTOMER_EXPORT_COLUMNS = [
   { key: 'customerId', label: 'Customer ID' },
-  { key: 'accountCategory', label: 'Category' },
   { key: 'fullName', label: 'Full Name' },
   { key: 'email', label: 'Email Address' },
   { key: 'phone', label: 'Phone Number' },
@@ -43,9 +45,34 @@ const TIMELINE = {
   status:       { dot: 'bg-blue-600',     accent: '#2563eb' },
 };
 
+const KNOWN_PH_CITIES = [
+  'Pulilan', 'Malolos', 'Baliuag', 'Baliwag', 'Calumpit', 'Plaridel',
+  'Guiguinto', 'Bocaue', 'Meycauayan', 'Marilao', 'San Jose del Monte',
+  'Santa Maria', 'Angat', 'Norzagaray', 'San Ildefonso', 'San Miguel',
+  'San Rafael', 'Pandi', 'Paombong', 'Hagonoy', 'Bulakan', 'Balagtas',
+  'Obando', 'Bustos', 'Doña Remedios Trinidad', 'Quezon City', 'Manila',
+  'Caloocan', 'Pasig', 'Taguig', 'Valenzuela', 'Makati', 'Pasay', 'Mandaluyong'
+];
+
+function resolveCustomerCity(customer) {
+  if (customer?.city && customer.city.trim()) return customer.city.trim();
+  const address = customer?.address || customer?.deliveryInstructions || '';
+  if (!address) return '';
+  for (const city of KNOWN_PH_CITIES) {
+    const regex = new RegExp(`\\b${city}\\b`, 'i');
+    if (regex.test(address)) {
+      return city;
+    }
+  }
+  const parts = address.split(',').map(p => p.trim()).filter(Boolean);
+  if (parts.length >= 3) {
+    return parts[parts.length - 2];
+  }
+  return '';
+}
+
 const TABLE_HEADERS = [
   { label: 'Customer ID', icon: Hash },
-  { label: 'Category', icon: Tag },
   { label: 'Full Name', icon: User },
   { label: 'Email Address', icon: Mail },
   { label: 'Phone Number', icon: Phone },
@@ -65,8 +92,9 @@ const DETAIL_TABS = [
 const CustomerList = () => {
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState('All');
+  const [statusFilter, setStatusFilter] = useState('All');
   const [currentPage, setCurrentPage] = useState(1);
   const [recordsPerPage, setRecordsPerPage] = useState(10);
   const [detailCustomer, setDetailCustomer] = useState(null);
@@ -102,9 +130,10 @@ const CustomerList = () => {
 
   // A failed/unreachable API is treated the same as "no records yet" — the
   // table renders its normal clean empty state rather than an error banner.
-  const fetchCustomers = async () => {
+  const fetchCustomers = async (isManual = false) => {
     try {
-      setLoading(true);
+      if (isManual) setIsRefreshing(true);
+      else setLoading(true);
       const res = await apiFetch('/customers');
       if (!res.ok) throw new Error(`Server responded ${res.status}`);
       const data = await res.json();
@@ -114,6 +143,7 @@ const CustomerList = () => {
       setCustomers([]);
     } finally {
       setLoading(false);
+      if (isManual) setIsRefreshing(false);
     }
   };
 
@@ -163,7 +193,7 @@ const CustomerList = () => {
             events.push({
               type: 'order',
               title: `Order Created: ${parcel.trackingNumber}`,
-              description: `Parcel "${parcel.item}" from ${parcel.senderName || 'Unknown'}`,
+              description: `Parcel "${parcel.item}" from ${parcel.senderName || '—'}`,
               timestamp: parcel.createdAt,
             });
 
@@ -198,24 +228,31 @@ const CustomerList = () => {
     const matchSearch = c.fullName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                         c.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                         c.customerId?.toLowerCase().includes(searchTerm.toLowerCase());
-    const cat = c.accountCategory || (isDemoEmail(c.email) ? 'DEMO' : 'REAL');
-    const matchCategory = categoryFilter === 'All' || cat === categoryFilter;
-    return matchSearch && matchCategory;
+    const matchStatus = statusFilter === 'All' || (c.status || 'Active') === statusFilter;
+    return matchSearch && matchStatus;
   });
 
-  const indexOfLast = currentPage * recordsPerPage;
+  const maxPage = Math.max(1, Math.ceil(filtered.length / recordsPerPage));
+  const safePage = Math.min(currentPage, maxPage);
+  const indexOfLast = safePage * recordsPerPage;
   const indexOfFirst = indexOfLast - recordsPerPage;
   const currentRecords = filtered.slice(indexOfFirst, indexOfLast);
 
-  const realCount = customers.filter(c => (c.accountCategory || (isDemoEmail(c.email) ? 'DEMO' : 'REAL')) !== 'DEMO').length;
-  const demoCount = customers.filter(c => (c.accountCategory || (isDemoEmail(c.email) ? 'DEMO' : 'REAL')) === 'DEMO').length;
-
-  const handleExport = () => {
+  const handleExport = (format) => {
     const exportData = filtered.map(c => ({
       ...c,
+      city: resolveCustomerCity(c) || '-',
       role: c.role || 'Customer',
     }));
-    exportToCSV(exportData, CUSTOMER_EXPORT_COLUMNS, 'yto_customers');
+    if (format === 'excel') {
+      exportToExcel(exportData, CUSTOMER_EXPORT_COLUMNS, 'yto_customers');
+    } else if (format === 'word') {
+      exportToWord(exportData, CUSTOMER_EXPORT_COLUMNS, 'yto_customers', 'Customer Directory Report');
+    } else if (format === 'pdf') {
+      exportToPDF(exportData, CUSTOMER_EXPORT_COLUMNS, 'yto_customers', 'Customer Directory Report');
+    } else {
+      exportToCSV(exportData, CUSTOMER_EXPORT_COLUMNS, 'yto_customers');
+    }
   };
 
   const formatDate = (dateStr) => {
@@ -242,16 +279,33 @@ const CustomerList = () => {
   };
 
   return (
-    <div className="p-8 max-w-7xl mx-auto">
-    <div className="space-y-6">
+    <div className="p-6 md:p-8 w-full">
+      <div className="space-y-6">
       <PageHeader
         title="Customer List"
         subtitle="Customers registered through the mobile app"
         breadcrumb={['Dashboard', 'People', 'Customer List']}
+        actions={(
+          <RefreshButton
+            onClick={() => fetchCustomers(true)}
+            isRefreshing={isRefreshing}
+            disabled={loading}
+          />
+        )}
       />
 
       {/* Main table card */}
-      <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+      <SectionCard
+        noPadding
+        footer={(
+          <CardFooter
+            resultsLabel={`Showing ${filtered.length} of ${customers.length} results`}
+            pills={[
+              { label: 'Active', value: customers.filter(c => c.status !== 'Deactivated').length, tone: 'green' },
+            ]}
+          />
+        )}
+      >
         <CardSectionHeader
           icon={Users}
           title="Customer List"
@@ -259,94 +313,87 @@ const CustomerList = () => {
         />
 
         {/* Control bar */}
-        <div className="flex flex-row flex-wrap items-center justify-between gap-3 px-6 py-4 border-b border-slate-100">
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="relative">
-              <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Search by name, email, or ID..."
-                value={searchTerm}
-                onChange={e => { setSearchTerm(e.target.value); setCurrentPage(1); }}
-                className="pl-10 pr-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 w-72"
-              />
-            </div>
-            <select
-              value={categoryFilter}
-              onChange={e => { setCategoryFilter(e.target.value); setCurrentPage(1); }}
-              className="px-3 py-2 border border-slate-200 rounded-xl text-sm bg-white cursor-pointer font-semibold text-brand-purple"
+        <FilterBar>
+          <FilterBar.Group>
+            <FilterBar.Search
+              placeholder="Search by name, email, or ID..."
+              value={searchTerm}
+              onChange={e => { setSearchTerm(e.target.value); setCurrentPage(1); }}
+            />
+            <FilterBar.Select
+              aria-label="Filter by status"
+              value={statusFilter}
+              onChange={e => { setStatusFilter(e.target.value); setCurrentPage(1); }}
             >
-              <option value="All">All Categories</option>
-              <option value="REAL">Real</option>
-              <option value="DEMO">Demo</option>
-            </select>
-            <span className="text-xs text-slate-400 whitespace-nowrap">{filtered.length} results</span>
-          </div>
-          <button
-            onClick={handleExport}
-            className="mp-export-btn"
-            onMouseEnter={e => { e.currentTarget.style.filter = 'brightness(1.08)'; }}
-            onMouseLeave={e => { e.currentTarget.style.filter = 'none'; }}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 7, padding: '9px 15px',
-              borderRadius: 8, border: 'none', background: '#f37021', color: 'white',
-              fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
-            }}
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" width="13" height="13">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="7 10 12 15 17 10" />
-              <line x1="12" y1="15" x2="12" y2="3" />
-            </svg>
-            Export CSV
-          </button>
-        </div>
+              <option value="All" className="font-medium text-slate-700 bg-white">All Statuses</option>
+              <option value="Active" className="font-medium text-slate-700 bg-white">Active</option>
+              <option value="Inactive" className="font-medium text-slate-700 bg-white">Inactive</option>
+            </FilterBar.Select>
+            <FilterBar.Count count={filtered.length} label="results" />
+          </FilterBar.Group>
+          <FilterBar.Actions>
+            <ExportDropdown onExport={handleExport} disabled={filtered.length === 0} />
+          </FilterBar.Actions>
+        </FilterBar>
 
         {/* Table */}
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[820px] border-collapse text-left">
-            <thead className="bg-[#390955] text-white">
+        <div style={{ padding: '8px 24px 24px' }}>
+          <DataTable className="min-w-[1160px]" containerClassName="border border-[#e4d8f2] rounded-xl">
+            <DataTable.Head>
               <tr>
-                {TABLE_HEADERS.map(h => (
-                  <th key={h.label} className="whitespace-nowrap px-4 py-3.5 text-xs font-semibold uppercase tracking-wider text-left">
-                    <span className="flex items-center gap-1.5"><h.icon size={12} />{h.label}</span>
-                  </th>
+                {TABLE_HEADERS.map((h, idx) => (
+                  <DataTable.Th
+                    key={h.label}
+                    className="whitespace-nowrap"
+                    stickyLeft={idx === 0}
+                    align={idx === TABLE_HEADERS.length - 1 ? 'right' : 'left'}
+                  >
+                    {h.label === 'Actions' ? (
+                      <span>{h.label}</span>
+                    ) : (
+                      <span className="flex items-center gap-1.5"><h.icon size={12} className="text-slate-400" />{h.label}</span>
+                    )}
+                  </DataTable.Th>
                 ))}
               </tr>
-            </thead>
+            </DataTable.Head>
             <tbody>
               {loading ? (
                 <TableSkeleton rows={6} columns={TABLE_HEADERS.length} />
               ) : currentRecords.length === 0 ? (
                 <tr>
-                  <td colSpan={TABLE_HEADERS.length} className="py-12 text-sm text-center text-slate-400">
-                    {customers.length === 0
-                      ? 'No active production records found.'
-                      : 'No records match the current search.'}
+                  <td colSpan={TABLE_HEADERS.length} style={{ padding: '32px 16px' }}>
+                    {customers.length === 0 ? (
+                      <EmptyState
+                        icon={Users}
+                        title="No customer records yet"
+                        description="Customer accounts appear here as they sign up or sync from the mobile app."
+                      />
+                    ) : (
+                      <EmptyState
+                        icon={Search}
+                        title="No customer records match your search"
+                        description="Try a different name, email, or ID, then clear the status filter if needed."
+                      />
+                    )}
                   </td>
                 </tr>
               ) : currentRecords.map((c, i) => (
-                <tr
+                <DataTable.Row
                   key={c._id || i}
                   onClick={() => { setDetailCustomer(c); setDetailTab('details'); setOrders([]); setTimelineEvents([]); }}
-                  className="cursor-pointer border-b border-slate-100 transition hover:bg-slate-50"
                 >
-                  <td className="px-4 py-3 font-mono text-xs font-bold text-brand-purple">{c.customerId || '-'}</td>
-                  <td className="px-4 py-3">
-                    <Badge tone={ACCOUNT_CATEGORY_TONE[c.accountCategory || (isDemoEmail(c.email) ? 'DEMO' : 'REAL')] || 'slate'}>
-                      {ACCOUNT_CATEGORY_LABEL[c.accountCategory || (isDemoEmail(c.email) ? 'DEMO' : 'REAL')] || (c.accountCategory || (isDemoEmail(c.email) ? 'Demo' : 'Real (Verified)'))}
-                    </Badge>
-                  </td>
-                  <td className="px-4 py-3 text-sm font-semibold text-gray-900">{c.fullName || '-'}</td>
-                  <td className="px-4 py-3 text-xs text-gray-500">{c.email || '-'}</td>
-                  <td className="px-4 py-3 text-xs text-gray-500">{c.phone || '-'}</td>
-                  <td className="px-4 py-3">
+                  <DataTable.Cell stickyLeft className="font-mono text-xs font-bold text-brand-purple whitespace-nowrap">{c.customerId || '-'}</DataTable.Cell>
+                  <DataTable.Cell className="text-sm font-semibold text-gray-900 whitespace-nowrap">{c.fullName || '-'}</DataTable.Cell>
+                  <DataTable.Cell className="text-xs text-gray-500 whitespace-nowrap">{c.email || '-'}</DataTable.Cell>
+                  <DataTable.Cell className="text-xs text-gray-500 whitespace-nowrap">{c.phone || '-'}</DataTable.Cell>
+                  <DataTable.Cell className="whitespace-nowrap">
                     <Badge tone="purple">{c.role || 'Customer'}</Badge>
-                  </td>
-                  <td className="px-4 py-3"><Badge tone={STATUS_TONE[c.status] || 'green'}>{c.status || 'Active'}</Badge></td>
-                  <td className="px-4 py-3 text-xs text-gray-500">{c.source || 'mobile-app'}</td>
-                  <td className="px-4 py-3 text-xs text-gray-500">{formatDate(c.createdAt)}</td>
-                  <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
+                  </DataTable.Cell>
+                  <DataTable.Cell className="whitespace-nowrap"><Badge tone={STATUS_TONE[c.status] || 'green'}>{c.status || 'Active'}</Badge></DataTable.Cell>
+                  <DataTable.Cell className="text-xs text-gray-500 whitespace-nowrap">{c.source || 'mobile-app'}</DataTable.Cell>
+                  <DataTable.Cell tabularNums className="text-xs text-gray-500 whitespace-nowrap">{formatDate(c.createdAt)}</DataTable.Cell>
+                  <DataTable.Cell align="right" className="whitespace-nowrap" onClick={e => e.stopPropagation()}>
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -355,31 +402,22 @@ const CustomerList = () => {
                         setOrders([]);
                         setTimelineEvents([]);
                       }}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-purple-200 text-brand-purple text-xs font-bold hover:bg-purple-50 transition"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-purple-200 text-brand-purple text-xs font-bold hover:bg-purple-50 transition opacity-80 group-hover:opacity-100 group-focus-within:opacity-100 whitespace-nowrap"
                     >
                       <Eye size={12} /> View Details
                     </button>
-                  </td>
-                </tr>
+                  </DataTable.Cell>
+                </DataTable.Row>
               ))}
             </tbody>
-          </table>
+          </DataTable>
         </div>
-
-        <CardFooter
-          resultsLabel={`Showing ${filtered.length} of ${customers.length} results`}
-          pills={[
-            { label: 'Real', value: realCount, tone: 'green' },
-            { label: 'Demo', value: demoCount, tone: 'amber' },
-            { label: 'Active', value: customers.filter(c => c.status !== 'Deactivated').length, tone: 'green' },
-          ]}
-        />
-      </div>
+      </SectionCard>
 
       {/* Pagination */}
       {!loading && filtered.length > 0 && (
         <PaginationControls
-          currentPage={currentPage}
+          currentPage={safePage}
           totalRecords={filtered.length}
           rowsPerPage={recordsPerPage}
           onPageChange={setCurrentPage}
@@ -432,9 +470,8 @@ const CustomerList = () => {
                   { label: 'Email Address', value: detailCustomer.email },
                   { label: 'Phone Number', value: detailCustomer.phone || '---' },
                   { label: 'Primary Address', value: detailCustomer.address || '—' },
-                  { label: 'City', value: detailCustomer.city || '—' },
+                  { label: 'City', value: resolveCustomerCity(detailCustomer) || '—' },
                   { label: 'Delivery Instructions', value: detailCustomer.deliveryInstructions || '—' },
-                  { label: 'Account Category', value: ACCOUNT_CATEGORY_LABEL[detailCustomer.accountCategory || (isDemoEmail(detailCustomer.email) ? 'DEMO' : 'REAL')] || (detailCustomer.accountCategory || (isDemoEmail(detailCustomer.email) ? 'Demo' : 'Real (Verified)')), badge: true, tone: ACCOUNT_CATEGORY_TONE[detailCustomer.accountCategory || (isDemoEmail(detailCustomer.email) ? 'DEMO' : 'REAL')] || 'green' },
                   { label: 'Status', value: detailCustomer.status || 'Active', badge: true, tone: STATUS_TONE[detailCustomer.status] || 'green' },
                   { label: 'Source', value: detailCustomer.source || 'mobile-app' },
                   { label: 'Joined', value: formatDateTime(detailCustomer.createdAt) },

@@ -2,18 +2,25 @@ import React, { useState, useEffect, useRef } from 'react';
 import './ViewSeller.css';
 import { normalizeSeller, formatStatusLabel, SELLER_STATUS } from './sellerRiderData';
 import PaginationControls from './PaginationControls';
-import { exportToCSV, exportToExcel } from './exportUtils';
+import { exportToCSV, exportToExcel, exportToWord, exportToPDF } from './exportUtils';
+import ExportDropdown from './components/ui/ExportDropdown';
+import RefreshButton from './components/ui/RefreshButton';
 import { apiFetch } from './services/api';
 import useSSE from './services/useSSE';
 import StatusBadge from './components/ui/StatusBadge';
 import { SELLER_STATUS_COLORS } from './components/ui/statusColors';
 import Modal from './components/ui/Modal';
+import { Hash, User, Mail, Phone, MapPin, Activity, Store } from 'lucide-react';
 import { useToast } from './components/ui/useToast';
-import { isDemoEmail } from './demoUtils';
+import PageHeader from './components/ui/PageHeader';
+import EmptyState from './components/ui/EmptyState';
+import Badge from './components/ui/Badge';
+import SectionCard from './components/ui/SectionCard';
+import CardSectionHeader from './components/ui/CardSectionHeader';
+import FilterBar from './components/ui/FilterBar';
 
 const SELLER_EXPORT_COLUMNS = [
   { key: 'sellerId', label: 'Seller ID' },
-  { key: 'accountCategory', label: 'Category' },
   { key: 'fullName', label: 'Full Name' },
   { key: 'email', label: 'Email Address' },
   { key: 'phone', label: 'Phone Number' },
@@ -27,12 +34,13 @@ const GenerateSellerReport = () => {
   // externalSellers/onUpdateSellers props fed a dashboard-held mock row
   // (removed with the de-demo migration).
   const [sellers, setSellers] = useState([]);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const sellersRef = useRef(sellers);
-  const [categoryFilter, setCategoryFilter] = useState('All');
   const { on: onSSE } = useSSE();
 
-  const fetchSellers = async () => {
+  const fetchSellers = async (isManual = false) => {
     try {
+      if (isManual) setIsRefreshing(true);
       const response = await apiFetch('/sellers');
       if (!response.ok) throw new Error('Failed to fetch');
       const data = await response.json();
@@ -43,6 +51,8 @@ const GenerateSellerReport = () => {
       console.error("Error fetching sellers:", err);
       setSellers([]);
       sellersRef.current = [];
+    } finally {
+      if (isManual) setIsRefreshing(false);
     }
   };
 
@@ -84,13 +94,16 @@ const GenerateSellerReport = () => {
       seller.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       seller.sellerId.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (seller.storeName && seller.storeName.toLowerCase().includes(searchTerm.toLowerCase()));
-    const matchesStatus = statusFilter === 'All' || seller.status === statusFilter;
-    const cat = seller.accountCategory || (isDemoEmail(seller.email) ? 'DEMO' : 'REAL');
-    const matchesCategory = categoryFilter === 'All' || cat === categoryFilter;
-    return matchesSearch && matchesStatus && matchesCategory;
+    const matchesStatus = statusFilter === 'All'
+      || (statusFilter === 'INACTIVE'
+          ? (seller.status === 'INACTIVE' || seller.status === 'Inactive' || seller.status === 'Deactivated' || seller.status === 'SUSPENDED' || seller.status === 'suspended')
+          : seller.status === statusFilter);
+    return matchesSearch && matchesStatus;
   });
 
-  const indexOfLastRecord  = currentPage * recordsPerPage;
+  const maxPage = Math.max(1, Math.ceil(filteredSellers.length / recordsPerPage));
+  const safePage = Math.min(currentPage, maxPage);
+  const indexOfLastRecord  = safePage * recordsPerPage;
   const indexOfFirstRecord = indexOfLastRecord - recordsPerPage;
   const currentRecords     = filteredSellers.slice(indexOfFirstRecord, indexOfLastRecord);
 
@@ -101,8 +114,19 @@ const GenerateSellerReport = () => {
     ...s,
     storeAddress: s.address?.street || s.address?.city || s.raw?.address || '—',
   }));
-  const handleExportCSV = () => exportToCSV(getExportData(), SELLER_EXPORT_COLUMNS, 'sellers-ledger');
-  const handleExportExcel = () => exportToExcel(getExportData(), SELLER_EXPORT_COLUMNS, 'sellers-ledger');
+
+  const handleExport = (format) => {
+    const data = getExportData();
+    if (format === 'excel') {
+      exportToExcel(data, SELLER_EXPORT_COLUMNS, 'sellers-ledger');
+    } else if (format === 'word') {
+      exportToWord(data, SELLER_EXPORT_COLUMNS, 'sellers-ledger', 'Sellers Ledger Report');
+    } else if (format === 'pdf') {
+      exportToPDF(data, SELLER_EXPORT_COLUMNS, 'sellers-ledger', 'Sellers Ledger Report');
+    } else {
+      exportToCSV(data, SELLER_EXPORT_COLUMNS, 'sellers-ledger');
+    }
+  };
 
   const formatTimelineDate = (dateStr) => {
     if (!dateStr) return '-';
@@ -191,24 +215,12 @@ const GenerateSellerReport = () => {
 
   const s = {
     main:        { flex: 1, padding: '24px 30px 48px', minHeight: '100vh', background: '#f0ecf7', fontFamily: "'DM Sans', sans-serif", color: '#390955' },
-    header:      { marginBottom: '24px', background: 'white', padding: '20px', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgba(57,9,85,0.07)' },
-    h1:          { fontSize: '22px', fontWeight: 800, color: '#390955', margin: 0, letterSpacing: '-0.5px' },
-    subtitle:    { color: '#a890c0', fontSize: '13px', margin: '3px 0 0', fontWeight: 500 },
-    panel:       { background: 'white', border: '1px solid rgba(57,9,85,0.08)', borderRadius: '12px', marginBottom: '20px', boxShadow: '0 4px 12px rgba(57,9,85,0.04)', overflow: 'hidden' },
-    panelHeader: { padding: '16px 24px', background: '#390955', display: 'flex', alignItems: 'center', justifyContent: 'space-between' },
-    panelHeading:{ fontSize: '15px', fontWeight: 700, color: 'white', margin: 0 },
-    panelBody:   { padding: '24px' },
     formInput:   { padding: '10px 14px', background: 'white', border: '1.5px solid #e4d8f2', borderRadius: '10px', color: '#390955', fontSize: '13px', outline: 'none', width: '100%', boxSizing: 'border-box', fontFamily: 'inherit' },
-    table:       { width: '100%', borderCollapse: 'collapse', fontSize: '13px' },
-    th:          { padding: '14px 16px', textAlign: 'left', fontWeight: 700, color: 'white', background: '#390955', textTransform: 'uppercase', fontSize: '11px', letterSpacing: '0.5px' },
-    td:          { padding: '14px 16px', color: '#390955', borderBottom: '1px solid #f3edfb' },
+    table:       { width: '100%', minWidth: '1080px', borderCollapse: 'collapse', fontSize: '13px' },
+    th:          { padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#64748b', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', textTransform: 'uppercase', fontSize: '11px', letterSpacing: '0.05em', whiteSpace: 'nowrap' },
+    td:          { padding: '14px 16px', color: '#390955', borderBottom: '1px solid #f3edfb', whiteSpace: 'nowrap' },
     btnPrimary:  { padding: '8px 16px', borderRadius: '8px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', background: '#f37021', color: 'white', border: 'none', fontFamily: 'inherit' },
     btnOutline:  { padding: '8px 16px', borderRadius: '8px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', background: 'white', color: '#390955', border: '1.5px solid #e4d8f2', fontFamily: 'inherit' },
-    btnDanger:   { padding: '8px 16px', borderRadius: '8px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', background: '#fee2e2', color: '#991b1b', border: '1px solid #fca5a5', fontFamily: 'inherit' },
-    btnSuccess:  { padding: '8px 16px', borderRadius: '8px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', background: '#d1fae5', color: '#065f46', border: '1px solid #6ee7b7', fontFamily: 'inherit' },
-    paginationBar: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '16px', paddingTop: '8px' },
-    paginationInfo:{ fontSize: '13px', fontWeight: 500, color: '#a890c0' },
-    paginationBtns:{ display: 'inline-flex', gap: '8px' },
     detailRow:   { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 0', borderBottom: '1px solid #f5f0ff', fontSize: 13 },
     detailLabel: { color: '#a890c0', fontWeight: 600 },
     detailValue: { color: '#390955', fontWeight: 700, textAlign: 'right' },
@@ -217,92 +229,81 @@ const GenerateSellerReport = () => {
 
   return (
     <div style={s.main}>
-      <header style={s.header}>
-        <h1 style={s.h1}>Seller Profiles Management</h1>
-        <p style={s.subtitle}>Search and update seller records · Archiving is managed in Settings &gt; Archived Records</p>
-      </header>
+      <PageHeader
+        title="Seller Profiles Management"
+        subtitle="Search and update seller records · Archiving is managed in Settings > Archived Records"
+        breadcrumb={['Dashboard', 'People', 'Sellers', 'Seller Directory']}
+        actions={(
+          <RefreshButton
+            onClick={() => fetchSellers(true)}
+            isRefreshing={isRefreshing}
+          />
+        )}
+      />
 
-      <div style={s.panel}>
-        <div style={s.panelHeader}>
-          <h2 style={s.panelHeading}>Search & Status Directives</h2>
-        </div>
-        <div style={s.panelBody}>
-          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '16px' }}>
-            <div>
-              <label style={{ fontSize: '11px', fontWeight: 700, color: '#a890c0', textTransform: 'uppercase', display: 'block', marginBottom: '6px' }}>Search Seller Name or ID</label>
-              <input type="text" placeholder="Type to filter lookup..." style={s.formInput} value={searchTerm} onChange={handleSearchChange} />
-            </div>
-            <div>
-              <label style={{ fontSize: '11px', fontWeight: 700, color: '#a890c0', textTransform: 'uppercase', display: 'block', marginBottom: '6px' }}>Account Category</label>
-              <select style={s.formInput} value={categoryFilter} onChange={e => { setCategoryFilter(e.target.value); setCurrentPage(1); }}>
-                <option value="All">All Categories</option>
-                <option value="REAL">Real Sellers</option>
-                <option value="DEMO">Demo Sellers</option>
-              </select>
-            </div>
-            <div>
-              <label style={{ fontSize: '11px', fontWeight: 700, color: '#a890c0', textTransform: 'uppercase', display: 'block', marginBottom: '6px' }}>Profile Lifecycle Status</label>
-              <select style={s.formInput} value={statusFilter} onChange={handleStatusFilterChange}>
-                <option value="All">All Statuses</option>
-                <option value={SELLER_STATUS.PENDING_VERIFICATION}>Pending Verification</option>
-                <option value={SELLER_STATUS.ACTIVE}>Active Only</option>
-              </select>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div style={s.panel}>
-        <div style={s.panelHeader}>
-          <h2 style={s.panelHeading}>Registered Sellers Ledger</h2>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.65)', fontWeight: 600 }}>
-              {filteredSellers.length} {filteredSellers.length === 1 ? 'seller' : 'sellers'}
-            </span>
-            <button style={{ ...s.btnOutline, background: 'rgba(255,255,255,0.1)', color: 'white', border: '1.5px solid rgba(255,255,255,0.3)' }} onClick={handleExportCSV}>Export CSV</button>
-            <button style={{ ...s.btnOutline, background: 'rgba(255,255,255,0.1)', color: 'white', border: '1.5px solid rgba(255,255,255,0.3)' }} onClick={handleExportExcel}>Export Excel</button>
-          </div>
-        </div>
+      <SectionCard noPadding className="mb-6">
+        <CardSectionHeader
+          icon={Store}
+          title="Registered Sellers Ledger"
+          subtitle={`${filteredSellers.length} of ${sellers.length} records — registered merchant accounts and shipping profiles`}
+        />
+        <FilterBar>
+          <FilterBar.Group>
+            <FilterBar.Search
+              placeholder="Search seller by name, store, or ID..."
+              value={searchTerm}
+              onChange={handleSearchChange}
+            />
+            <FilterBar.Select
+              aria-label="Filter by status"
+              value={statusFilter}
+              onChange={handleStatusFilterChange}
+            >
+              <option value="All" className="font-medium text-slate-700 bg-white">All Statuses</option>
+              <option value={SELLER_STATUS.ACTIVE} className="font-medium text-slate-700 bg-white">Active</option>
+              <option value="INACTIVE" className="font-medium text-slate-700 bg-white">Inactive</option>
+            </FilterBar.Select>
+            <FilterBar.Count count={filteredSellers.length} label="results" />
+          </FilterBar.Group>
+          <FilterBar.Actions>
+            <ExportDropdown onExport={handleExport} disabled={filteredSellers.length === 0} />
+          </FilterBar.Actions>
+        </FilterBar>
 
         <div style={{ padding: '8px 24px 24px' }}>
-          <div style={{ overflowX: 'auto', border: '1px solid #e4d8f2', borderRadius: '12px' }}>
+          <style>{`
+            .seller-row:hover td { background: #faf7fd !important; }
+            .seller-actions { opacity: 0.8; transition: opacity 0.15s ease; }
+            .seller-row:hover .seller-actions { opacity: 1; }
+          `}</style>
+          <div className="custom-table-scroll" style={{ overflowX: 'auto', border: '1px solid #e4d8f2', borderRadius: '12px' }}>
             <table style={s.table}>
               <thead>
                 <tr>
-                  <th style={s.th}>Seller ID</th>
-                  <th style={s.th}>Category</th>
-                  <th style={s.th}>Full Name</th>
-                  <th style={s.th}>Email Address</th>
-                  <th style={s.th}>Phone Number</th>
-                  <th style={s.th}>Store Address</th>
-                  <th style={s.th}>Status</th>
+                  <th style={{ ...s.th, position: 'sticky', left: 0, zIndex: 10, background: '#f8fafc', borderRight: '1px solid #e2e8f0', boxShadow: '2px 0 5px -2px rgba(0,0,0,0.06)' }}><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Hash size={12} style={{ color: '#94a3b8' }} />Seller ID</span></th>
+                  <th style={s.th}><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><User size={12} style={{ color: '#94a3b8' }} />Full Name</span></th>
+                  <th style={s.th}><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Mail size={12} style={{ color: '#94a3b8' }} />Email Address</span></th>
+                  <th style={s.th}><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Phone size={12} style={{ color: '#94a3b8' }} />Phone Number</span></th>
+                  <th style={s.th}><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><MapPin size={12} style={{ color: '#94a3b8' }} />Store Address</span></th>
+                  <th style={s.th}><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Activity size={12} style={{ color: '#94a3b8' }} />Status</span></th>
                   <th style={{ ...s.th, textAlign: 'right' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {currentRecords.length === 0 ? (
                   <tr>
-                    <td colSpan="8" style={{ ...s.td, textAlign: 'center', padding: '48px', color: '#a890c0', fontWeight: 500 }}>
-                      No records match the current view.
+                    <td colSpan="7" style={{ padding: '32px 16px' }}>
+                      <EmptyState
+                        title="No seller records match your search"
+                        description="Try adjusting your search or lifecycle status filter."
+                      />
                     </td>
                   </tr>
                 ) : (
                   currentRecords.map((seller, idx) => {
-                    const isDemo = (seller.accountCategory || (isDemoEmail(seller.email) ? 'DEMO' : 'REAL')) === 'DEMO';
                     return (
-                      <tr key={seller._id || idx} style={{ background: idx % 2 === 0 ? 'white' : '#faf7fd' }}>
-                        <td style={{ ...s.td, fontFamily: "'DM Mono', monospace", fontWeight: 600, fontSize: '12px' }}>{seller.sellerId}</td>
-                        <td style={s.td}>
-                          <span style={{
-                            fontSize: '10px', fontWeight: 800, padding: '3px 8px', borderRadius: '6px',
-                            background: isDemo ? '#f3f4f6' : '#ecfdf5',
-                            color: isDemo ? '#6b7280' : '#059669',
-                            border: `1px solid ${isDemo ? '#d1d5db' : '#a7f3d0'}`,
-                            textTransform: 'uppercase',
-                          }}>
-                            {isDemo ? 'DEMO' : 'REAL'}
-                          </span>
-                        </td>
+                      <tr key={seller._id || idx} className="seller-row" style={{ background: 'white' }}>
+                        <td style={{ ...s.td, fontFamily: "'DM Mono', monospace", fontWeight: 600, fontSize: '12px', position: 'sticky', left: 0, zIndex: 5, background: 'white', borderRight: '1px solid #f1ecf8', boxShadow: '2px 0 5px -2px rgba(0,0,0,0.06)' }}>{seller.sellerId}</td>
                         <td style={{ ...s.td, fontWeight: 700 }}>
                           <div>{seller.fullName || '—'}</div>
                         </td>
@@ -313,16 +314,16 @@ const GenerateSellerReport = () => {
                           <div>{seller.phone || '—'}</div>
                         </td>
                         <td style={s.td}>
-                          <div style={{ fontWeight: 600, color: '#390955' }}>{seller.storeName || seller.raw?.storeName || '—'}</div>
-                          <div style={{ fontSize: '11.5px', color: '#a890c0', marginTop: '2px' }}>
-                            {seller.address?.street || seller.address?.city || seller.raw?.address || '—'}
+                          <div style={{ fontWeight: 600, color: '#390955', whiteSpace: 'nowrap' }}>{seller.storeName || seller.raw?.storeName || '—'}</div>
+                          <div style={{ fontSize: '11.5px', color: '#a890c0', marginTop: '2px', whiteSpace: 'nowrap' }}>
+                            {seller.address?.street || seller.warehouseAddress || seller.raw?.warehouseAddress || seller.address?.city || seller.raw?.address || '—'}
                           </div>
                         </td>
                         <td style={s.td}>
                           <StatusBadge status={seller.status} label={formatStatusLabel(seller.status)} colorMap={SELLER_STATUS_COLORS} fallback="ACTIVE" />
                         </td>
                         <td style={{ ...s.td, textAlign: 'right' }}>
-                          <div style={{ display: 'inline-flex', gap: '8px' }}>
+                          <div className="seller-actions" style={{ display: 'inline-flex', gap: '8px', whiteSpace: 'nowrap' }}>
                             <button style={s.btnOutline} onClick={() => { setDetailTab('details'); setSellerTimeline([]); setDetailSeller(seller); fetchSellerTimeline(seller); }}>
                               View Details
                             </button>
@@ -340,14 +341,14 @@ const GenerateSellerReport = () => {
           </div>
 
           <PaginationControls
-            currentPage={currentPage}
+            currentPage={safePage}
             totalRecords={filteredSellers.length}
             rowsPerPage={recordsPerPage}
             onPageChange={setCurrentPage}
             onRowsPerPageChange={(n) => { setRecordsPerPage(n); setCurrentPage(1); }}
           />
         </div>
-      </div>
+      </SectionCard>
 
       {/* DETAIL VIEW MODAL — full bank + address info */}
       {detailSeller && (
@@ -366,7 +367,6 @@ const GenerateSellerReport = () => {
             </div>
             <div style={{ padding: '20px 24px 24px' }}>
               <div style={s.detailSection}>Identification</div>
-              <div style={s.detailRow}><span style={s.detailLabel}>Account Category</span><span style={{ ...s.detailValue, fontWeight: 800, color: (detailSeller.accountCategory || (isDemoEmail(detailSeller.email) ? 'DEMO' : 'REAL')) === 'DEMO' ? '#6b7280' : '#059669' }}>{detailSeller.accountCategory || (isDemoEmail(detailSeller.email) ? 'DEMO' : 'REAL')}</span></div>
               <div style={s.detailRow}><span style={s.detailLabel}>ID Type</span><span style={s.detailValue}>{detailSeller.idType}</span></div>
               <div style={s.detailRow}><span style={s.detailLabel}>Government ID No.</span><span style={s.detailValue}>{detailSeller.governmentIdNumber || '—'}</span></div>
 

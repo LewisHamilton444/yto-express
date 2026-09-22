@@ -1,19 +1,25 @@
 import React, { useState, useEffect } from 'react';
 import { normalizeRider, formatStatusLabel, RIDER_STATUS } from './sellerRiderData';
 import PaginationControls from './PaginationControls';
-import { exportToCSV, exportToExcel } from './exportUtils';
+import { exportToCSV, exportToExcel, exportToPDF, exportToWord } from './exportUtils';
+import ExportDropdown from './components/ui/ExportDropdown';
+import RefreshButton from './components/ui/RefreshButton';
+import FilterBar from './components/ui/FilterBar';
 import ParcelProgressTimeline from './ParcelProgressTimeline';
 import { apiFetch, ridersApi, parcelsApi } from './services/api';
 import Modal from './components/ui/Modal';
+import PageHeader from './components/ui/PageHeader';
+import SectionCard from './components/ui/SectionCard';
+import CardSectionHeader from './components/ui/CardSectionHeader';
 import { VehicleIcon } from './components/ui/vehicleIcons';
 import { RIDER_STATUS_BADGE } from './components/ui/statusColors';
-import Tooltip from './components/ui/Tooltip';
-import { ArrowLeft, ArrowRight, CheckCircle2, XCircle } from 'lucide-react';
-import { isDemoEmail } from './demoUtils';
+import StatusBadge from './components/ui/StatusBadge';
+import { ArrowLeft, ArrowRight, CheckCircle2, XCircle, Hash, User, Mail, Phone, Truck, Building2, Package, MapPin, Star, Zap, Activity, Calendar, RotateCcw } from 'lucide-react';
+import EmptyState from './components/ui/EmptyState';
+import TableSkeleton from './components/ui/TableSkeleton';
 
 const RIDER_EXPORT_COLUMNS = [
   { key: 'riderId', label: 'Rider ID' },
-  { key: 'accountCategory', label: 'Category' },
   { key: 'fullName', label: 'Full Name' },
   { key: 'email', label: 'Email Address' },
   { key: 'phone', label: 'Phone Number' },
@@ -84,7 +90,8 @@ const isArchivedDelivery = (parcel) => {
 };
 
 export default function GenerateRiderDataReport() {
-  const [filters,      setFilters]      = useState({ riderName: '', riderId: '', contact: '', category: 'all', status: 'all', vehicleType: 'all', duty: 'all', area: '', dateFrom: '', dateTo: '' });
+  const [searchTerm,   setSearchTerm]   = useState('');
+  const [filters,      setFilters]      = useState({ vehicleType: 'all', duty: 'all', status: 'all' });
   const [currentPage,  setCurrentPage]  = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(8);
   const [selectedRider,setSelectedRider]= useState(null);
@@ -92,13 +99,15 @@ export default function GenerateRiderDataReport() {
   const [riders,       setRiders]       = useState([]);
   const [parcels,      setParcels]      = useState([]);
   const [loading,      setLoading]      = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [saveMsg,      setSaveMsg]      = useState('');
   const [saveErr,      setSaveErr]      = useState('');
   const [showArchivedDeliveries, setShowArchivedDeliveries] = useState(false);
   const [viewParcel,   setViewParcel]   = useState(null);
 
-  const fetchRiders = async () => {
+  const fetchRiders = async (isManual = false) => {
     try {
+      if (isManual) setIsRefreshing(true);
       const data = await ridersApi.list();
       // Guard: a non-array response would crash data.map below.
       setRiders((Array.isArray(data) ? data : []).map(normalizeRider));
@@ -107,6 +116,7 @@ export default function GenerateRiderDataReport() {
       setRiders([]);
     } finally {
       setLoading(false);
+      if (isManual) setIsRefreshing(false);
     }
   };
 
@@ -118,6 +128,10 @@ export default function GenerateRiderDataReport() {
       console.error('Error fetching parcels:', err);
       setParcels([]);
     }
+  };
+
+  const handleRefresh = async () => {
+    await Promise.all([fetchRiders(true), fetchParcels()]);
   };
 
   useEffect(() => { fetchRiders(); fetchParcels(); }, []);
@@ -190,7 +204,6 @@ export default function GenerateRiderDataReport() {
 
   const getExportData = () => filteredData.map(r => ({
     riderId: r.riderId,
-    accountCategory: r.accountCategory || (isDemoEmail(r.email) ? 'DEMO' : 'REAL'),
     fullName: r.fullName,
     email: r.email || '—',
     phone: r.phone || '—',
@@ -202,35 +215,50 @@ export default function GenerateRiderDataReport() {
     status: formatStatusLabel(r.status),
   }));
 
-  const handleExportCSV = () => exportToCSV(getExportData(), RIDER_EXPORT_COLUMNS, 'riders-ledger');
-  const handleExportExcel = () => exportToExcel(getExportData(), RIDER_EXPORT_COLUMNS, 'riders-ledger');
+  const handleExport = (format) => {
+    const data = getExportData();
+    if (format === 'excel') {
+      exportToExcel(data, RIDER_EXPORT_COLUMNS, 'riders-ledger');
+    } else if (format === 'word') {
+      exportToWord(data, RIDER_EXPORT_COLUMNS, 'riders-ledger', 'Rider Data Report');
+    } else if (format === 'pdf') {
+      exportToPDF(data, RIDER_EXPORT_COLUMNS, 'riders-ledger', 'Rider Data Report');
+    } else {
+      exportToCSV(data, RIDER_EXPORT_COLUMNS, 'riders-ledger');
+    }
+  };
 
   // Archived riders live in Settings > Archived Records now, not here.
-  const filteredData  = riders.filter(r => {
+  const filteredData = riders.filter(r => {
     if (r.status === RIDER_STATUS.ARCHIVED) return false;
-    const cat = r.accountCategory || (isDemoEmail(r.email) ? 'DEMO' : 'REAL');
-    if (filters.category && filters.category !== 'all' && cat !== filters.category) return false;
-    if (filters.riderId   && !r.riderId.toLowerCase().includes(filters.riderId.toLowerCase()))     return false;
-    if (filters.riderName && !r.fullName.toLowerCase().includes(filters.riderName.toLowerCase())) return false;
-    if (filters.contact) {
-      const c = filters.contact.toLowerCase();
-      const matchContact = (r.email || '').toLowerCase().includes(c) || (r.phone || '').includes(c);
-      if (!matchContact) return false;
+    if (searchTerm) {
+      const q = searchTerm.trim().toLowerCase();
+      const riderId = (r.riderId || '').toLowerCase();
+      const name = (r.fullName || '').toLowerCase();
+      const email = (r.email || '').toLowerCase();
+      const phone = (r.phone || '').toLowerCase();
+      const hub = (r.raw?.assignedHubAddress || r.raw?.address || r.location?.city || '').toLowerCase();
+      const plate = (r.vehiclePlateNumber || '').toLowerCase();
+      const vehicle = (r.vehicleType || '').toLowerCase();
+      const matches = riderId.includes(q) || name.includes(q) || email.includes(q) || phone.includes(q) || hub.includes(q) || plate.includes(q) || vehicle.includes(q);
+      if (!matches) return false;
     }
-    if (filters.status !== 'all' && r.status !== filters.status)                              return false;
-    if (filters.vehicleType !== 'all' && r.vehicleType !== filters.vehicleType)                return false;
-    if (filters.duty !== 'all' && getDutyState(r) !== filters.duty)                             return false;
-    if (filters.area) {
-      const hubText = (r.raw?.assignedHubAddress || r.raw?.address || r.location?.city || '').toLowerCase();
-      if (!hubText.includes(filters.area.toLowerCase())) return false;
-    }
+    if (filters.vehicleType !== 'all' && r.vehicleType !== filters.vehicleType) return false;
+    if (filters.duty !== 'all' && getDutyState(r) !== filters.duty) return false;
+    if (filters.status !== 'all' && r.status !== filters.status) return false;
     return true;
   });
 
-  const paginatedData = filteredData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  const isFiltered = searchTerm.trim() !== '' || filters.vehicleType !== 'all' || filters.duty !== 'all' || filters.status !== 'all';
+
+  const maxPage = Math.max(1, Math.ceil(filteredData.length / itemsPerPage));
+  const safePage = Math.min(currentPage, maxPage);
+  const indexOfLastRecord  = safePage * itemsPerPage;
+  const indexOfFirstRecord = indexOfLastRecord - itemsPerPage;
+  const paginatedData = filteredData.slice(indexOfFirstRecord, indexOfLastRecord);
 
   const handleFilterChange = (field, value) => { setFilters(p => ({ ...p, [field]: value })); setCurrentPage(1); };
-  const handleReset = () => { setFilters({ riderName: '', riderId: '', contact: '', category: 'all', status: 'all', vehicleType: 'all', duty: 'all', area: '', dateFrom: '', dateTo: '' }); setCurrentPage(1); };
+  const handleReset = () => { setSearchTerm(''); setFilters({ vehicleType: 'all', duty: 'all', status: 'all' }); setCurrentPage(1); };
 
   const rider = selectedRider ? riders.find(r => r.riderId === selectedRider) : null;
   const riderHeldParcels   = rider ? getHeldParcels(rider) : [];
@@ -238,213 +266,197 @@ export default function GenerateRiderDataReport() {
   const riderArchivedCount = riderClosedParcels.filter(isArchivedDelivery).length;
   const riderVisibleClosedParcels = showArchivedDeliveries ? riderClosedParcels : riderClosedParcels.filter(p => !isArchivedDelivery(p));
 
-  const th = { padding: '13px 16px', textAlign: 'left', fontWeight: 700, color: 'white', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.4, whiteSpace: 'nowrap', background: '#390955', position: 'sticky', top: 0 };
-  const td = { padding: '13px 16px', borderBottom: '1px solid #f0eaf8', color: '#1a1a1a', verticalAlign: 'middle' };
+  const th = { padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#64748b', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', position: 'sticky', top: 0, zIndex: 1 };
+  const td = { padding: '13px 16px', borderBottom: '1px solid #f0eaf8', color: '#1a1a1a', verticalAlign: 'middle', whiteSpace: 'nowrap' };
 
   return (
-    <div style={{ flex: 1, background: '#f9f7ff', overflowY: 'auto', fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
-      <style>{`.hrow:hover td { background: #faf5ff !important; }`}</style>
+    <div style={{ flex: 1, padding: '24px 30px 48px', minHeight: '100vh', background: '#f0ecf7', fontFamily: "'DM Sans', sans-serif", color: '#390955', overflowY: 'auto' }}>
+      <style>{`
+        .hrow:hover td { background: #faf5ff !important; }
+        .rider-actions { opacity: 0.8; transition: opacity 0.15s ease; }
+        .hrow:hover .rider-actions { opacity: 1; }
+      `}</style>
 
-      <header style={{ background: 'white', borderBottom: '1px solid #e0d5f0', padding: '24px 32px 20px' }}>
-        <h1 style={{ fontSize: 26, fontWeight: 800, color: '#1a1a1a', letterSpacing: -0.5, margin: '0 0 4px 0' }}>Generate Rider Data Report</h1>
-        <p style={{ fontSize: 13, color: '#888', margin: 0 }}>View and manage rider performance data · Archiving is managed in Settings &gt; Archived Records</p>
-        <nav style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8 }}>
-          {['Dashboard', 'Rider Information Management', selectedRider ? 'Rider Profile Info' : 'Generate Rider Data Report'].map((b, i, arr) => (
-            <React.Fragment key={b}>
-              <span style={{ fontSize: 12, color: i === arr.length - 1 ? '#390955' : '#888', fontWeight: i === arr.length - 1 ? 700 : 500, cursor: i < arr.length - 1 ? 'pointer' : 'default' }}
-                onClick={() => { if (i === 1) setSelectedRider(null); }}>
-                {b}
-              </span>
-              {i < arr.length - 1 && <span style={{ fontSize: 12, color: '#d4c8e8' }}>/</span>}
-            </React.Fragment>
-          ))}
-        </nav>
-      </header>
+      <PageHeader
+        title={selectedRider ? 'Rider Profile Info' : 'Rider Profiles Management'}
+        subtitle="View and manage rider performance data · Archiving is managed in Settings > Archived Records"
+        breadcrumb={['Dashboard', 'People', 'Riders', selectedRider ? 'Rider Profile Info' : 'Rider Directory']}
+        actions={!selectedRider ? (
+          <RefreshButton
+            onClick={handleRefresh}
+            isRefreshing={isRefreshing}
+          />
+        ) : null}
+      />
 
-      <div style={{ padding: '24px 32px', display: 'flex', flexDirection: 'column', gap: 20 }}>
-        {!selectedRider ? (
-          <>
-            {/* Filters */}
-            <div style={{ background: 'white', border: '1px solid #e0d5f0', borderRadius: 12, padding: '22px 24px', boxShadow: '0 1px 6px rgba(57,9,85,0.05)' }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: '#1a1a1a', marginBottom: 18, display: 'flex', alignItems: 'center', gap: 8 }}>
-                <div style={{ width: 26, height: 26, borderRadius: 7, background: '#f37021', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" width="13" height="13"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
-                </div>
-                Report Filters
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 14, marginBottom: 18 }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <label style={{ fontSize: 11, fontWeight: 700, color: '#390955', textTransform: 'uppercase', letterSpacing: 0.4 }}>Full Name</label>
-                  <input type="text" placeholder="Search by name" value={filters.riderName} onChange={e => handleFilterChange('riderName', e.target.value)}
-                    style={{ padding: '9px 12px', border: '1.5px solid #e0d5f0', borderRadius: 8, fontSize: 13, fontFamily: 'inherit', background: '#faf9ff', color: '#1a1a1a' }}/>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <label style={{ fontSize: 11, fontWeight: 700, color: '#390955', textTransform: 'uppercase', letterSpacing: 0.4 }}>Rider ID</label>
-                  <input type="text" placeholder="e.g. RD-..." value={filters.riderId} onChange={e => handleFilterChange('riderId', e.target.value)}
-                    style={{ padding: '9px 12px', border: '1.5px solid #e0d5f0', borderRadius: 8, fontSize: 13, fontFamily: 'inherit', background: '#faf9ff', color: '#1a1a1a' }}/>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <label style={{ fontSize: 11, fontWeight: 700, color: '#390955', textTransform: 'uppercase', letterSpacing: 0.4 }}>Email / Phone</label>
-                  <input type="text" placeholder="Search email/phone" value={filters.contact} onChange={e => handleFilterChange('contact', e.target.value)}
-                    style={{ padding: '9px 12px', border: '1.5px solid #e0d5f0', borderRadius: 8, fontSize: 13, fontFamily: 'inherit', background: '#faf9ff', color: '#1a1a1a' }}/>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <label style={{ fontSize: 11, fontWeight: 700, color: '#390955', textTransform: 'uppercase', letterSpacing: 0.4 }}>Category</label>
-                  <select value={filters.category} onChange={e => handleFilterChange('category', e.target.value)}
-                    style={{ padding: '9px 12px', border: '1.5px solid #e0d5f0', borderRadius: 8, fontSize: 13, fontFamily: 'inherit', background: '#faf9ff', color: '#1a1a1a' }}>
-                    <option value="all">All Categories</option>
-                    <option value="REAL">Real Riders</option>
-                    <option value="DEMO">Demo Riders</option>
-                  </select>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <label style={{ fontSize: 11, fontWeight: 700, color: '#390955', textTransform: 'uppercase', letterSpacing: 0.4 }}>Vehicle Info</label>
-                  <select value={filters.vehicleType} onChange={e => handleFilterChange('vehicleType', e.target.value)}
-                    style={{ padding: '9px 12px', border: '1.5px solid #e0d5f0', borderRadius: 8, fontSize: 13, fontFamily: 'inherit', background: '#faf9ff', color: '#1a1a1a' }}>
-                    <option value="all">All Vehicles</option>
-                    <option value="Motorcycle">Motorcycle</option>
-                    <option value="Van">Van</option>
-                    <option value="Bicycle">Bicycle</option>
-                  </select>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <label style={{ fontSize: 11, fontWeight: 700, color: '#390955', textTransform: 'uppercase', letterSpacing: 0.4 }}>Hub Address</label>
-                  <input type="text" placeholder="e.g. Pulilan or City" value={filters.area} onChange={e => handleFilterChange('area', e.target.value)}
-                    style={{ padding: '9px 12px', border: '1.5px solid #e0d5f0', borderRadius: 8, fontSize: 13, fontFamily: 'inherit', background: '#faf9ff', color: '#1a1a1a' }}/>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <label style={{ fontSize: 11, fontWeight: 700, color: '#390955', textTransform: 'uppercase', letterSpacing: 0.4 }}>On Duty</label>
-                  <select value={filters.duty} onChange={e => handleFilterChange('duty', e.target.value)}
-                    style={{ padding: '9px 12px', border: '1.5px solid #e0d5f0', borderRadius: 8, fontSize: 13, fontFamily: 'inherit', background: '#faf9ff', color: '#1a1a1a' }}>
-                    <option value="all">Any Duty State</option>
-                    <option value="online">On Duty (app toggle active)</option>
-                    <option value="on-delivery">On Delivery (holding a shipment)</option>
-                    <option value="offline">Off Duty (toggle off / not yet active)</option>
-                  </select>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <label style={{ fontSize: 11, fontWeight: 700, color: '#390955', textTransform: 'uppercase', letterSpacing: 0.4 }}>Status</label>
-                  <select value={filters.status} onChange={e => handleFilterChange('status', e.target.value)}
-                    style={{ padding: '9px 12px', border: '1.5px solid #e0d5f0', borderRadius: 8, fontSize: 13, fontFamily: 'inherit', background: '#faf9ff', color: '#1a1a1a' }}>
-                    <option value="all">All Status</option>
-                    <option value={RIDER_STATUS.ACTIVE}>Active</option>
-                    <option value={RIDER_STATUS.PENDING_VERIFICATION}>Pending Verification</option>
-                  </select>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <label style={{ fontSize: 11, fontWeight: 700, color: '#390955', textTransform: 'uppercase', letterSpacing: 0.4 }}>Date From</label>
-                  <input type="date" value={filters.dateFrom} onChange={e => handleFilterChange('dateFrom', e.target.value)}
-                    style={{ padding: '9px 12px', border: '1.5px solid #e0d5f0', borderRadius: 8, fontSize: 13, fontFamily: 'inherit', background: '#faf9ff', color: '#1a1a1a' }}/>
-                </div>
-              </div>
-              <div style={{ display: 'flex', gap: 10 }}>
-                <button onClick={() => setCurrentPage(1)} style={{ padding: '10px 22px', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', background: '#390955', color: 'white' }}>Retrieve Report</button>
-                <button onClick={handleReset} style={{ padding: '10px 22px', border: '1.5px solid #e0d5f0', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', background: 'white', color: '#555' }}>Reset Filters</button>
-              </div>
-            </div>
+      {!selectedRider ? (
+        <SectionCard noPadding className="mb-6">
+          <CardSectionHeader
+            icon={Truck}
+            title="Registered Riders Ledger"
+            subtitle={`${filteredData.length} of ${riders.length} records (${riders.filter(r => r.status === RIDER_STATUS.ACTIVE).length} active on map) — rider performance data and duty status`}
+          />
+          <FilterBar>
+            <FilterBar.Group>
+              <FilterBar.Search
+                placeholder="Search rider by name, ID, or hub..."
+                value={searchTerm}
+                onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
+              />
+              <FilterBar.Select
+                aria-label="Filter by vehicle type"
+                value={filters.vehicleType}
+                onChange={(e) => handleFilterChange('vehicleType', e.target.value)}
+              >
+                <option value="all" className="font-medium text-slate-700 bg-white">All Vehicles</option>
+                <option value="Motorcycle" className="font-medium text-slate-700 bg-white">Motorcycle</option>
+                <option value="Van" className="font-medium text-slate-700 bg-white">Van</option>
+                <option value="Bicycle" className="font-medium text-slate-700 bg-white">Bicycle</option>
+              </FilterBar.Select>
+              <FilterBar.Select
+                aria-label="Filter by duty state"
+                value={filters.duty}
+                onChange={(e) => handleFilterChange('duty', e.target.value)}
+              >
+                <option value="all" className="font-medium text-slate-700 bg-white">All Duty States</option>
+                <option value="online" className="font-medium text-slate-700 bg-white">On Duty</option>
+                <option value="on-delivery" className="font-medium text-slate-700 bg-white">On Delivery</option>
+                <option value="offline" className="font-medium text-slate-700 bg-white">Off Duty</option>
+              </FilterBar.Select>
+              <FilterBar.Select
+                aria-label="Filter by status"
+                value={filters.status}
+                onChange={(e) => handleFilterChange('status', e.target.value)}
+              >
+                <option value="all" className="font-medium text-slate-700 bg-white">All Statuses</option>
+                <option value={RIDER_STATUS.ACTIVE} className="font-medium text-slate-700 bg-white">Active</option>
+                <option value={RIDER_STATUS.PENDING_VERIFICATION} className="font-medium text-slate-700 bg-white">Pending Verification</option>
+              </FilterBar.Select>
+              {isFiltered && (
+                <button
+                  type="button"
+                  onClick={handleReset}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-lg transition-colors cursor-pointer"
+                >
+                  <RotateCcw size={11} aria-hidden="true" />
+                  <span>Reset</span>
+                </button>
+              )}
+              <FilterBar.Count count={filteredData.length} label="results" />
+            </FilterBar.Group>
+            <FilterBar.Actions className="ml-auto">
+              <ExportDropdown onExport={handleExport} disabled={filteredData.length === 0} />
+            </FilterBar.Actions>
+          </FilterBar>
 
-            {/* Table */}
-            <div style={{ background: 'white', border: '1px solid #e0d5f0', borderRadius: 12, overflow: 'hidden', boxShadow: '0 2px 10px rgba(57,9,85,0.05)' }}>
-              <div style={{ padding: '16px 22px', borderBottom: '1px solid #f0eaf8', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span style={{ fontSize: 14, fontWeight: 700, color: '#1a1a1a' }}>Rider Records</span>
-                  <span style={{ fontSize: 12, fontWeight: 700, padding: '3px 10px', borderRadius: 8, background: '#f0eaf8', color: '#390955' }}>{filteredData.length} results</span>
-                  <span style={{ fontSize: 11, color: '#22c55e', fontWeight: 600 }}>● {riders.filter(r=>r.status===RIDER_STATUS.ACTIVE).length} active on map</span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <Tooltip content="Download the filtered rider rows as a CSV file">
-                  <button onClick={handleExportCSV} style={{ padding: '6px 12px', border: '1.5px solid #e0d5f0', borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', background: 'white', color: '#390955' }}>Export CSV</button>
-                  </Tooltip>
-                  <Tooltip content="Download the filtered rider rows as an Excel workbook">
-                  <button onClick={handleExportExcel} style={{ padding: '6px 12px', border: '1.5px solid #e0d5f0', borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', background: 'white', color: '#390955' }}>Export Excel</button>
-                  </Tooltip>
-                </div>
-              </div>
-
-              {loading ? (
-                <div style={{ textAlign: 'center', padding: 48, color: '#a890c0', fontWeight: 600 }}>Loading riders from database...</div>
-              ) : filteredData.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: 48, color: '#a890c0', fontWeight: 600 }}>No riders found.</div>
-              ) : (
-                <div style={{ overflowX: 'auto', maxHeight: 440, overflowY: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <div style={{ padding: '8px 24px 24px' }}>
+                <div className="custom-table-scroll" style={{ overflowX: 'auto', maxHeight: 480, overflowY: 'auto', border: '1px solid #e4d8f2', borderRadius: '12px' }}>
+                  <table style={{ width: '100%', minWidth: '1360px', borderCollapse: 'collapse', fontSize: 13 }}>
                     <thead>
                       <tr>
-                        {['Rider ID','Category','Full Name','Email Address','Phone Number','Vehicle Info','Hub Address','Deliveries Completed','Rating','On Duty','Status','Actions'].map(h => <th key={h} style={th}>{h}</th>)}
+                        {[
+                          { label: 'Rider ID', Icon: Hash },
+                          { label: 'Full Name', Icon: User },
+                          { label: 'Email Address', Icon: Mail },
+                          { label: 'Phone Number', Icon: Phone },
+                          { label: 'Vehicle Info', Icon: Truck },
+                          { label: 'Hub Address', Icon: Building2 },
+                          { label: 'Deliveries Completed', Icon: Package },
+                          { label: 'Rating', Icon: Star },
+                          { label: 'On Duty', Icon: Zap },
+                          { label: 'Status', Icon: Activity },
+                        ].map((col) => {
+                          const h = col.label;
+                          const HIcon = col.Icon;
+                          return (
+                          <th
+                            key={h}
+                            style={{
+                              ...th,
+                              ...(h === 'Rider ID' ? { position: 'sticky', left: 0, top: 0, zIndex: 3, background: '#f8fafc', borderRight: '1px solid #e2e8f0', boxShadow: '2px 0 5px -2px rgba(0,0,0,0.06)' } : {}),
+                              ...(h === 'Deliveries Completed' || h === 'Actions' ? { textAlign: 'right' } : {})
+                            }}
+                          >
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><HIcon size={12} style={{ color: '#94a3b8' }} />{h}</span>
+                          </th>
+                          );
+                        })}
+                        <th style={{ ...th, textAlign: 'right' }}>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {paginatedData.map((r, i) => {
-                        const badge = RIDER_STATUS_BADGE[r.status] || RIDER_STATUS_BADGE.ACTIVE;
-                        const duty = getDutyState(r);
-                        const dutyBadge = DUTY_BADGE[duty];
-                        const isDemo = (r.accountCategory || (isDemoEmail(r.email) ? 'DEMO' : 'REAL')) === 'DEMO';
-                        return (
-                        <tr key={r.riderId} className="hrow" onClick={() => setSelectedRider(r.riderId)}
-                          style={{ cursor: 'pointer', ...(i%2===0 ? {} : { background: 'rgba(57,9,85,0.015)' }) }}>
-                          <td style={{ ...td, fontWeight: 700, color: '#390955', fontFamily: 'monospace', fontSize: 11 }}>{r.riderId}</td>
-                          <td style={td}>
-                            <span style={{
-                              fontSize: '10px', fontWeight: 800, padding: '3px 8px', borderRadius: '6px',
-                              background: isDemo ? '#f3f4f6' : '#ecfdf5',
-                              color: isDemo ? '#6b7280' : '#059669',
-                              border: `1px solid ${isDemo ? '#d1d5db' : '#a7f3d0'}`,
-                              textTransform: 'uppercase',
-                            }}>
-                              {isDemo ? 'DEMO' : 'REAL'}
-                            </span>
-                          </td>
-                          <td style={td}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-                              <div style={{ width: 30, height: 30, borderRadius: '50%', background: '#fff4ec', border: '2px solid #f37021', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f37021', flexShrink: 0 }}><VehicleIcon type={r.vehicleType} size={16} /></div>
-                              <div style={{ fontWeight: 700, color: '#1a1a1a' }}>{r.fullName}</div>
-                            </div>
-                          </td>
-                          <td style={{ ...td, fontSize: 12 }}>{r.email || '—'}</td>
-                          <td style={{ ...td, fontSize: 12 }}>{r.phone || '—'}</td>
-                          <td style={td}>
-                            <div style={{ fontSize: 12, fontWeight: 700, color: '#1a1a1a' }}>{r.vehicleType}</div>
-                            <div style={{ fontSize: 11, color: '#888' }}>{r.vehiclePlateNumber || '—'}</div>
-                          </td>
-                          <td style={td}>
-                            <span style={{ fontSize: 12, fontWeight: 600, color: '#390955', background: '#f5f0fc', padding: '3px 9px', borderRadius: 6, display: 'inline-block' }}>
-                              {r.raw?.assignedHubAddress || r.raw?.address || (r.location.city ? `${r.location.city} Hub` : 'Pulilan Hub')}
-                            </span>
-                          </td>
-                          <td style={{ ...td, fontWeight: 700 }}>{r.performance.deliveriesCount}</td>
-                          <td style={td}><Stars rating={r.performance.rating}/></td>
-                          <td style={td}>
-                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 8, fontSize: 11, fontWeight: 700,
-                              background: dutyBadge.bg, color: dutyBadge.color }}>
-                              <span style={{ width: 5, height: 5, borderRadius: '50%', background: dutyBadge.dot }}/>
-                              {DUTY_LABELS[duty]}
-                            </span>
-                          </td>
-                          <td style={td}>
-                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 8, fontSize: 11, fontWeight: 700,
-                              background: badge.bg, color: badge.color, border: badge.border }}>
-                              <span style={{ width: 5, height: 5, borderRadius: '50%', background: badge.dot }}/>
-                              {formatStatusLabel(r.status)}
-                            </span>
-                          </td>
-                          <td style={td} onClick={e => e.stopPropagation()}>
-                            <div style={{ display:'flex', gap:6 }}>
-                              <button onClick={(e) => { e.stopPropagation(); setSelectedRider(r.riderId); }}
-                                style={{ padding: '5px 10px', border: 'none', borderRadius: 6, background: '#390955', color: 'white', fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                                View <ArrowRight size={12} aria-hidden="true" />
-                              </button>
-                            </div>
+                      {loading ? (
+                        <TableSkeleton rows={8} columns={11} />
+                      ) : filteredData.length === 0 ? (
+                        <tr>
+                          <td colSpan={11} style={{ padding: '32px 16px' }}>
+                            <EmptyState
+                              title="No riders found"
+                              description="No riders match the current filter criteria."
+                            />
                           </td>
                         </tr>
-                      );})}
+                      ) : (
+                        paginatedData.map((r) => {
+                          const badge = RIDER_STATUS_BADGE[r.status] || RIDER_STATUS_BADGE.ACTIVE;
+                          const duty = getDutyState(r);
+                          const dutyBadge = DUTY_BADGE[duty];
+                          return (
+                          <tr key={r.riderId} className="hrow" onClick={() => setSelectedRider(r.riderId)}
+                            style={{ cursor: 'pointer', background: 'white' }}>
+                            <td style={{ ...td, fontWeight: 700, color: '#390955', fontFamily: 'monospace', fontSize: 11, position: 'sticky', left: 0, zIndex: 2, background: 'white', borderRight: '1px solid #f0eaf8', boxShadow: '2px 0 5px -2px rgba(0,0,0,0.06)' }}>{r.riderId}</td>
+                            <td style={td}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 9, whiteSpace: 'nowrap' }}>
+                                <div style={{ width: 30, height: 30, borderRadius: '50%', background: '#fff4ec', border: '2px solid #f37021', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f37021', flexShrink: 0 }}><VehicleIcon type={r.vehicleType} size={16} /></div>
+                                <div style={{ fontWeight: 700, color: '#1a1a1a', whiteSpace: 'nowrap' }}>{r.fullName}</div>
+                              </div>
+                            </td>
+                            <td style={{ ...td, fontSize: 12 }}>{r.email || '—'}</td>
+                            <td style={{ ...td, fontSize: 12 }}>{r.phone || '—'}</td>
+                            <td style={td}>
+                              <div style={{ fontSize: 12, fontWeight: 700, color: '#1a1a1a', whiteSpace: 'nowrap' }}>{r.vehicleType}</div>
+                              <div style={{ fontSize: 11, color: '#888', whiteSpace: 'nowrap' }}>{r.vehiclePlateNumber || '—'}</div>
+                            </td>
+                            <td style={td}>
+                              <span style={{ fontSize: 12, fontWeight: 600, color: '#390955', background: '#f5f0fc', padding: '3px 9px', borderRadius: 6, display: 'inline-block', whiteSpace: 'nowrap' }}>
+                                {r.raw?.assignedHubAddress || r.raw?.address || (r.location?.city ? `${r.location.city} Hub` : 'Pulilan Hub')}
+                              </span>
+                            </td>
+                            <td style={{ ...td, textAlign: 'right', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{r.performance.deliveriesCount}</td>
+                            <td style={{ ...td, textAlign: 'center' }}><Stars rating={r.performance.rating}/></td>
+                            <td style={td}>
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 8, fontSize: 11, fontWeight: 700,
+                                background: dutyBadge.bg, color: dutyBadge.color, whiteSpace: 'nowrap' }}>
+                                <span style={{ width: 5, height: 5, borderRadius: '50%', background: dutyBadge.dot }}/>
+                                {DUTY_LABELS[duty]}
+                              </span>
+                            </td>
+                            <td style={td}>
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 8, fontSize: 11, fontWeight: 700,
+                                background: badge.bg, color: badge.color, border: badge.border, whiteSpace: 'nowrap' }}>
+                                <span style={{ width: 5, height: 5, borderRadius: '50%', background: badge.dot }}/>
+                                {formatStatusLabel(r.status)}
+                              </span>
+                            </td>
+                            <td style={{ ...td, textAlign: 'right' }} onClick={e => e.stopPropagation()}>
+                              <div className="rider-actions" style={{ display:'inline-flex', gap:6, whiteSpace: 'nowrap' }}>
+                                <button onClick={(e) => { e.stopPropagation(); setSelectedRider(r.riderId); }}
+                                  style={{ padding: '5px 10px', border: 'none', borderRadius: 6, background: '#390955', color: 'white', fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                                  View <ArrowRight size={12} aria-hidden="true" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );})
+                      )}
                     </tbody>
                   </table>
                 </div>
-              )}
+              </div>
 
-              <div style={{ padding: '0 22px 16px', borderTop: '1px solid #f0eaf8', background: '#faf8ff' }}>
+              <div style={{ padding: '0 24px 16px', borderTop: '1px solid #f0eaf8', background: '#faf8ff' }}>
                 <PaginationControls
-                  currentPage={currentPage}
+                  currentPage={safePage}
                   totalRecords={filteredData.length}
                   rowsPerPage={itemsPerPage}
                   rowsPerPageOptions={[8, 25, 50, 100]}
@@ -452,8 +464,7 @@ export default function GenerateRiderDataReport() {
                   onRowsPerPageChange={(n) => { setItemsPerPage(n); setCurrentPage(1); }}
                 />
               </div>
-            </div>
-          </>
+            </SectionCard>
         ) : (
           /* PROFILE VIEW */
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -567,7 +578,15 @@ export default function GenerateRiderDataReport() {
                     <div style={{ overflowX: 'auto' }}>
                       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                         <thead>
-                          <tr>{['Tracking No.','Item','Destination','Status'].map(h => <th key={h} style={{ ...th, position: 'static' }}>{h}</th>)}</tr>
+                          <tr>{[
+                            { label: 'Tracking No.', Icon: Hash },
+                            { label: 'Item', Icon: Package },
+                            { label: 'Destination', Icon: MapPin },
+                            { label: 'Status', Icon: Activity },
+                          ].map((col) => {
+                            const HIcon = col.Icon;
+                            return <th key={col.label} style={{ ...th, position: 'static' }}><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><HIcon size={12} style={{ color: '#94a3b8' }} />{col.label}</span></th>;
+                          })}</tr>
                         </thead>
                         <tbody>
                           {riderHeldParcels.map(p => (
@@ -575,7 +594,7 @@ export default function GenerateRiderDataReport() {
                               <td style={{ ...td, fontFamily: 'monospace', fontWeight: 700, color: '#390955' }}>{p.trackingNumber}</td>
                               <td style={td}>{p.item}</td>
                               <td style={td}>{p.destination || '—'}</td>
-                              <td style={td}>{p.status}</td>
+                              <td style={td}><StatusBadge status={p.status} /></td>
                             </tr>
                           ))}
                         </tbody>
@@ -600,7 +619,16 @@ export default function GenerateRiderDataReport() {
                     <div style={{ overflowX: 'auto' }}>
                       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                         <thead>
-                          <tr>{['Tracking No.','Item','Destination','Status','Updated'].map(h => <th key={h} style={{ ...th, position: 'static' }}>{h}</th>)}</tr>
+                          <tr>{[
+                            { label: 'Tracking No.', Icon: Hash },
+                            { label: 'Item', Icon: Package },
+                            { label: 'Destination', Icon: MapPin },
+                            { label: 'Status', Icon: Activity },
+                            { label: 'Updated', Icon: Calendar },
+                          ].map((col) => {
+                            const HIcon = col.Icon;
+                            return <th key={col.label} style={{ ...th, position: 'static' }}><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><HIcon size={12} style={{ color: '#94a3b8' }} />{col.label}</span></th>;
+                          })}</tr>
                         </thead>
                         <tbody>
                           {riderVisibleClosedParcels.map(p => {
@@ -611,7 +639,7 @@ export default function GenerateRiderDataReport() {
                                 <td style={td}>{p.item}</td>
                                 <td style={td}>{p.destination || '—'}</td>
                                 <td style={td}>
-                                  {p.status}
+                                  <StatusBadge status={p.status} />
                                   {archived && <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, color: '#888' }}>· Archived</span>}
                                 </td>
                                 <td style={td}>{p.updatedAt ? new Date(p.updatedAt).toLocaleDateString() : '—'}</td>
@@ -634,7 +662,6 @@ export default function GenerateRiderDataReport() {
             )}
           </div>
         )}
-      </div>
 
       {/* EDIT MODAL */}
       {editingRider && (

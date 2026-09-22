@@ -21,7 +21,18 @@ const Issue = require('./models/Issue');
 const AdminNotification = require('./models/AdminNotification');
 const Account = require('./models/Account');
 
-// Preserve official demo accounts (seller@gmail.com, customer@gmail.com, rider@gmail.com)
+// Destructive purge gate (2026-09-18): this script only runs when the caller
+// explicitly confirms with CONFIRM_PURGE=YES, so an accidental invocation can
+// never wipe the live Web database.
+if (process.env.CONFIRM_PURGE !== 'YES') {
+  console.log('[Purge Refused] Set CONFIRM_PURGE=YES to run this destructive cleanup.');
+  console.log('[Purge Refused] It permanently deletes demo/test rows and every non-demo row it classifies as temporary.');
+  process.exit(0);
+}
+
+// Canonical mobile demo logins. The Web database is REAL-only: these rows are
+// demo fixtures that belong to the APP database, so they are PURGED here
+// (previous versions of this script preserved them).
 const OFFICIAL_DEMO_EMAILS = [
   'seller@gmail.com',
   'customer@gmail.com',
@@ -33,50 +44,57 @@ async function cleanWebDatabase() {
     await mongoose.connect(MONGO_URI);
     console.log('Connected to Web MongoDB.');
 
-    // 1. Purge duplicate test/demo admin accounts and safeguard canonical Admin accounts
-    await Account.deleteMany({ email: { $in: ['superadmin@gmail.com', 'staff@gmail.com', 'hub@gmail.com'] } });
-    const adminCount = await Account.countDocuments();
+    // NOTE (2026-09-18): every filter below targets DEMO/TEST rows ONLY.
+    // The previous version deleted "everything that is not a demo account",
+    // which would have wiped every real seller, customer, rider, parcel, and
+    // issue on a REAL-only database. Real records are never touched now.
+
+    // 1. Demo/test admin accounts — canonical admins are preserved.
+    const delAdmins = await Account.deleteMany({
+      email: { $in: ['superadmin@gmail.com', 'staff@gmail.com', 'hub@gmail.com'] },
+    });
+    console.log(`Deleted ${delAdmins.deletedCount} demo admin accounts (canonical admins preserved).`);
     const adminEmails = await Account.find({}).select('email role adminId').lean();
-    console.log(`[PRESERVED] Admin accounts count: ${adminCount}`, adminEmails.map(a => `${a.email} (${a.role}) [${a.adminId || 'no-id'}]`));
+    console.log(`[PRESERVED] Admin accounts: ${adminEmails.length}`, adminEmails.map(a => `${a.email} (${a.role}) [${a.adminId || 'no-id'}]`));
 
-    // 2. Delete non-official customers
-    const delCust = await Customer.deleteMany({ email: { $nin: OFFICIAL_DEMO_EMAILS } });
-    console.log(`Deleted ${delCust.deletedCount} temporary/test customers.`);
+    // 2. Demo customers (canonical demo logins only)
+    const delCust = await Customer.deleteMany({ email: { $in: OFFICIAL_DEMO_EMAILS } });
+    console.log(`Deleted ${delCust.deletedCount} demo customers.`);
 
-    // 3. Delete non-official sellers
-    const delSell = await Seller.deleteMany({ email: { $nin: OFFICIAL_DEMO_EMAILS } });
-    console.log(`Deleted ${delSell.deletedCount} temporary/test sellers.`);
+    // 3. Demo sellers
+    const delSell = await Seller.deleteMany({ email: { $in: OFFICIAL_DEMO_EMAILS } });
+    console.log(`Deleted ${delSell.deletedCount} demo sellers.`);
 
-    // 4. Delete non-official riders
-    const delRide = await Rider.deleteMany({ email: { $nin: OFFICIAL_DEMO_EMAILS } });
-    console.log(`Deleted ${delRide.deletedCount} temporary/test riders.`);
+    // 4. Demo riders
+    const delRide = await Rider.deleteMany({ email: { $in: OFFICIAL_DEMO_EMAILS } });
+    console.log(`Deleted ${delRide.deletedCount} demo riders.`);
 
-    // 5. Delete test parcels generated during automated testing
+    // 5. Demo/test parcels — demo parties or obviously synthetic test IDs only.
     const delParcels = await Parcel.deleteMany({
       $or: [
         { trackingNumber: { $regex: /TEST|E2E|DUMMY/i } },
         { senderName: { $regex: /Bridge Test|E2E/i } },
-        { senderEmail: { $nin: OFFICIAL_DEMO_EMAILS } },
-        { recipientEmail: { $nin: OFFICIAL_DEMO_EMAILS } },
-      ]
+        { senderEmail: { $in: OFFICIAL_DEMO_EMAILS } },
+        { recipientEmail: { $in: OFFICIAL_DEMO_EMAILS } },
+      ],
     });
-    console.log(`Deleted ${delParcels.deletedCount} temporary test parcels.`);
+    console.log(`Deleted ${delParcels.deletedCount} demo/test parcels.`);
 
-    // 6. Delete test issues
+    // 6. Demo/test issues — demo reporters or synthetic test IDs only.
     const delIssues = await Issue.deleteMany({
       $or: [
         { trackingNumber: { $regex: /TEST|E2E|DUMMY/i } },
-        { reporterEmail: { $nin: OFFICIAL_DEMO_EMAILS } }
-      ]
+        { reporterEmail: { $in: OFFICIAL_DEMO_EMAILS } },
+      ],
     });
-    console.log(`Deleted ${delIssues.deletedCount} temporary test issues.`);
+    console.log(`Deleted ${delIssues.deletedCount} demo/test issues.`);
 
-    // 7. Delete test AdminNotifications
+    // 7. Test AdminNotifications
     const delNotifs = await AdminNotification.deleteMany({
       $or: [
         { message: { $regex: /test\.seller|test\.rider|test\.cust|regd\.cust|uat_customer/i } },
-        { relatedId: { $regex: /YTOMU0OSUU0QUI8|YTOMU0OHY0G96FF|TICK-2026/i } },
-      ]
+        { relatedId: { $regex: /YTOMU0OSUU0QUI8|YTOMU0OHY0G96FF/i } },
+      ],
     });
     console.log(`Deleted ${delNotifs.deletedCount} test admin notifications.`);
 
@@ -91,7 +109,7 @@ async function cleanWebDatabase() {
     console.log('REMAINING RIDERS:', remainingRide);
     console.log('REMAINING ADMINS:', remainingAdmins);
 
-    console.log('Web database cleanup complete.');
+    console.log('Web database demo/test cleanup complete.');
   } catch (err) {
     console.error('Web DB Cleanup Error:', err.message);
   } finally {

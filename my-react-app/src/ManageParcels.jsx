@@ -5,8 +5,22 @@ import { PARCEL_STATUS_COLORS } from './components/ui/statusColors';
 import Modal from './components/ui/Modal';
 import PageHeader from './components/ui/PageHeader';
 import Tooltip from './components/ui/Tooltip';
-import { AlertTriangle, Check, CheckCircle2, CircleDot, FileDown, FileText, X, XCircle } from 'lucide-react';
+import TableSkeleton from './components/ui/TableSkeleton';
+import EmptyState from './components/ui/EmptyState';
+import SectionCard from './components/ui/SectionCard';
+import CardSectionHeader from './components/ui/CardSectionHeader';
+import CardFooter from './components/ui/CardFooter';
+import FilterBar from './components/ui/FilterBar';
+import PaginationControls from './PaginationControls';
+import RefreshButton from './components/ui/RefreshButton';
+import ExportDropdown from './components/ui/ExportDropdown';
+import { exportToCSV, exportToExcel, exportToWord, exportToPDF } from './exportUtils';
+import {
+  Check, CheckCircle2, CircleDot, FileDown, FileText, Package, X, XCircle,
+  Hash, User, Users, Store, MapPin, Weight, Truck, Activity,
+} from 'lucide-react';
 import { normalizeParcelStatus } from './utils/parcelStatus';
+import { resolveCityCoords } from './luzonCityCoords';
 
 /**
  * ManageParcels.jsx
@@ -24,9 +38,9 @@ import { normalizeParcelStatus } from './utils/parcelStatus';
  *
  * Fetches real parcels from GET /api/parcels and real riders from
  * GET /api/riders (for the Assign Rider list + resolving assignedRider
- * names), normalized via normalizeParcel() below. Falls back to
- * The page renders ONLY live /api/parcels records — no fallback dataset exists.
- * unreachable, so the page never renders blank.
+ * names), normalized via normalizeParcel() below. The page renders ONLY live
+ * /api/parcels records — there is no fallback dataset; when the server is
+ * unreachable an honest error banner appears instead of placeholder rows.
  *
  * Palette (unchanged from the legacy files):
  *   page bg #f9f7ff · card white / border #e8e0f0 · table header #390955
@@ -66,28 +80,24 @@ const EXPORT_FORMATS = [
   { key: 'csv', label: 'CSV Spreadsheet', desc: 'Excel-compatible' },
 ];
 
-// Approximate city-center coordinates, used only for the list-level mini-map
-// previews (small dots beside each parcel). The POD tab's MiniMap plots the
-// REAL bridge-synced rider fix with dynamic bounds instead of these.
-const PH_CITY_COORDS = {
-  'Manila':            { lat: 14.5995, lng: 120.9842 },
-  'Makati City':       { lat: 14.5547, lng: 121.0244 },
-  'Makati':            { lat: 14.5547, lng: 121.0244 },
-  'Quezon City':       { lat: 14.6760, lng: 121.0437 },
-  'Pasay':             { lat: 14.5378, lng: 121.0014 },
-  'Mandaluyong City':  { lat: 14.5794, lng: 121.0359 },
-  'Mandaluyong':       { lat: 14.5794, lng: 121.0359 },
-  'Pasig City':        { lat: 14.5764, lng: 121.0851 },
-  'Pasig':             { lat: 14.5764, lng: 121.0851 },
-  'BGC':               { lat: 14.5509, lng: 121.0489 },
-  'Caloocan':          { lat: 14.6488, lng: 120.9673 },
-  'Marikina':          { lat: 14.6507, lng: 121.1029 },
-  'Bulacan':           { lat: 14.7943, lng: 120.8799 },
-  'Hagonoy':           { lat: 14.8340, lng: 120.7310 },
-};
-// Cebu, Davao, and "Other" are real dropdown options too — the preview
-// centers on NCR rather than silently placing them on the wrong island.
-const NCR_FALLBACK_CENTER = { lat: 14.6, lng: 121.0 };
+// City-center coordinates for the list-level mini-map dots come from the
+// shared Luzon lookup (luzonCityCoords.js). The local 13-city table and its
+// NCR fallback center were removed in the truth-pass: an unknown city now
+// yields no coordinate at all instead of pinning the parcel to a wrong island.
+// The POD tab's MiniMap still plots only the REAL bridge-synced rider fix.
+
+// Column definition for the parcel registry table — label + the icon that
+// sits left of the header text, matching the Customers/Sellers/Riders tables.
+const COLS = [
+  { label: 'Tracking ID',      Icon: Hash,     sticky: true },
+  { label: 'Sender',           Icon: User },
+  { label: 'Receiver',         Icon: Users },
+  { label: 'Pickup Address',   Icon: Store },
+  { label: 'Delivery Address', Icon: MapPin },
+  { label: 'Weight',           Icon: Weight,   align: 'right' },
+  { label: 'Assigned Rider',   Icon: Truck },
+  { label: 'Status',           Icon: Activity },
+];
 
 // ── Derived-data helpers ─────────────────────────────────────────────────────
 
@@ -109,7 +119,9 @@ function mapServiceLabel(rawServiceType) {
 
 function normalizeParcel(raw, riderNameById) {
   const city = raw.destination || raw.origin || '';
-  const base = PH_CITY_COORDS[city] || NCR_FALLBACK_CENTER;
+  // null when the destination/origin city isn't in the shared Luzon table —
+  // the parcel then has no map position instead of a fabricated one.
+  const base = resolveCityCoords(city);
   const createdAt = raw.createdAt ? raw.createdAt.slice(0, 10) : new Date().toISOString().slice(0, 10);
   const riderId = raw.riderId || '';
 
@@ -129,11 +141,11 @@ function normalizeParcel(raw, riderNameById) {
     // Contact phones/emails now sync from the mobile sender/recipient via the
     // bridge (senderPhone / receiverPhone / senderEmail / recipientEmail on
     // the Parcel schema).
-    sender: { name: raw.senderName || 'Unknown', phone: raw.senderPhone || '—', email: raw.senderEmail || '—' },
-    receiver: { name: raw.receiverName || 'Unknown', phone: raw.receiverPhone || '—', email: raw.recipientEmail || '—' },
+    sender: { name: raw.senderName || '—', phone: raw.senderPhone || '—', email: raw.senderEmail || '—' },
+    receiver: { name: raw.receiverName || '—', phone: raw.receiverPhone || '—', email: raw.recipientEmail || '—' },
     pickupAddress: raw.origin || '—',
-    deliveryAddress: raw.destination || raw.address || raw.origin || 'Unknown',
-    address: raw.destination || raw.origin || 'Unknown',
+    deliveryAddress: raw.destination || raw.address || raw.origin || '—',
+    address: raw.destination || raw.origin || '—',
     city,
     weight: raw.weight || '—',
     dimensions: dims,
@@ -165,8 +177,8 @@ function normalizeParcel(raw, riderNameById) {
     deliveryFee: typeof raw.deliveryFee === 'number' && raw.deliveryFee > 0 ? `₱${raw.deliveryFee.toFixed(2)}` : '—',
     paymentMode: raw.paymentMode || '—',
     codAmount: typeof raw.codAmount === 'number' && raw.codAmount > 0 ? `₱${raw.codAmount.toFixed(2)}` : '—',
-    lat: base.lat,
-    lng: base.lng,
+    lat: base ? base.lat : null,
+    lng: base ? base.lng : null,
     podPhoto: raw.podPhoto || '',
     // Real last-known rider GPS fix, stamped by POST /api/bridge/receive-status
     // whenever the rider app sends coordinates with a status transition. When
@@ -203,6 +215,19 @@ function normalizeParcel(raw, riderNameById) {
 // ── Export helpers (CSV via Blob download, PDF via print window — no extra deps) ──
 
 const EXPORT_COLUMNS = ['Tracking ID', 'Sender', 'Receiver', 'Pickup Address', 'Delivery Address', 'Weight', 'Service', 'Assigned Rider', 'Date Created', 'Status'];
+
+const PARCEL_EXPORT_COLUMNS = [
+  { key: 'id', label: 'Tracking ID' },
+  { key: 'senderName', label: 'Sender' },
+  { key: 'receiverName', label: 'Receiver' },
+  { key: 'pickupAddress', label: 'Pickup Address' },
+  { key: 'deliveryAddress', label: 'Delivery Address' },
+  { key: 'weight', label: 'Weight' },
+  { key: 'service', label: 'Service Level' },
+  { key: 'assignedRider', label: 'Assigned Courier' },
+  { key: 'dateCreated', label: 'Date Created' },
+  { key: 'status', label: 'Status' },
+];
 
 function rowValues(p) {
   return [p.id, p.sender.name, p.receiver.name, p.pickupAddress, p.deliveryAddress || p.address, p.weight, p.service, p.assignedRider || 'Unassigned', fmtDate(p.registeredDate), p.status];
@@ -677,62 +702,11 @@ function ParcelModal({ parcel, onClose, allParcels }) {
   );
 }
 
-// ── Toolbar (search + status filter + Export PDF/CSV) ──────────────────────
-
-function Toolbar({ search, setSearch, statusFilter, setStatusFilter, onExportCSV, onExportPDF, resultCount }) {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const menuRef = useRef(null);
-
-  useEffect(() => {
-    const onClickOutside = (e) => { if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false); };
-    document.addEventListener('mousedown', onClickOutside);
-    return () => document.removeEventListener('mousedown', onClickOutside);
-  }, []);
-
-  return (
-    <div style={{ padding: '12px 20px', background: '#fdfcff', borderBottom: '1px solid #f5f0ff', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10 }}>
-      <div style={{ position: 'relative', flex: '1 1 260px', maxWidth: 380 }}>
-        <svg viewBox="0 0 24 24" fill="none" stroke="#c4a8d8" strokeWidth="2" width="15" height="15" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}>
-          <circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" strokeLinecap="round" />
-        </svg>
-        <input
-          type="text"
-          className="mp-search"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search parcels, sender, receiver…"
-          style={{ width: '100%', boxSizing: 'border-box', padding: '9px 12px 9px 36px', border: '1.5px solid #e0d5f0', borderRadius: 8, fontSize: 13, color: '#1a1a1a', background: 'white', fontFamily: 'inherit', outline: 'none' }}
-        />
-      </div>
-
-      <select
-        value={statusFilter}
-        onChange={(e) => setStatusFilter(e.target.value)}
-        className="mp-select"
-        style={{ padding: '9px 12px', border: '1.5px solid #e0d5f0', borderRadius: 8, fontSize: 13, color: '#1a1a1a', background: 'white', fontFamily: 'inherit', outline: 'none', cursor: 'pointer' }}
-      >
-        <option value="All">All Statuses</option>
-        {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-      </select>
-
-      <span style={{ fontSize: 12, color: '#aaa' }}>{resultCount} result{resultCount !== 1 ? 's' : ''}</span>
-
-      <div ref={menuRef} style={{ position: 'relative', marginLeft: 'auto' }}>
-        <button onClick={() => setMenuOpen((v) => !v)} className="mp-export-btn"
-          style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 15px', borderRadius: 8, border: 'none', background: '#f37021', color: 'white', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" width="13" height="13"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
-          Export PDF/CSV
-        </button>
-        {menuOpen && (
-          <div style={{ position: 'absolute', right: 0, top: 'calc(100% + 6px)', background: 'white', border: '1px solid #e0d5f0', borderRadius: 10, boxShadow: '0 12px 32px rgba(57,9,85,0.14)', overflow: 'hidden', minWidth: 170, zIndex: 20 }}>
-            <button onClick={() => { onExportCSV(); setMenuOpen(false); }} style={{ ...menuItemStyle, display: 'flex', alignItems: 'center', gap: 8 }}><FileDown size={14} aria-hidden="true" /> Export as CSV</button>
-            <button onClick={() => { onExportPDF(); setMenuOpen(false); }} style={{ ...menuItemStyle, display: 'flex', alignItems: 'center', gap: 8 }}><FileText size={14} aria-hidden="true" /> Export as PDF</button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
+// ── Shared popover styles ───────────────────────────────────────────────────
+// Note: the page's control bar is now the shared FilterBar (search + status
+// filter + Export CSV/PDF) rendered in the main component below, matching the
+// Customers / Sellers / Riders tables. The old inline-styled Toolbar with its
+// export dropdown was removed in that pass.
 
 const menuItemStyle = { display: 'block', width: '100%', textAlign: 'left', padding: '10px 14px', background: 'transparent', border: 'none', color: '#1a1a1a', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' };
 
@@ -783,16 +757,22 @@ export default function ManageParcels() {
   const [parcels, setParcels]           = useState([]);
   const [riders, setRiders]             = useState([]); // [{ riderId, riderName }] from GET /api/riders
   const [loading, setLoading]           = useState(true);
-  const [usingFallback, setUsingFallback] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [actionError, setActionError]   = useState('');
   const [search, setSearch]             = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [viewParcel, setViewParcel]     = useState(null);
+  const [currentPage, setCurrentPage]   = useState(1);
+  const [rowsPerPage, setRowsPerPage]   = useState(10);
 
   const flashActionError = useCallback((msg) => { setActionError(msg); setTimeout(() => setActionError(''), 4000); }, []);
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
+  const loadData = useCallback(async (isManual = false) => {
+    if (isManual) {
+      setIsRefreshing(true);
+    } else {
+      setLoading(true);
+    }
     try {
       const [parcelsRes, ridersRes] = await Promise.all([apiFetch('/parcels'), apiFetch('/riders')]);
       if (!parcelsRes.ok) throw new Error(`Parcels endpoint responded ${parcelsRes.status}`);
@@ -803,28 +783,23 @@ export default function ManageParcels() {
 
       const riderList = (Array.isArray(ridersData) ? ridersData : [])
         .filter((r) => String(r.status || '').toLowerCase() !== 'archived')
-        .map((r) => ({ riderId: r.registrationId || r._id, riderName: r.riderName || 'Unknown Rider' }));
+        .map((r) => ({ riderId: r.registrationId || r._id, riderName: r.riderName || '—' }));
       const riderNameById = {};
       riderList.forEach((r) => { riderNameById[r.riderId] = r.riderName; });
 
       const normalized = (Array.isArray(parcelsData) ? parcelsData : []).map((p) => normalizeParcel(p, riderNameById));
 
-      if (normalized.length > 0) {
-        setParcels(normalized);
-        setUsingFallback(false);
-      } else {
-        setParcels([]);
-        setUsingFallback(false);
-      }
+      // Live rows only — the page never substitutes a fallback dataset.
+      setParcels(normalized);
       setRiders(riderList);
     } catch (err) {
       console.error('ManageParcels: error loading parcels —', err);
       setParcels([]);
-      setUsingFallback(false);
       flashActionError('Could not reach the server.');
       setRiders([]);
     } finally {
       setLoading(false);
+      setIsRefreshing(false);
     }
   }, [flashActionError]);
 
@@ -846,14 +821,13 @@ export default function ManageParcels() {
     });
   }, [parcels, search, statusFilter]);
 
-  // Persists the assignment to the real parcel record (PUT /api/parcels/:id)
-  // when we're on live data; in fallback mode (API unreachable) there's
-  // nothing real to persist to, so it just updates local state like before.
+  // Persists the assignment to the real parcel record (PUT /api/parcels/:id).
+  // Rows without a database id (never the case for live rows) update locally.
   const handleAssignRider = async (parcel, rider) => {
     const prevParcels = parcels;
     setParcels((prev) => prev.map((p) => (p.id === parcel.id ? { ...p, riderId: rider.riderId, assignedRider: rider.riderName } : p)));
 
-    if (usingFallback || !parcel._id) return;
+    if (!parcel._id) return;
     try {
       const res = await apiFetch(`/parcels/${parcel._id}`, {
         method: 'PUT',
@@ -868,89 +842,174 @@ export default function ManageParcels() {
     }
   };
 
-  const COLS = ['Tracking ID', 'Sender', 'Receiver', 'Pickup Address', 'Delivery Address', 'Weight', 'Assigned Rider', 'Status'];
+  const getExportData = () => filtered.map((p) => ({
+    id: p.id,
+    senderName: p.sender?.name || '—',
+    receiverName: p.receiver?.name || '—',
+    pickupAddress: p.pickupAddress || '—',
+    deliveryAddress: p.deliveryAddress || p.address || '—',
+    weight: p.weight || '—',
+    service: p.service || '—',
+    assignedRider: p.assignedRider || 'Unassigned',
+    dateCreated: fmtDate(p.registeredDate),
+    status: p.status || '—',
+  }));
+
+  const handleTableExport = (format) => {
+    const data = getExportData();
+    if (format === 'excel') {
+      exportToExcel(data, PARCEL_EXPORT_COLUMNS, 'parcels-ledger');
+    } else if (format === 'word') {
+      exportToWord(data, PARCEL_EXPORT_COLUMNS, 'parcels-ledger', 'Parcels Ledger Report');
+    } else if (format === 'pdf') {
+      exportToPDF(data, PARCEL_EXPORT_COLUMNS, 'parcels-ledger', 'Parcels Ledger Report');
+    } else {
+      exportToCSV(data, PARCEL_EXPORT_COLUMNS, 'parcels-ledger');
+    }
+  };
+
+  // Page slice — the registry renders one page at a time (same behaviour as
+  // the Customers/Sellers/Riders ledgers). safePage clamps the request when a
+  // filter change shrinks the result set below the current page.
+  const totalPages = Math.max(1, Math.ceil(filtered.length / rowsPerPage));
+  const safePage = Math.min(currentPage, totalPages);
+  const pageRows = useMemo(
+    () => filtered.slice((safePage - 1) * rowsPerPage, safePage * rowsPerPage),
+    [filtered, safePage, rowsPerPage],
+  );
 
   return (
-    <div style={{ flex: 1, overflowY: 'auto', backgroundColor: '#f9f7ff', fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" }}>
+    <div style={{ flex: 1, padding: '24px 30px 48px', backgroundColor: '#f0ecf7', minHeight: '100vh', fontFamily: "'DM Sans', sans-serif" }}>
       <style>{`
         @keyframes mp-modal-in { from { opacity:0; transform:scale(0.95) translateY(10px); } to { opacity:1; transform:scale(1) translateY(0); } }
 
-        .mp-search:focus, .mp-select:focus { border-color:#390955 !important; box-shadow:0 0 0 3px rgba(57,9,85,0.1); }
-        .mp-export-btn:hover { filter:brightness(1.08); }
         .mp-row:hover td      { background:#f0eaf8 !important; }
-        .mp-view-btn:hover, .mp-icon-btn:hover { background:#f37021 !important; color:white !important; border-color:#f37021 !important; }
+        .mp-view-btn, .mp-icon-btn { opacity: 0.8; transition: all 0.15s ease; }
+        .mp-row:hover .mp-view-btn, .mp-row:hover .mp-icon-btn { opacity: 1; }
+        .mp-view-btn:hover, .mp-icon-btn:hover { background:#f37021 !important; color:white !important; border-color:#f37021 !important; opacity: 1; }
 
         .mp-table-wrap { width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch; }
-        .mp-table-wrap table { width:100%; min-width:1040px; border-collapse:collapse; font-size:13px; }
+        .mp-table-wrap table { width:100%; min-width:1080px; border-collapse:collapse; font-size:13px; }
       `}</style>
 
       {viewParcel && <ParcelModal key={viewParcel.id} parcel={viewParcel} onClose={() => setViewParcel(null)} allParcels={parcels} />}
 
-      {/* Header — shared PageHeader pattern (title / subtitle / breadcrumb)
-          so every page presents the same header hierarchy. */}
+      {/* Header — shared PageHeader pattern with refresh action */}
       <PageHeader
         title="Manage Parcels"
         subtitle="Parcel registry, delivery status &amp; rider assignment in one view"
         breadcrumb={['Dashboard', 'Shipments', 'Manage Parcels']}
+        actions={(
+          <RefreshButton
+            onClick={() => loadData(true)}
+            isRefreshing={isRefreshing}
+          />
+        )}
       />
 
-      {/* Body */}
-      <div style={{ padding: '24px 32px', display: 'flex', flexDirection: 'column', gap: 20 }}>
-        {usingFallback && !loading && (
-          <div style={{ padding: '12px 16px', background: '#fff4ec', color: '#c2410c', border: '1px solid #f9d4b6', borderRadius: 10, fontSize: 12.5, fontWeight: 600 }}>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}><AlertTriangle size={15} aria-hidden="true" /> Live parcel feed unavailable — showing an empty roster until the server responds.</span>
-          </div>
-        )}
-        {actionError && (
-          <div style={{ padding: '12px 16px', background: '#fdf2f2', color: '#9b1c1c', border: '1px solid #fecaca', borderRadius: 10, fontSize: 12.5, fontWeight: 600 }}>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}><XCircle size={15} aria-hidden="true" /> {actionError}</span>
-          </div>
-        )}
-        <div style={{ background: 'white', borderRadius: 12, border: '1px solid #e8e0f0', boxShadow: '0 2px 8px rgba(57,9,85,0.05)', overflow: 'hidden' }}>
+      {actionError && (
+        <div style={{ marginBottom: 20, padding: '12px 16px', background: '#fdf2f2', color: '#9b1c1c', border: '1px solid #fecaca', borderRadius: 10, fontSize: 12.5, fontWeight: 600 }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}><XCircle size={15} aria-hidden="true" /> {actionError}</span>
+        </div>
+      )}
 
-          {/* Panel header */}
-          <div style={{ padding: '16px 20px', borderBottom: '1.5px solid #f0eaf8', display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ width: 28, height: 28, background: '#f37021', borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" width="14" height="14"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" /></svg>
-            </div>
-            <div>
-              <h2 style={{ fontSize: 14, fontWeight: 700, color: '#1a1a1a', margin: 0 }}>Parcel List</h2>
-              <p style={{ fontSize: 11, color: '#888', margin: '1px 0 0' }}>{filtered.length} of {parcels.length} records — All active shipments and assigned rider tracking</p>
-            </div>
-          </div>
-
-          <Toolbar
-            search={search} setSearch={setSearch}
-            statusFilter={statusFilter} setStatusFilter={setStatusFilter}
-
-            onExportCSV={() => exportCSV(filtered)}
-            onExportPDF={() => exportPDF(filtered)}
-            resultCount={filtered.length}
+      <SectionCard
+        noPadding
+        className="w-full mb-6"
+        footer={(
+          <CardFooter
+            resultsLabel={`Showing ${filtered.length} of ${parcels.length} results`}
+            pills={[
+              { label: 'Delivered',  value: parcels.filter((p) => p.status === 'Delivered').length,  tone: 'green' },
+              { label: 'In Transit', value: parcels.filter((p) => p.status === 'In Transit').length, tone: 'blue' },
+              { label: 'Pending',    value: parcels.filter((p) => p.status === 'Pending').length,    tone: 'slate' },
+            ]}
           />
+        )}
+      >
+        <CardSectionHeader
+          icon={Package}
+          title="Parcel List"
+          subtitle={`${filtered.length} of ${parcels.length} records — all active shipments and assigned rider tracking`}
+        />
 
-          <div className="mp-table-wrap">
+        <FilterBar>
+          <FilterBar.Group>
+            <FilterBar.Search
+              placeholder="Search by tracking ID, sender, or receiver..."
+              value={search}
+              onChange={e => { setSearch(e.target.value); setCurrentPage(1); }}
+            />
+            <FilterBar.Select
+              aria-label="Filter by status"
+              value={statusFilter}
+              onChange={e => { setStatusFilter(e.target.value); setCurrentPage(1); }}
+            >
+              <option value="All">All Statuses</option>
+              {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+            </FilterBar.Select>
+            <FilterBar.Count count={filtered.length} label="results" />
+          </FilterBar.Group>
+          <FilterBar.Actions>
+            <ExportDropdown onExport={handleTableExport} disabled={filtered.length === 0} />
+          </FilterBar.Actions>
+        </FilterBar>
+
+          {/* Table — same bordered/rounded container the other ledgers use */}
+          <div className="mp-table-wrap custom-table-scroll" style={{ margin: '8px 24px 24px', border: '1px solid #e4d8f2', borderRadius: 12 }}>
             <table>
               <thead>
-                <tr style={{ background: '#390955' }}>
-                  {COLS.map((h) => (
-                    <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontWeight: 700, color: 'white', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.3, whiteSpace: 'nowrap' }}>{h}</th>
-                  ))}
-                  <th style={{ padding: '10px 16px', textAlign: 'center', fontWeight: 700, color: 'white', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.3 }}>Actions</th>
+                <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                  {COLS.map((col) => {
+                    const ColIcon = col.Icon;
+                    return (
+                      <th
+                        key={col.label}
+                        style={{
+                          padding: '12px 16px',
+                          textAlign: col.align === 'right' ? 'right' : 'left',
+                          fontWeight: 600,
+                          color: '#64748b',
+                          fontSize: 11,
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.05em',
+                          whiteSpace: 'nowrap',
+                          ...(col.sticky ? { position: 'sticky', left: 0, zIndex: 10, background: '#f8fafc', borderRight: '1px solid #e2e8f0', boxShadow: '2px 0 5px -2px rgba(0,0,0,0.06)' } : {})
+                        }}
+                      >
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                          <ColIcon size={12} style={{ color: '#94a3b8' }} />
+                          {col.label}
+                        </span>
+                      </th>
+                    );
+                  })}
+                  <th style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 600, color: '#64748b', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan={COLS.length + 1} style={{ padding: '48px 20px', textAlign: 'center', color: '#aaa', fontSize: 13 }}>Loading parcels…</td></tr>
+                  <TableSkeleton rows={8} columns={COLS.length + 1} />
                 ) : filtered.length === 0 ? (
-                  <tr><td colSpan={COLS.length + 1} style={{ padding: '48px 20px', textAlign: 'center', color: '#aaa', fontSize: 13 }}>No parcels found.</td></tr>
-                ) : filtered.map((p, idx) => (
-                  <tr key={p.id} className="mp-row" style={{ background: idx % 2 === 0 ? 'white' : '#faf9ff' }}>
-                    <td style={{ padding: '12px 16px', fontFamily: 'monospace', color: '#390955', fontWeight: 700, whiteSpace: 'nowrap', borderBottom: '1px solid #f3f0f8' }}>{p.id}</td>
+                  <tr>
+                    <td colSpan={COLS.length + 1} style={{ padding: '32px 16px' }}>
+                      <EmptyState
+                        icon={Package}
+                        title={parcels.length === 0 ? 'No parcels yet' : 'No parcels match your search'}
+                        description={parcels.length === 0
+                          ? 'Parcels appear here as the mobile app books and syncs them.'
+                          : 'Try a different tracking ID, sender, or receiver, then clear the status filter if needed.'}
+                      />
+                    </td>
+                  </tr>
+                ) : pageRows.map((p) => (
+                  <tr key={p.id} className="mp-row" style={{ background: 'white' }}>
+                    <td style={{ padding: '12px 16px', fontFamily: 'monospace', color: '#390955', fontWeight: 700, whiteSpace: 'nowrap', borderBottom: '1px solid #f3f0f8', position: 'sticky', left: 0, zIndex: 5, background: 'white', borderRight: '1px solid #f3f0f8', boxShadow: '2px 0 5px -2px rgba(0,0,0,0.06)' }}>{p.id}</td>
                     <td style={{ padding: '12px 16px', color: '#1a1a1a', fontWeight: 600, whiteSpace: 'nowrap', borderBottom: '1px solid #f3f0f8' }}>{p.sender.name}</td>
                     <td style={{ padding: '12px 16px', color: '#374151', whiteSpace: 'nowrap', borderBottom: '1px solid #f3f0f8' }}>{p.receiver.name}</td>
                     <td style={{ padding: '12px 16px', color: '#666', borderBottom: '1px solid #f3f0f8', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.pickupAddress}</td>
                     <td style={{ padding: '12px 16px', color: '#666', borderBottom: '1px solid #f3f0f8', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.deliveryAddress || p.address}</td>
-                    <td style={{ padding: '12px 16px', color: '#374151', whiteSpace: 'nowrap', borderBottom: '1px solid #f3f0f8', textAlign: 'center' }}>{p.weight}</td>
+                    <td style={{ padding: '12px 16px', color: '#374151', whiteSpace: 'nowrap', borderBottom: '1px solid #f3f0f8', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{p.weight}</td>
                     <td style={{ padding: '12px 16px', whiteSpace: 'nowrap', borderBottom: '1px solid #f3f0f8' }}>
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: p.assignedRider ? '#1a1a1a' : '#bbb', fontWeight: 600, fontSize: 12 }}>
                         <span style={{ color: '#7c3aed' }}><RiderIcon size={13} /></span>
@@ -958,8 +1017,8 @@ export default function ManageParcels() {
                       </span>
                     </td>
                     <td style={{ padding: '12px 16px', whiteSpace: 'nowrap', borderBottom: '1px solid #f3f0f8' }}><StatusBadge status={p.status} /></td>
-                    <td style={{ padding: '12px 16px', textAlign: 'center', borderBottom: '1px solid #f3f0f8' }}>
-                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    <td style={{ padding: '12px 16px', textAlign: 'right', borderBottom: '1px solid #f3f0f8' }}>
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
                         <button onClick={() => setViewParcel(p)} className="mp-view-btn" title="View Details"
                           style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 14px', borderRadius: 6, border: '1.5px solid #390955', background: 'white', color: '#390955', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="11" height="11"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>
@@ -973,20 +1032,18 @@ export default function ManageParcels() {
               </tbody>
             </table>
           </div>
+        </SectionCard>
 
-          {/* Footer */}
-          <div style={{ padding: '10px 20px', borderTop: '1px solid #f0eaf8', display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 11, color: '#aaa' }}>Showing {filtered.length} result{filtered.length !== 1 ? 's' : ''}</span>
-            <div style={{ display: 'flex', gap: 6 }}>
-              {['Delivered', 'In Transit', 'Pending'].map((s) => (
-                <span key={s} style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 10, background: PARCEL_STATUS_COLORS[s]?.bg, color: PARCEL_STATUS_COLORS[s]?.color }}>
-                  {s}: {parcels.filter((p) => p.status === s).length}
-                </span>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
+        {/* Pagination — same rows-per-page + Prev/Next bar as the other ledgers */}
+        {!loading && filtered.length > 0 && (
+          <PaginationControls
+            currentPage={safePage}
+            totalRecords={filtered.length}
+            rowsPerPage={rowsPerPage}
+            onPageChange={setCurrentPage}
+            onRowsPerPageChange={(n) => { setRowsPerPage(n); setCurrentPage(1); }}
+          />
+        )}
     </div>
   );
 }

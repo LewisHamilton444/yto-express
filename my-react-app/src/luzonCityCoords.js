@@ -114,9 +114,6 @@ export const CITY_COORDS = {
   Solano:             { lat:16.5167, lng:121.1833 },
 };
 
-// Manila — always a safe Luzon fallback for any city string not in the table.
-export const LUZON_FALLBACK_COORDS = { lat: 14.5995, lng: 120.9842 };
-
 export function resolveCityCoords(city) {
   return CITY_COORDS[city] || null;
 }

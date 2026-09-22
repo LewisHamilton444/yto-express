@@ -1,19 +1,18 @@
 /* ============================================================
-   🎨 PROCESS PARCEL LOCATION CONTAINER THEME
+   PROCESS PARCEL LOCATION CONTAINER THEME
    ============================================================ */
 
 .process-parcel-location-main-content {
   flex: 1;
   background-color: #f3f0f7;
   min-height: 100vh;
-  padding: 24px;
+  padding: 24px 32px;
   box-sizing: border-box;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
 .process-parcel-location-container-inner {
-  max-width: 1400px;
-  margin: 0 auto;
+  width: 100%;
   display: flex;
   flex-direction: column;
   gap: 20px;

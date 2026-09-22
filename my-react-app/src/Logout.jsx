@@ -42,7 +42,7 @@ export default function Logout({ setActivePage, onLogout, currentUser }) {
     <div className="logout-root">
       <div className={`logout-card ${visible ? 'in' : ''} ${exiting ? 'exit' : ''}`}>
 
-        {/* Active session user: avatar, email, role/demo badge */}
+        {/* Active session user: avatar, email, role */}
         {currentUser && (
           <div className="logout-user">
             <div className="logout-avatar">{initials(currentUser.email)}</div>

@@ -7,15 +7,11 @@ import React from 'react';
  */
 export default function CardSectionHeader({ icon: Icon, title, subtitle }) {
   return (
-    <div className="flex items-center gap-3 border-b border-slate-100 px-6 py-4">
-      {Icon && (
-        <span className="bg-orange-500 p-2 rounded-lg text-white flex items-center justify-center shrink-0">
-          <Icon size={16} />
-        </span>
-      )}
+    <div className="flex items-center gap-2.5 border-b border-slate-100 px-6 py-4">
+      {Icon && <Icon size={16} className="text-slate-400 shrink-0" aria-hidden="true" />}
       <div className="min-w-0">
-        <h2 className="text-sm font-bold text-slate-800">{title}</h2>
-        {subtitle && <p className="mt-0.5 truncate text-xs text-slate-400">{subtitle}</p>}
+        <h2 className="text-sm font-semibold text-slate-800">{title}</h2>
+        {subtitle && <p className="mt-0.5 truncate text-xs text-slate-500">{subtitle}</p>}
       </div>
     </div>
   );

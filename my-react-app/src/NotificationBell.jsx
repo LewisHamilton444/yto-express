@@ -25,6 +25,8 @@ export default function NotificationBell({ pendingCount = 0, onNavigate }) {
   // Durable events bridged from the mobile app (bookings, pickups,
   // deliveries, POD uploads, issue tickets). No synthetic alerts are mixed
   // in — every row here originates from a real app/backend event.
+  // Read state is server-owned (`read` flag on the row); clicking the bell
+  // item marks it read via PATCH /api/notifications/:id/read.
   const [appNotifications, setAppNotifications] = useState([]);
   const fetchAppNotifications = async () => {
     try {
@@ -47,7 +49,7 @@ export default function NotificationBell({ pendingCount = 0, onNavigate }) {
     return () => document.removeEventListener('mousedown', onClickOutside);
   }, []);
 
-  const totalCount = appNotifications.length + (pendingCount > 0 ? 1 : 0);
+  const totalCount = appNotifications.filter(n => !n.read).length + (pendingCount > 0 ? 1 : 0);
 
   return (
     <div style={s.wrap} ref={wrapRef}>
@@ -81,7 +83,15 @@ export default function NotificationBell({ pendingCount = 0, onNavigate }) {
             <>
               <div style={s.groupLabel}>From the Mobile App</div>
               {appNotifications.map(n => (
-                <div key={n._id} style={{ ...s.row, cursor: 'pointer' }} onClick={() => { setOpen(false); onNavigate?.('app-notifications'); }}>
+                <div
+                  key={n._id}
+                  style={{ ...s.row, cursor: 'pointer' }}
+                  onClick={() => {
+                    setOpen(false);
+                    if (!n.read) apiFetch(`/notifications/${n._id}/read`, { method: 'PATCH' }).catch(() => {});
+                    onNavigate?.('app-notifications');
+                  }}
+                >
                   <span style={s.dot('#390955')} />
                   <div>
                     <div style={s.rowTitle}>{n.title}</div>

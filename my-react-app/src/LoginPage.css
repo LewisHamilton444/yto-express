@@ -166,7 +166,7 @@
   align-items: center;
   gap: 7px;
   padding: 4px 12px;
-  border-radius: 100px;
+  border-radius: var(--yto-radius-full, 9999px);
   background: rgba(255, 255, 255, 0.10);
   border: 1px solid rgba(255, 255, 255, 0.16);
   font-size: 10px;
@@ -214,7 +214,7 @@
 
 .login-role-tag {
   padding: 4px 12px;
-  border-radius: 100px;
+  border-radius: var(--yto-radius-full, 9999px);
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.14);
   font-size: 10.5px;
@@ -247,7 +247,7 @@
 .login-card {
   width: min(432px, calc(100vw - var(--login-gutter) * 2));
   padding: clamp(26px, 4vh, 40px) clamp(24px, 3vw, 42px) clamp(24px, 4vh, 40px);
-  border-radius: 22px;
+  border-radius: var(--yto-radius-2xl, 20px);
   border: 1px solid rgba(255, 255, 255, 0.28);
   background: rgba(255, 255, 255, 0.13);
   -webkit-backdrop-filter: blur(18px) saturate(1.35);
@@ -365,7 +365,7 @@
   padding: 10px 14px;
   background: rgba(170, 26, 26, 0.28);
   border: 1px solid rgba(255, 140, 140, 0.35);
-  border-radius: 10px;
+  border-radius: var(--yto-radius-md, 8px);
   font-size: 12px;
   font-weight: 600;
   color: #ffe4e4;
@@ -552,7 +552,7 @@
   inset: 0;
   width: 17px;
   height: 17px;
-  border-radius: 5px;
+  border-radius: var(--yto-radius-xs, 4px);
   border: 1.5px solid rgba(255, 255, 255, 0.60);
   background: rgba(255, 255, 255, 0.08);
   display: flex;
@@ -582,8 +582,8 @@
 }
 
 .login-checkbox-input:focus-visible + .login-checkbox-custom {
-  outline: 2px solid #f37021;
-  outline-offset: 2px;
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(57, 9, 85, 0.4), 0 0 0 4px #f37021;
 }
 
 /* ============================================================
@@ -600,7 +600,7 @@
   background: linear-gradient(135deg, #f37021 0%, #e05e10 100%);
   color: #ffffff;
   border: none;
-  border-radius: 11px;
+  border-radius: var(--yto-radius-md, 8px);
   font-size: 14.5px;
   font-weight: 700;
   cursor: pointer;
@@ -719,7 +719,7 @@
   }
   .login-card {
     padding: 34px 24px 30px;
-    border-radius: 18px;
+    border-radius: var(--yto-radius-xl, 16px);
   }
   .login-card-title {
     font-size: 24px;

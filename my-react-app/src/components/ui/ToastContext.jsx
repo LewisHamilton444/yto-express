@@ -6,7 +6,7 @@ import { ToastContext } from './toastContextDef';
  * One toast system for the whole admin portal. Previously every screen had
  * its own divergent feedback — bottom-right toasts (verification), full-width
  * strips that shifted layout (ProcessParcel, Tracking Info, Hub), inline
- * green/red banners inside modals (ViewSeller), an AlertBanner used as a
+ * green/red banners inside modals (ViewSeller), a one-off banner used as a
  * toast (ManageIssues). All of those now push here: a fixed bottom-right
  * stack, per-toast auto-dismiss + manual close, consistent iconography.
  *

@@ -1,3 +1,17 @@
+// ══════════════════════════════════════════════════════════════════════════
+// RETIRED 2026-09-18 — this script seeded the canonical demo accounts
+// (seller@gmail.com / customer@gmail.com / rider@gmail.com) into the WEB
+// database. The Web portal is REAL-only now: those demo rows belong to the
+// APP database (mobile testing) and must never be recreated here. The script
+// refuses to run and exits 0 so any automation that still calls it fails
+// loudly in the log instead of silently re-seeding demo data.
+// ══════════════════════════════════════════════════════════════════════════
+
+console.log('[Retired] seed_official_demo_accounts.js no longer seeds demo accounts.');
+console.log('[Retired] The Web database is REAL-only. Demo accounts live in the App database.');
+process.exit(0);
+
+/* eslint-disable no-unreachable */
 const dns = require('node:dns');
 dns.setServers(['8.8.8.8', '8.8.4.4']);
 const mongoose = require('mongoose');

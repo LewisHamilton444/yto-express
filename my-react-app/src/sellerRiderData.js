@@ -1,6 +1,5 @@
 
 
-import { isDemoEmail } from './demoUtils';
 
 // ── Shared Seller/Rider data shapes ──────────────────────────────────────────
 // The MongoDB documents (see server/models/Seller.js and server/models/Rider.js)
@@ -56,6 +55,9 @@ function normalizeStatus(rawStatus) {
 // which crashed the page when JSX tried to render it directly.
 export function normalizeSeller(raw = {}) {
   const addr = raw.address && typeof raw.address === 'object' ? raw.address : {};
+  const streetAddr = (typeof raw.address === 'string' && raw.address.trim())
+    ? raw.address
+    : (addr.street || raw.warehouseAddress || '');
   return {
     _id: raw._id,
     sellerId: raw.registrationId || raw.sellerId || raw._id || '—',
@@ -68,7 +70,7 @@ export function normalizeSeller(raw = {}) {
     email: raw.email || '',
     phone: raw.phone || '',
     address: {
-      street: typeof raw.address === 'string' ? raw.address : (addr.street || ''),
+      street: streetAddr,
       city: raw.city || addr.city || '',
       state: raw.state || addr.state || '',
       postalCode: raw.postalCode || addr.postalCode || '',
@@ -78,8 +80,7 @@ export function normalizeSeller(raw = {}) {
     accountNumber: raw.accountNumber || '',
     paymentCycle: raw.paymentCycle || 'Weekly',
     commissionRate: raw.commissionRate ?? 0,
-    status: normalizeStatus(raw.status),
-    accountCategory: raw.accountCategory || (isDemoEmail(raw.email) || String(raw.sellerId || raw.registrationId || '').includes('DEMO') ? 'DEMO' : 'REAL'),
+    status: normalizeStatus(raw.status),
     raw: raw,
   };
 }
@@ -132,13 +133,16 @@ function extractCityFromAddress(addrString = '') {
 export function buildSellerPayloadFromPendingRegistration(item) {
   const { city, province } = extractCityFromAddress(item.address);
   return {
-    registrationId: generateRegistrationId('SEL'),
+    registrationId: item.id || generateRegistrationId('SEL'),
     accountNumber: generateAccountNumber(),
     fullName: item.fullName,
+    storeName: item.storeName || item.businessName || '',
+    warehouseAddress: item.warehouseAddress || item.address || '',
+    operatingHours: item.operatingHours || '',
     idType: item.governmentId?.type || 'National ID',
     idNumber: item.governmentId?.number || '',
     email: item.email,
-    phone: item.contactNumber,
+    phone: item.contactNumber || item.phone || '',
     address: item.address || '',
     city,
     state: province,
@@ -207,13 +211,13 @@ export function normalizeRider(raw = {}) {
     // (bridge sync-duty-status). Raw kept on `raw.isOnDuty` too — the UI
     // derives both this and the parcel-based "on-delivery" signal.
     isOnDuty: raw.isOnDuty === true,
-    status: normalizeStatus(raw.status),
-    accountCategory: raw.accountCategory || (isDemoEmail(raw.email) || String(raw.riderId || raw.registrationId || '').includes('DEMO') ? 'DEMO' : 'REAL'),
+    status: normalizeStatus(raw.status),
     performance: {
       deliveriesCount: raw.deliveries ?? 0,
       rating: raw.rating ?? 5.0,
     },
     joined: raw.createdAt ? raw.createdAt.split('T')[0] : 'N/A',
+    createdAt: raw.createdAt || null,
     raw: raw,
   };
 }
@@ -221,4 +225,45 @@ export function normalizeRider(raw = {}) {
 // Mock rosters (mockSellers / mockRiders) were removed 2026-09-13 — the
 // platform is REAL-only and pages render only live API records.
 
+export function mapSellerToPendingItem(seller) {
+  return {
+    id: seller.registrationId || String(seller._id),
+    _id: seller._id,
+    fullName: seller.fullName || '—',
+    contactNumber: seller.phone || '—',
+    email: seller.email || '—',
+    storeName: seller.storeName || '—',
+    governmentId: {
+      type: seller.idType || 'National ID',
+      number: seller.idNumber || '—',
+    },
+    address: typeof seller.address === 'string' ? seller.address : (seller.address?.street || '—'),
+    businessName: seller.storeName || seller.fullName || '—',
+    businessType: 'Retail',
+    submittedAt: seller.createdAt || new Date().toISOString(),
+    status: seller.status || 'Pending Verification',
+    documents: Array.isArray(seller.documents) ? seller.documents : [],
+    raw: seller,
+  };
+}
 
+export function mapRiderToPendingItem(rider) {
+  return {
+    id: rider.registrationId || String(rider._id),
+    _id: rider._id,
+    fullName: rider.riderName || '—',
+    contactNumber: rider.phone || '—',
+    email: rider.email || '—',
+    vehicleType: rider.vehicleType || 'Motorcycle',
+    plateNumber: rider.vehiclePlate || '—',
+    governmentId: {
+      type: rider.idType || "Driver's License",
+      number: rider.idNumber || '—',
+    },
+    address: typeof rider.address === 'string' ? rider.address : (rider.address?.street || '—'),
+    submittedAt: rider.createdAt || new Date().toISOString(),
+    status: rider.status || 'Pending Verification',
+    documents: Array.isArray(rider.documents) ? rider.documents : [],
+    raw: rider,
+  };
+}

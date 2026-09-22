@@ -1,20 +1,41 @@
 import React, { useState } from 'react';
 import './ProcessRiderInformation.css';
+import PageHeader from './components/ui/PageHeader';
 
 import { initialPendingRiders } from './verification/registrationCredentials';
-import { buildRiderPayloadFromPendingRegistration } from './sellerRiderData';
+import { buildRiderPayloadFromPendingRegistration, mapRiderToPendingItem } from './sellerRiderData';
 import { useRegistrationApproval } from './verification/useRegistrationApproval';
 import PendingVerificationsTable from './verification/PendingVerificationsTable';
 import ReviewModal from './verification/ReviewModal';
 import SendSMSModal from './verification/SendSMSModal';
+import RefreshButton from './components/ui/RefreshButton';
+import { apiFetch } from './services/api';
 
 const ProcessRiderInformation = ({ pendingRiders: ridersProp, setPendingRiders: setRidersProp }) => {
   // Falls back to local state if rendered without the lifted props (defensive
   // only — in the real app this always comes from AnalyticsDashboard now, so
   // the queue survives navigating to another sidebar section and back).
   const [localRiders, setLocalRiders] = useState(initialPendingRiders);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const riders    = ridersProp    ?? localRiders;
   const setRiders = setRidersProp ?? setLocalRiders;
+
+  const handleRefresh = async () => {
+    try {
+      setIsRefreshing(true);
+      const res = await apiFetch('/riders?status=Pending');
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          setRiders(data.map(mapRiderToPendingItem));
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to refresh pending riders:', e);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   // Review/approve/email flow is shared with the seller page — see the hook.
   const {
@@ -32,17 +53,17 @@ const ProcessRiderInformation = ({ pendingRiders: ridersProp, setPendingRiders: 
     <div className="process-rider-information-main-content">
       <div className="process-rider-information-container-inner">
 
-        <header className="process-rider-information-card-header">
-          <h1 className="process-rider-information-h1">Process Rider Information</h1>
-          <p className="process-rider-information-subtitle">Review pending rider registrations submitted from the mobile app</p>
-          <nav className="pri-breadcrumb" aria-label="Breadcrumb">
-            <span className="pri-breadcrumb-item">Dashboard</span>
-            <span className="pri-breadcrumb-sep">/</span>
-            <span className="pri-breadcrumb-item">Manage Rider Information</span>
-            <span className="pri-breadcrumb-sep">/</span>
-            <span className="pri-breadcrumb-item pri-breadcrumb-item--active">Pending Verifications</span>
-          </nav>
-        </header>
+        <PageHeader
+          title="Process Rider Information"
+          subtitle="Review pending rider registrations submitted from the mobile app"
+          breadcrumb={['Dashboard', 'People', 'Riders', 'Pending Verifications']}
+          actions={(
+            <RefreshButton
+              onClick={handleRefresh}
+              isRefreshing={isRefreshing}
+            />
+          )}
+        />
 
         <PendingVerificationsTable
           type="rider"

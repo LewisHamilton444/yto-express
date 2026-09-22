@@ -15,7 +15,7 @@
 
 .logout-card {
   background: white;
-  border-radius: 12px;
+  border-radius: var(--yto-radius-xl, 16px);
   padding: 48px 40px;
   max-width: 440px;
   width: 100%;
@@ -89,7 +89,7 @@
   font-weight: 800;
   letter-spacing: 1px;
   padding: 2px 8px;
-  border-radius: 100px;
+  border-radius: var(--yto-radius-full, 9999px);
   text-transform: uppercase;
 }
 
@@ -156,7 +156,7 @@
 .logout-btn {
   flex: 1;
   padding: 12px 0;
-  border-radius: 10px;
+  border-radius: var(--yto-radius-md, 8px);
   font-weight: 600;
   font-size: 14px;
   cursor: pointer;

@@ -9,7 +9,6 @@ const AccountSchema = new mongoose.Schema({
   role:        { type: String, enum: ['super_admin', 'staff', 'hub_receiver'], default: 'staff' },
   password:    { type: String, required: true },
   status:      { type: String, enum: ['Active', 'Deactivated'], default: 'Active' },
-  accountCategory: { type: String, enum: ['REAL', 'DEMO'], default: 'REAL' },
   createdDate: { type: String, default: () => new Date().toISOString().split('T')[0] },
   statusHistory: {
     type: [{

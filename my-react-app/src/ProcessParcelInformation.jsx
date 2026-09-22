@@ -4,6 +4,9 @@ import { useToast } from './components/ui/useToast';
 import Tooltip from './components/ui/Tooltip';
 import { PARCEL_STATUS_COLORS } from './components/ui/statusColors';
 import StatusBadge from './components/ui/StatusBadge';
+import PageHeader from './components/ui/PageHeader';
+import TableSkeleton from './components/ui/TableSkeleton';
+import EmptyState from './components/ui/EmptyState';
 import { Plus, Pencil, X, Search, Bike } from 'lucide-react';
 import './ProcessParcelInformation.css';
 
@@ -85,6 +88,10 @@ export default function ProcessParcelInformation() {
   useEffect(() => { fetchAll(); }, []);
 
   // ── Add Parcel to MongoDB ──
+  // Tracking numbers must come from the real booking pipeline (mobile app
+  // bridge). Admin-created rows are for hub intake only; leave the ID
+  // blank so the server mints the canonical number (bridge rejects
+  // parcels without a valid tracking identity).
   const handleAdd = async (e) => {
     e.preventDefault();
     try {
@@ -195,17 +202,11 @@ export default function ProcessParcelInformation() {
   return (
     <div className="ppi-main">
 
-      <header className="ppi-header">
-        <div>
-          <h1 className="ppi-page-title">Process Parcel Information</h1>
-          <p className="ppi-page-sub">Add, update, delete, and retrieve parcel records</p>
-          <nav className="ppi-breadcrumb">
-            <span>Dashboard</span><span className="ppi-bc-sep">/</span>
-            <span>Shipments</span><span className="ppi-bc-sep">/</span>
-            <span className="ppi-bc-active">Process Parcel Information</span>
-          </nav>
-        </div>
-      </header>
+      <PageHeader
+        title="Process Parcel Information"
+        subtitle="Add, update, delete, and retrieve parcel records"
+        breadcrumb={['Dashboard', 'Shipments', 'Process Parcel Information']}
+      />
 
       {/* Stats Row */}
       <div className="ppi-stats-row">
@@ -535,43 +536,48 @@ export default function ProcessParcelInformation() {
                 <option value="failed">Failed</option>
               </select>
             </div>
-            {loading ? (
-              <p style={{ textAlign:'center', padding:32, color:'#a890c0', fontWeight:600 }}>Loading from database...</p>
-            ) : (
-              <div className="ppi-table-wrap">
-                <table className="ppi-table">
-                  <thead>
+            <div className="ppi-table-wrap">
+              <table className="ppi-table">
+                <thead>
+                  <tr>
+                    {['Tracking No.','Sender','Recipient','Weight','Destination','Service','Status','Rider','Action'].map(h => (
+                      <th key={h}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {loading ? (
+                    <TableSkeleton rows={6} columns={9} />
+                  ) : filteredRetrieve.length === 0 ? (
                     <tr>
-                      {['Tracking No.','Sender','Recipient','Weight','Destination','Service','Status','Rider','Action'].map(h => (
-                        <th key={h}>{h}</th>
-                      ))}
+                      <td colSpan="9" style={{ padding: '24px 16px' }}>
+                        <EmptyState
+                          title="No parcels match your search"
+                          description="Try adjusting your keywords or status filter."
+                        />
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {filteredRetrieve.length === 0 ? (
-                      <tr><td colSpan="9" className="ppi-table-empty">No parcels match your search.</td></tr>
-                    ) : filteredRetrieve.map(p => {
-                      const assignedRider = riders.find(r => r.registrationId === p.riderId || r._id === p.riderId);
-                      return (
-                        <tr key={p._id}>
-                          <td className="ppi-td-id" style={{ fontFamily:'monospace', fontSize:11 }}>{p.trackingNumber}</td>
-                          <td>{p.senderName}</td>
-                          <td>{p.recipientName}</td>
-                          <td>{p.weight}kg</td>
-                          <td>{p.destination || '—'}</td>
-                          <td style={{ textTransform:'capitalize' }}>{p.serviceType}</td>
-                          <td><ParcelStatusBadge status={p.status}/></td>
-                          <td style={{ fontSize:11, color: assignedRider ? '#390955' : '#bbb', fontWeight: assignedRider ? 600 : 400 }}>
-                            {assignedRider ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><Bike size={13} aria-hidden="true" /> {assignedRider.riderName}</span> : 'Unassigned'}
-                          </td>
-                          <td><button className="ppi-btn-sm" onClick={() => setViewParcel(p)}>View</button></td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
+                  ) : filteredRetrieve.map(p => {
+                    const assignedRider = riders.find(r => r.registrationId === p.riderId || r._id === p.riderId);
+                    return (
+                      <tr key={p._id}>
+                        <td className="ppi-td-id" style={{ fontFamily:'monospace', fontSize:11 }}>{p.trackingNumber}</td>
+                        <td>{p.senderName}</td>
+                        <td>{p.recipientName}</td>
+                        <td>{p.weight}kg</td>
+                        <td>{p.destination || '—'}</td>
+                        <td style={{ textTransform:'capitalize' }}>{p.serviceType}</td>
+                        <td><ParcelStatusBadge status={p.status}/></td>
+                        <td style={{ fontSize:11, color: assignedRider ? '#390955' : '#bbb', fontWeight: assignedRider ? 600 : 400 }}>
+                          {assignedRider ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><Bike size={13} aria-hidden="true" /> {assignedRider.riderName}</span> : 'Unassigned'}
+                        </td>
+                        <td><button className="ppi-btn-sm" onClick={() => setViewParcel(p)}>View</button></td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
             <p className="ppi-table-count">Showing {filteredRetrieve.length} of {parcels.length} parcels</p>
           </div>
         )}

@@ -33,9 +33,9 @@ function shutdown() {
   setTimeout(() => process.exit(0), 200);
 }
 
-function start(name, args, cwd) {
+function start(name, args, cwd, extraEnv = {}) {
   console.log(`[dev:all] Starting ${name}...`);
-  const child = spawn(process.execPath, args, { cwd, stdio: 'inherit' });
+  const child = spawn(process.execPath, args, { cwd, stdio: 'inherit', env: { ...process.env, ...extraEnv } });
   child.on('error', (err) => {
     console.error(`[dev:all] Failed to start ${name}: ${err.message}`);
     if (name === 'backend') { console.error('[dev:all]   Check: server/.env exists and MONGO_URI is set (node Server.js now prints a clear error if not).'); }
@@ -54,7 +54,9 @@ process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
 
 backend = start('backend', ['Server.js'], serverDir);
-frontend = start('frontend', [path.join(root, 'node_modules', 'vite', 'bin', 'vite.js'), 'dev', '--port', String(FRONTEND_PORT), '--strictPort'], root);
+frontend = start('frontend', [path.join(root, 'node_modules', 'vite', 'bin', 'vite.js'), 'dev', '--port', String(FRONTEND_PORT), '--strictPort'], root, {
+  VITE_API_URL: process.env.VITE_API_URL || `http://localhost:${BACKEND_PORT}`,
+});
 
 console.log(`\n[dev:all] YTO web dev stack
   API:      http://localhost:${BACKEND_PORT}/

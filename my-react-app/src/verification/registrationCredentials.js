@@ -11,10 +11,6 @@ export const initialPendingSellers = [];
 
 export const initialPendingRiders = [];
 
-export const generateCredentials = (fullName) => {
-  return { username: fullName, password: '(Registered via mobile app)' };
-};
-
 // Approval notification text sent to registered users.
 // Note: Passwords are created by users on the mobile app and never overwritten.
 export const buildSmsMessage = (credentials = {}) => {

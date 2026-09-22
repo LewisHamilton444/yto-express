@@ -1,19 +1,18 @@
 /* ============================================================
-   🎨 PROCESS RIDER INFORMATION CONTAINER THEME
+   PROCESS RIDER INFORMATION CONTAINER THEME
    ============================================================ */
 
 .process-rider-information-main-content {
   flex: 1;
   background-color: #f3f0f7; /* Soft tinted canvas background */
   min-height: 100vh;
-  padding: 24px;             /* Gives breathing room around the primary interface cards */
+  padding: 28px 32px;        /* Gives breathing room around the primary interface cards */
   box-sizing: border-box;
 }
 
 /* Internal structured layout width controller */
 .process-rider-information-container-inner {
-  max-width: 1400px;
-  margin: 0 auto;
+  width: 100%;
   display: flex;
   flex-direction: column;
   gap: 20px;
@@ -22,7 +21,7 @@
 /* ── MATCHING ANALYTICS DASHBOARD CARD HEADER FRAME ── */
 .process-rider-information-card-header {
   background: #ffffff;
-  border-radius: 12px;       /* Beautiful card roundness matching dashboard style */
+  border-radius: var(--yto-radius-xl, 16px);       /* Beautiful card roundness matching dashboard style */
   padding: 24px 32px;
   box-shadow: 0 4px 20px rgba(57, 9, 85, 0.04);
   border: 1px solid #e8e2f0;
@@ -74,7 +73,7 @@
   padding: 14px 24px;
   font-size: 13px;
   font-weight: 600;
-  border-radius: 12px;
+  border-radius: var(--yto-radius-md, 8px);
   margin-bottom: 4px;
 }
 .process-rider-information-message--success {
@@ -97,7 +96,7 @@
 /* Primary Card Modules Container Panels */
 .process-rider-information-section {
   background: white;
-  border-radius: 12px;
+  border-radius: var(--yto-radius-xl, 16px);
   padding: 32px;
   box-shadow: 0 4px 20px rgba(57, 9, 85, 0.04);
   border: 1px solid #e8e2f0;

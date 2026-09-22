@@ -20,6 +20,12 @@ dotenv.config({ path: path.resolve(__dirname, '.env') });
 
 const app = express();
 
+// Render terminates TLS and forwards requests to the app, so the client IP
+// lives in X-Forwarded-For. Without trust proxy, express-rate-limit cannot
+// key its counters on the real client IP behind the proxy (rate-limit v8+
+// throws a validation error in that setup, which would 500 every login).
+app.set('trust proxy', 1);
+
 // Security HTTP headers (2026 audit H3): packaged via helmet with a CSP that
 // tolerates the admin's inline-style design system while blocking frame
 // embedding, MIME sniffing, and mixed content downgrades.
@@ -43,14 +49,30 @@ app.use(helmet({
 // CORS (2026 audit M1): no wildcard. Same-origin and localhost dev origins are
 // always allowed; production origins come from CORS_ORIGIN (comma-separated)
 // and any *.onrender.com host. Disallowed origins get no ACAO header at all.
-const isAllowedCorsOrigin = (origin) => {
-    if (!origin) return true; // same-origin requests, curl, native clients
+//
+// BUGFIX 2026-09-22 — this predicate previously had signature (origin) => bool.
+// cors@2.8.6 treats a FUNCTION origin as the async-decision contract
+// (origin, callback) => void. Our predicate never invoked its 2nd argument,
+// so cors's internal continuation never ran, next() was never called, and
+// EVERY request — allowed or not — hung until the client timed out. That was
+// the login page's "stuck spinner + error after ~1 minute" (apiFetch's 60s
+// abort) and the perpetually orange "Connecting..." health pill. The fixed
+// form below keeps the same allowlist rules but answers cors's callback:
+//   cb(null, originValue)  → allow (reflects the origin)
+//   cb(null, false)        → deny (no ACAO header, request still proceeds)
+//   cb(err)                → reject with error
+// Verified against the installed cors source: server/node_modules/cors/lib/index.js
+// (middlewareWrapper → originCallback(req.headers.origin, function (err2, origin) ...)).
+const isAllowedCorsOrigin = (origin, callback) => {
+    if (!origin) return callback(null, true); // same-origin requests, curl, native clients
     try {
         const { hostname } = new URL(origin);
-        if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname.endsWith('.onrender.com')) return true;
-    } catch { return false; }
+        if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname.endsWith('.onrender.com')) {
+            return callback(null, origin);
+        }
+    } catch { return callback(null, false); }
     const allowed = (process.env.CORS_ORIGIN || '').split(',').map((s) => s.trim()).filter(Boolean);
-    return allowed.includes(origin);
+    return callback(null, allowed.includes(origin) ? origin : false);
 };
 
 app.use(cors({
@@ -215,6 +237,19 @@ function validateAdminPassword(password) {
 // ── ROOT ROUTE ──
 app.get('/', (req, res) => {
     res.send('YTO Express API Server is Running!');
+});
+
+// ── HEALTH CHECK ──
+// Machine-readable liveness endpoint (the root route returns prose). The login
+// page's server-status pill probes this; before it existed the pill polled '/'
+// and could not distinguish "API up" from "some other server on that port".
+app.get('/api/health', (req, res) => {
+    const dbState = mongoose.connection.readyState; // 1 = connected
+    res.status(dbState === 1 ? 200 : 503).json({
+        status: dbState === 1 ? 'ok' : 'degraded',
+        db: dbState === 1 ? 'connected' : 'disconnected',
+        uptimeSeconds: Math.floor(process.uptime()),
+    });
 });
 
 // ── SSE EVENT STREAM ───────────────────────────────────────────────────

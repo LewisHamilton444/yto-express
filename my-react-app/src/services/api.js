@@ -15,27 +15,50 @@
 // common "GET a collection" case, which was identical everywhere.
 
 export const API_ROOT = import.meta.env.VITE_API_URL || 'https://yto-express-backend.onrender.com';
-export const API_BASE = `${API_ROOT}/api`;
+const API_BASE = `${API_ROOT}/api`;
 
 /** fetch(), with `path` resolved against the shared API base and JWT token attached. */
 export async function apiFetch(path, options = {}) {
+  // Per-call timeout (default 60s): without this a hanging connection leaves
+  // every caller waiting forever — the login spinner and the dashboard
+  // skeleton never resolve. A timeout converts the hang into a catchable
+  // error so each screen shows its honest error state instead. Callers that
+  // need longer (or shorter) pass { timeout: ms }.
+  const { timeout = 60000, ...fetchOptions } = options;
   const token = getAuthToken();
-  const headers = { ...options.headers };
+  const headers = { ...fetchOptions.headers };
   if (token && !headers['Authorization']) {
     headers['Authorization'] = `Bearer ${token}`;
   }
-  const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
-  if (res.status === 401 && token && !path.includes('/login')) {
-    try {
-      const clone = res.clone();
-      const data = await clone.json();
-      if (data.error && (data.error.toLowerCase().includes('expired') || data.error.toLowerCase().includes('token') || data.error.toLowerCase().includes('denied'))) {
-        setAuthToken(null);
-        window.dispatchEvent(new Event('yto:auth_expired'));
-      }
-    } catch { /* non-JSON 401 body: nothing to inspect */ }
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeout);
+  try {
+    const res = await fetch(`${API_BASE}${path}`, { ...fetchOptions, headers, signal: ctrl.signal });
+    if (res.status === 401 && token && !path.includes('/login')) {
+      try {
+        const clone = res.clone();
+        const data = await clone.json();
+        if (data.error && (data.error.toLowerCase().includes('expired') || data.error.toLowerCase().includes('token') || data.error.toLowerCase().includes('denied'))) {
+          setAuthToken(null);
+          window.dispatchEvent(new Event('yto:auth_expired'));
+        }
+      } catch { /* non-JSON 401 body: nothing to inspect */ }
+    }
+    return res;
+  } catch (err) {
+    if (err && err.name === 'AbortError') {
+      throw new Error('Taking too long to respond. The system may be starting up — please try again.');
+    }
+    if (err instanceof TypeError) {
+      // Browser-native fetch failures (DNS, refusal, offline) arrive as a bare
+      // TypeError whose message leaks internals like "Failed to fetch". Surface
+      // plain language instead — the login screen prints this verbatim.
+      throw new Error('Cannot reach the server right now. Check that it is running, then try again.');
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
   }
-  return res;
 }
 
 const TOKEN_KEY = 'yto_token';
@@ -80,6 +103,10 @@ export const ridersApi = {
   list: () => getJson('/riders'),
 };
 
+export const customersApi = {
+  list: () => getJson('/customers'),
+};
+
 export const parcelsApi = {
   list: () => getJson('/parcels'),
 };
@@ -90,10 +117,6 @@ export const parcelLocationsApi = {
 
 export const accountsApi = {
   list: () => getJson('/accounts'),
-};
-
-export const dashboardApi = {
-  stats: () => getJson('/dashboard/stats'),
 };
 
 // ── Login Helper ────────────────────────────────────────────────────────

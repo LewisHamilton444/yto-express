@@ -4,12 +4,12 @@ const ROLE_LABELS = { super_admin: 'Super Admin', staff: 'Staff', hub_receiver: 
 
 const s = {
   wrap:     { position: 'relative' },
-  trigger:  { display: 'flex', alignItems: 'center', gap: 8, background: 'none', border: 'none', cursor: 'pointer', padding: '4px 6px', borderRadius: 10 },
+  trigger:  { display: 'flex', alignItems: 'center', gap: 8, background: 'none', border: 'none', cursor: 'pointer', padding: '4px 6px', borderRadius: 8 },
   avatar:   { width: 34, height: 34, borderRadius: '50%', background: '#390955', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800, flexShrink: 0 },
   nameCol:  { display: 'flex', flexDirection: 'column', alignItems: 'flex-start' },
   name:     { fontSize: 12.5, fontWeight: 700, color: '#1a1a1a', lineHeight: 1.3 },
   role:     { fontSize: 10.5, color: '#a890c0', fontWeight: 600 },
-  dropdown: { position: 'absolute', top: 'calc(100% + 8px)', right: 0, width: 220, background: 'white', borderRadius: 12, boxShadow: '0 12px 32px rgba(57,9,85,0.18)', border: '1px solid #ede4f5', zIndex: 3000, overflow: 'hidden' },
+  dropdown: { position: 'absolute', top: 'calc(100% + 8px)', right: 0, width: 220, background: 'white', borderRadius: 14, boxShadow: '0 12px 32px rgba(57,9,85,0.18)', border: '1px solid #ede4f5', zIndex: 3000, overflow: 'hidden' },
   head:     { padding: '14px 16px', borderBottom: '1px solid #f3edfb', display: 'flex', alignItems: 'center', gap: 10 },
   item:     { display: 'flex', alignItems: 'center', gap: 10, padding: '11px 16px', fontSize: 13, fontWeight: 600, color: '#390955', cursor: 'pointer' },
   itemDanger: { color: '#991b1b' },

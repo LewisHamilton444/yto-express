@@ -18,7 +18,7 @@
 :root {
   /* Brand */
   --yto-brand-purple: #390955;
-  --yto-brand-purple-dark: #1a0a2e;
+  --yto-brand-purple-dark: #2a0640;
   --yto-brand-orange: #f37021;
 
   /* Surfaces */
@@ -61,19 +61,31 @@
   --yto-text-lg: 17px;
   --yto-text-xl: 26px;
 
-  /* Shape */
-  --yto-radius-sm: 6px;
-  --yto-radius: 8px;
-  --yto-radius-lg: 10px;
-  --yto-radius-xl: 12px;
+  /* Shape / Corner Radius System (Concentric scale based on element hierarchy)
+     01 System vs Single Value: radius scales with element bounding box.
+     02 Concentric Arcs: R_inner = R_outer - Padding.
+     03 Tiered scale: xs (4px) -> sm (6px) -> md (8px) -> lg (12px) -> xl (16px) -> 2xl (20px).
+     04 Strict pill: 9999px reserved for single-line tags, switches, and circle avatars.
+     05 Boundary docking: touching edges must be squared (0px).
+     06 Concentric focus rings: R_ring = R_control + gap. */
+  --yto-radius-xs: 4px;       /* Micro: status tags, indicator dots, micro-chips, nested tags */
+  --yto-radius-sm: 6px;       /* Small: sub-menu links, table action buttons, small inputs */
+  --yto-radius-md: 8px;       /* Medium (Base): default buttons, form fields, select dropdowns */
+  --yto-radius: 8px;          /* Alias for backwards compatibility */
+  --yto-radius-lg: 12px;      /* Large: nested cards, filter panels, tab trays */
+  --yto-radius-xl: 16px;      /* Extra Large: primary dashboard cards, table panels */
+  --yto-radius-2xl: 20px;     /* 2XL: modals, dialog overlays, floating sheets */
+  --yto-radius-full: 9999px;  /* Pill / Circle: avatars, toggle switches, single-line count chips */
 
   /* Elevation */
   --yto-shadow-sm: 0 1px 3px rgba(57, 9, 85, 0.08);
   --yto-shadow-md: 0 12px 32px rgba(57, 9, 85, 0.18);
   --yto-shadow-lg: 0 32px 80px rgba(57, 9, 85, 0.25);
 
-  /* Focus */
+  /* Focus & Selection Rings (Concentric outer ring to prevent corner pinching) */
   --yto-focus-ring: 0 0 0 3px rgba(57, 9, 85, 0.12);
+  --yto-focus-ring-concentric: 0 0 0 2px var(--yto-surface), 0 0 0 4px var(--yto-brand-orange);
+  --yto-focus-ring-brand: 0 0 0 2px var(--yto-surface), 0 0 0 4px var(--yto-brand-purple);
 }
 
 /* ── Typography floor (Part 1: inline-styled JSX) ─────────────

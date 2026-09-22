@@ -17,6 +17,8 @@ const adminNotificationSchema = new mongoose.Schema({
     type: { type: String, default: 'system' },       // order_update | new_order | system_alert | ...
     relatedId: { type: String, default: '' },        // tracking number / ticket id
     source: { type: String, default: 'mobile-app' },
+    read: { type: Boolean, default: false },        // server-side read state (shared across admin sessions)
+    readAt: { type: Date, default: null },
 }, { timestamps: true });
 
 adminNotificationSchema.index({ createdAt: -1 });

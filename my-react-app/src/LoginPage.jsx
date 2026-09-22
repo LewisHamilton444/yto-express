@@ -54,7 +54,7 @@ const LoginPage = ({ onLogin }) => {
       ctrl = new AbortController();
       const { timeout, pauseMs } = attempts[index];
       activeTimer = setTimeout(() => ctrl.abort(), timeout);
-      fetch(API_ROOT, { signal: ctrl.signal })
+      fetch(`${API_ROOT}/api/health`, { signal: ctrl.signal })
         .then((res) => {
           if (!cancelled) setApiHealth(res.ok ? 'online' : 'offline');
         })

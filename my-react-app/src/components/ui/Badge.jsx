@@ -15,10 +15,22 @@ const TONE_CLASSES = {
   orange: 'bg-orange-50 text-brand-orange border-orange-200',
 };
 
-export default function Badge({ tone = 'slate', icon: Icon, children, className = '', hint }) {
+export default function Badge({
+  tone,
+  icon: Icon,
+  children,
+  className = '',
+  hint,
+  style,
+  uppercase = true,
+}) {
+  const resolvedTone = tone || (!style?.background ? 'slate' : null);
+  const toneClass = resolvedTone ? (TONE_CLASSES[resolvedTone] || TONE_CLASSES.slate) : '';
+
   const pill = (
     <span
-      className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${TONE_CLASSES[tone] || TONE_CLASSES.slate} ${className}`}
+      style={style}
+      className={`inline-flex items-center gap-1 whitespace-nowrap rounded-md border px-2.5 py-0.5 text-[11px] font-bold ${uppercase ? 'uppercase tracking-wide' : 'tracking-normal'} ${toneClass} ${className}`}
     >
       {Icon && <Icon size={11} strokeWidth={2.5} />}
       {children}

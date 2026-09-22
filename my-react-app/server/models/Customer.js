@@ -14,7 +14,6 @@ const CustomerSchema = new mongoose.Schema({
   address:         { type: String, default: '' },
   city:            { type: String, default: '' },
   deliveryInstructions: { type: String, default: '' },
-  accountCategory: { type: String, enum: ['REAL', 'DEMO'], default: 'REAL' },
   status:          { type: String, default: 'Active' },
   source:          { type: String, default: 'mobile-app' },
   statusHistory: [{

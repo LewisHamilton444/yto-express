@@ -20,10 +20,14 @@
 //   2. HUB-001 (Quezon City) and HUB-003 (South Luzon - Laguna) were
 //      REMOVED — non-Bulacan hubs contradicted the Bulacan-only app
 //      service area. The hub list is now Bulacan-only.
+//
+// STATUS HONESTY: `status` below is the hub's declared operating state used
+// for map coloring only — it is NOT derived from live load telemetry (no
+// such feed exists). Live parcel/rider counts per hub are computed at
+// render time in LiveRiderMap (hubMetrics) and are the real numbers.
 
-export const HUB_STATUS = {
+const HUB_STATUS = {
   OPERATIONAL: 'Operational',
-  HIGH_CAPACITY: 'High Capacity',
   OFFLINE: 'Offline',
 };
 
@@ -37,7 +41,7 @@ export const LOGISTICS_HUBS = [
     address: 'Warehouse 8-17, Pulilan Enterprises Center, Block 3, Pulilan Regional Road, Dampol II-B, Pulilan, Bulacan',
     coordinates: { lat: 14.9027, lng: 120.8073 },
     geofenceRadius: 2.5,
-    status: HUB_STATUS.HIGH_CAPACITY,
+    status: HUB_STATUS.OPERATIONAL,
   },
 ];
 
@@ -53,6 +57,8 @@ export function haversineKm(lat1, lng1, lat2, lng2) {
 
 export const HUB_STATUS_COLORS = {
   [HUB_STATUS.OPERATIONAL]:   { bg: '#e6f9ed', color: '#1e7e34', dot: '#22c55e' },
-  [HUB_STATUS.HIGH_CAPACITY]: { bg: '#fff4ec', color: '#c2410c', dot: '#f37021' },
   [HUB_STATUS.OFFLINE]:       { bg: '#f5f5f5', color: '#666',    dot: '#aaa' },
+  // Legacy guard: rows written before the honesty fix may still carry the
+  // removed 'High Capacity' value — render them as Operational, never blank.
+  'High Capacity':            { bg: '#e6f9ed', color: '#1e7e34', dot: '#22c55e' },
 };

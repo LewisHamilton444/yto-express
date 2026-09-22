@@ -16,10 +16,6 @@ export const PARCEL_STATUS_COLORS = {
 };
 
 // Account category badging shared by admin views (CustomerList, ManageIssues, ...).
-// Canonical scheme: REAL renders green, DEMO renders neutral gray — matches the
-// long-standing inline badges in ManageAccounts / ViewSeller / ManageParcels.
-export const ACCOUNT_CATEGORY_TONE = { REAL: 'green', DEMO: 'slate' };
-export const ACCOUNT_CATEGORY_LABEL = { REAL: 'Real (Verified)', DEMO: 'Demo' };
 
 // Canonical account-status palettes for seller & rider ledgers. ViewSeller and
 // GenerateRiderDataReport used to each define their own local copies (one solid
@@ -29,12 +25,6 @@ export const SELLER_STATUS_COLORS = {
   ACTIVE:               { bg: '#d1fae5', color: '#065f46' },
   PENDING_VERIFICATION: { bg: '#fef3c7', color: '#92400e' },
   ARCHIVED:             { bg: '#fee2e2', color: '#991b1b' },
-};
-
-export const RIDER_STATUS_COLORS = {
-  ACTIVE:               { bg: '#e6f9ed', color: '#1e7e34' },
-  PENDING_VERIFICATION: { bg: '#fef3c7', color: '#92400e' },
-  ARCHIVED:             { bg: '#f3f4f6', color: '#6b7280' },
 };
 
 // Human-readable meaning of each lifecycle status — shown as a hover hint on

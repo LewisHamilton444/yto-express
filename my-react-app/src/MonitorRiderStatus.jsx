@@ -1,42 +1,27 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { normalizeRider, RIDER_STATUS } from './sellerRiderData';
 import { ridersApi } from './services/api';
-import Tooltip from './components/ui/Tooltip';
 import { VehicleIcon } from './components/ui/vehicleIcons';
 import { vehicleGlyphSvg } from './components/ui/vehicleIconUtils';
-import { Archive, RefreshCw, X } from 'lucide-react';
+import { Archive, RotateCcw } from 'lucide-react';
+import PageHeader from './components/ui/PageHeader';
+import RefreshButton from './components/ui/RefreshButton';
+import FilterBar from './components/ui/FilterBar';
+import Modal from './components/ui/Modal';
+import EmptyState from './components/ui/EmptyState';
+import SectionCard from './components/ui/SectionCard';
+import StatCard from './components/ui/StatCard';
+import useSSE from './services/useSSE';
+// Single shared Luzon coordinate table — this file used to carry its own copy
+// that had drifted (it even listed Davao City, outside the Bulacan/Luzon
+// service area). Positions here are approximate city-level references only.
+import { CITY_COORDS } from './luzonCityCoords';
 
-const CITY_COORDS = {
-  Manila:{lat:14.5995,lng:120.9842}, 'Quezon City':{lat:14.6760,lng:121.0437}, Makati:{lat:14.5547,lng:121.0244},
-  Pasig:{lat:14.5764,lng:121.0851}, Taguig:{lat:14.5243,lng:121.0792}, Mandaluyong:{lat:14.5794,lng:121.0359},
-  Marikina:{lat:14.6507,lng:121.1029}, Caloocan:{lat:14.6494,lng:120.9673}, Malabon:{lat:14.6628,lng:120.9575},
-  Navotas:{lat:14.6667,lng:120.9417}, Valenzuela:{lat:14.7011,lng:120.9830}, 'Las Piñas':{lat:14.4453,lng:120.9829},
-  Parañaque:{lat:14.4793,lng:121.0198}, Muntinlupa:{lat:14.4081,lng:121.0415}, Pasay:{lat:14.5378,lng:120.9938},
-  'San Juan':{lat:14.6019,lng:121.0355}, BGC:{lat:14.5409,lng:121.0503}, Pateros:{lat:14.5436,lng:121.0683},
-  Hagonoy:{lat:14.8340,lng:120.7310}, Malolos:{lat:14.8430,lng:120.8110}, Meycauayan:{lat:14.7350,lng:120.9580},
-  Marilao:{lat:14.7580,lng:120.9490}, Balagtas:{lat:14.8140,lng:120.9090}, Bocaue:{lat:14.7970,lng:120.9290},
-  Pulilan:{lat:14.8990,lng:120.8490}, Calumpit:{lat:14.9150,lng:120.7650}, Guiguinto:{lat:14.8290,lng:120.8790},
-  Bulacan:{lat:14.7942,lng:120.8800}, Bacoor:{lat:14.4624,lng:120.9645}, Imus:{lat:14.4297,lng:120.9367},
-  Dasmarinas:{lat:14.3294,lng:120.9367}, Kawit:{lat:14.4353,lng:120.9014}, 'General Trias':{lat:14.3867,lng:120.8817},
-  'Cavite City':{lat:14.4824,lng:120.8960}, 'San Pedro':{lat:14.3592,lng:121.0128}, Biñan:{lat:14.3406,lng:121.0792},
-  'Santa Rosa':{lat:14.3122,lng:121.1114}, Cabuyao:{lat:14.2758,lng:121.1244}, Calamba:{lat:14.2117,lng:121.1653},
-  'Los Baños':{lat:14.1667,lng:121.2333}, Antipolo:{lat:14.5864,lng:121.1761}, Cainta:{lat:14.5783,lng:121.1228},
-  Taytay:{lat:14.5514,lng:121.1322}, Angono:{lat:14.5244,lng:121.1536}, Binangonan:{lat:14.4672,lng:121.1975},
-  Angeles:{lat:15.1450,lng:120.5888}, 'San Fernando':{lat:15.0289,lng:120.6900}, Mabalacat:{lat:15.2167,lng:120.5667},
-  'Batangas City':{lat:13.7565,lng:121.0583}, Lipa:{lat:13.9411,lng:121.1628}, Tanauan:{lat:14.0844,lng:121.1503},
-  Cabanatuan:{lat:15.4864,lng:120.9670}, Gapan:{lat:15.3072,lng:120.9458}, Dagupan:{lat:16.0433,lng:120.3333},
-  Urdaneta:{lat:15.9761,lng:120.5711}, Baguio:{lat:16.4023,lng:120.5960}, 'Tarlac City':{lat:15.4755,lng:120.5963},
-  Olongapo:{lat:14.8285,lng:120.2824}, Balanga:{lat:14.6760,lng:120.5360}, Tuguegarao:{lat:17.6133,lng:121.7270},
-  Cauayan:{lat:16.9333,lng:121.7667}, Santiago:{lat:16.6875,lng:121.5500}, Ilagan:{lat:17.1489,lng:121.8894},
-  Bayombong:{lat:16.4833,lng:121.1500}, 'Davao City':{lat:7.0731,lng:125.6128},
-};
 
 function MapView({ lat, lng, vehicle, uniqueId }) {
   const containerRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const markerRef = useRef(null);
-  const animRef = useRef(null);
-  const progRef = useRef(Math.random()*0.01);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -66,21 +51,6 @@ function MapView({ lat, lng, vehicle, uniqueId }) {
         iconAnchor: [17, 34]
       });
       markerRef.current = L.marker([lat, lng], { icon: customIcon }).addTo(map);
-
-      // ── Live movement animation — simulates rider moving ──
-      let last = null;
-      const animate = (ts) => {
-        if (!last) last = ts;
-        const dt = (ts - last) / 1000;
-        last = ts;
-        progRef.current = (progRef.current + 0.00008 * dt) % 0.01;
-        const drift = progRef.current;
-        if (markerRef.current) {
-          markerRef.current.setLatLng([lat + drift, lng + drift * 0.5]);
-        }
-        animRef.current = requestAnimationFrame(animate);
-      };
-      animRef.current = requestAnimationFrame(animate);
     };
 
     if (window.L) {
@@ -93,7 +63,6 @@ function MapView({ lat, lng, vehicle, uniqueId }) {
     }
 
     return () => {
-      if (animRef.current) cancelAnimationFrame(animRef.current);
       if (mapInstanceRef.current) {
         mapInstanceRef.current.remove();
         mapInstanceRef.current = null;
@@ -105,23 +74,28 @@ function MapView({ lat, lng, vehicle, uniqueId }) {
 }
 
 export default function MonitorRiderStatus() {
-  const [activeTab, setActiveTab] = useState('gps-coords');
   const [riders, setRiders] = useState([]);
   const [archivedCount, setArchivedCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState('');
   const [selectedRider, setSelectedRider] = useState(null);
   const [riderTab, setRiderTab] = useState('details');
   const [riderTimeline, setRiderTimeline] = useState([]);
   const [timelineLoading, setTimelineLoading] = useState(false);
 
+  // Search & Filter state
+  const [searchTerm, setSearchTerm] = useState('');
+  const [dutyFilter, setDutyFilter] = useState('all');
+  const [vehicleFilter, setVehicleFilter] = useState('all');
+
   const attachLiveGps = useCallback((normalizedRiders) => normalizedRiders.map((r, index) => {
     const coords = CITY_COORDS[r.location.city];
     return {
       ...r,
       liveGps: {
-        latitude:  coords ? coords.lat + (index * 0.0015) : 14.5995 + (index * 0.008),
-        longitude: coords ? coords.lng + (index * 0.0015) : 120.9842 + (index * 0.006),
+        latitude:  coords ? coords.lat + (index * 0.0015) : null,
+        longitude: coords ? coords.lng + (index * 0.0015) : null,
         city: r.location.city || 'Unknown',
         // Duty state comes from the rider's real Android profile toggle
         // (bridge sync-duty-status). Moving/idle is not sent by the app yet,
@@ -131,8 +105,9 @@ export default function MonitorRiderStatus() {
     };
   }), []);
 
-  const fetchRiders = useCallback(async () => {
+  const fetchRiders = useCallback(async (isManual = false) => {
     try {
+      if (isManual) setIsRefreshing(true);
       const data = await ridersApi.list();
 
       if (Array.isArray(data) && data.length > 0) {
@@ -153,8 +128,35 @@ export default function MonitorRiderStatus() {
       setArchivedCount(0);
     } finally {
       setLoading(false);
+      if (isManual) setIsRefreshing(false);
     }
   }, [attachLiveGps]);
+
+  const filteredRiders = riders.filter((r) => {
+    if (searchTerm) {
+      const q = searchTerm.trim().toLowerCase();
+      const riderId = (r.riderId || '').toLowerCase();
+      const name = (r.fullName || '').toLowerCase();
+      const email = (r.email || '').toLowerCase();
+      const phone = (r.phone || '').toLowerCase();
+      const vehicle = (r.vehicleType || '').toLowerCase();
+      const plate = (r.vehiclePlateNumber || '').toLowerCase();
+      const hub = (r.assignedHub || r.raw?.assignedHub || r.raw?.assignedHubAddress || r.raw?.address || r.location?.city || '').toLowerCase();
+      const matches = riderId.includes(q) || name.includes(q) || email.includes(q) || phone.includes(q) || vehicle.includes(q) || plate.includes(q) || hub.includes(q);
+      if (!matches) return false;
+    }
+    if (dutyFilter === 'online' && !r.liveGps?.isOnline) return false;
+    if (dutyFilter === 'offline' && r.liveGps?.isOnline) return false;
+    if (vehicleFilter !== 'all' && r.vehicleType !== vehicleFilter) return false;
+    return true;
+  });
+
+  const isFiltered = searchTerm.trim() !== '' || dutyFilter !== 'all' || vehicleFilter !== 'all';
+  const handleResetFilters = () => {
+    setSearchTerm('');
+    setDutyFilter('all');
+    setVehicleFilter('all');
+  };
 
   const formatTimelineDate = (dateStr) => {
     if (!dateStr) return '-';
@@ -190,6 +192,8 @@ export default function MonitorRiderStatus() {
     setTimelineLoading(false);
   };
 
+  const { on: onSSE } = useSSE();
+
   useEffect(() => {
     fetchRiders();
     // Re-fetch every 15 seconds to stay in sync with archive/restore actions
@@ -197,236 +201,308 @@ export default function MonitorRiderStatus() {
     return () => clearInterval(interval);
   }, [fetchRiders]);
 
+  useEffect(() => {
+    if (!onSSE) return;
+    const unsubDuty = onSSE('duty-status-synced', () => fetchRiders());
+    const unsubUser = onSSE('user-synced', (ev) => {
+      if (!ev || ev.role === 'rider') fetchRiders();
+    });
+    return () => {
+      if (typeof unsubDuty === 'function') unsubDuty();
+      if (typeof unsubUser === 'function') unsubUser();
+    };
+  }, [onSSE, fetchRiders]);
+
   // (handleToggleGeofence removed — it mutated a `geofences` state that never
   // existed in this component; invoking it would have thrown at runtime.)
 
 
 
   return (
-    <div style={{ flex: 1, background: '#f9f7ff', overflowY: 'auto', fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" }}>
+    <div style={{ flex: 1, padding: '24px 30px 48px', minHeight: '100vh', background: '#f0ecf7', fontFamily: "'DM Sans', sans-serif", color: '#390955', overflowY: 'auto' }}>
       <style>{`@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(1.4)}}`}</style>
 
-      <header style={{ background: 'white', borderBottom: '1px solid #e0d5f0', padding: '24px 32px 20px', display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
-        <div>
-          <h1 style={{ fontSize: 26, fontWeight: 800, color: '#1a1a1a', letterSpacing: -0.5, margin: '0 0 4px 0' }}>Monitor Rider Status</h1>
-          <p style={{ fontSize: 13, color: '#888', margin: 0 }}>Real-time rider tracking and GPS monitoring</p>
-          <nav style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8 }}>
-            {['Dashboard', 'Rider Information Management', 'Monitor Rider Status'].map((b, i, arr) => (
-              <React.Fragment key={b}>
-                <span style={{ fontSize: 12, color: i === arr.length - 1 ? '#390955' : '#888', fontWeight: i === arr.length - 1 ? 700 : 500 }}>{b}</span>
-                {i < arr.length - 1 && <span style={{ fontSize: 12, color: '#d4c8e8' }}>/</span>}
-              </React.Fragment>
-            ))}
-          </nav>
-        </div>
-        <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-          {lastUpdated && <span style={{ fontSize:10, color:'#9b82b2', fontFamily:'monospace' }}>Updated {lastUpdated}</span>}
-          <Tooltip content="Re-fetch rider statuses from the server">
-          <button onClick={fetchRiders} style={{ padding:'6px 14px', background:'white', border:'1.5px solid #e0d5f0', borderRadius:8, fontSize:11, fontWeight:700, color:'#390955', cursor:'pointer', display:'inline-flex', alignItems:'center', gap:6 }}>
-            <RefreshCw size={13} aria-hidden="true" /> Refresh
-          </button>
-          </Tooltip>
-          {archivedCount > 0 && (
-            <span style={{ display:'flex', alignItems:'center', gap:5, padding:'6px 12px', background:'rgba(127,140,141,0.1)', borderRadius:8, fontSize:11, fontWeight:700, color:'#7f8c8d' }}>
-              <Archive size={13} aria-hidden="true" /> {archivedCount} Archived (hidden)
+      <PageHeader
+        title="Monitor Rider Status"
+        subtitle="Real-time rider tracking and live duty monitoring"
+        breadcrumb={['Dashboard', 'People', 'Riders', 'Duty Monitor']}
+        actions={(
+          <div className="flex items-center gap-2.5 flex-wrap">
+            {lastUpdated && <span style={{ fontSize: 11, color: '#9b82b2', fontFamily: 'monospace' }}>Updated {lastUpdated}</span>}
+            <RefreshButton
+              onClick={() => fetchRiders(true)}
+              isRefreshing={isRefreshing}
+            />
+            {archivedCount > 0 && (
+              <span style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', background: 'rgba(127,140,141,0.1)', borderRadius: 8, fontSize: 11, fontWeight: 700, color: '#7f8c8d' }}>
+                <Archive size={13} aria-hidden="true" /> {archivedCount} Archived (hidden)
+              </span>
+            )}
+            <span style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 12px', background: 'rgba(34,197,94,0.1)', borderRadius: 8, fontSize: 11, fontWeight: 700, color: '#16a34a' }}>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#22c55e', animation: 'pulse 1.5s infinite', display: 'inline-block' }}/>
+              {riders.filter(r => r.liveGps?.isOnline).length} Active on Duty
             </span>
-          )}
-          <span style={{ display:'flex', alignItems:'center', gap:4, padding:'6px 12px', background:'rgba(34,197,94,0.1)', borderRadius:8, fontSize:11, fontWeight:700, color:'#16a34a' }}>
-            <span style={{ width:6, height:6, borderRadius:'50%', background:'#22c55e', animation:'pulse 1.5s infinite', display:'inline-block' }}/>
-            {riders.length} Riders Shown
-          </span>
-        </div>
-      </header>
+          </div>
+        )}
+      />
 
-      <div style={{ padding: '24px 32px' }}>
+      {/* Fleet Stat Cards */}
+      <StatCard.Grid cols={3} className="mb-6">
+        <StatCard
+          label="Riders on Duty"
+          value={riders.filter(r => r.liveGps?.isOnline).length}
+          sub={`${riders.length > 0 ? Math.round((riders.filter(r => r.liveGps?.isOnline).length / riders.length) * 100) : 0}% active now`}
+          tone="emerald"
+          trend={riders.filter(r => r.liveGps?.isOnline).length > 0 ? "Active" : "None"}
+          trendTone={riders.filter(r => r.liveGps?.isOnline).length > 0 ? "positive" : "neutral"}
+        />
+        <StatCard
+          label="Off Duty / Standby"
+          value={riders.length - riders.filter(r => r.liveGps?.isOnline).length}
+          sub="Standby or offline couriers"
+          tone="purple"
+          trend="Standby"
+          trendTone="neutral"
+        />
+        <StatCard
+          label="Total Fleet Roster"
+          value={riders.length}
+          sub={archivedCount > 0 ? `${archivedCount} archived accounts` : "Active registered fleet"}
+          tone="orange"
+          trend="Total"
+          trendTone="neutral"
+        />
+      </StatCard.Grid>
 
-        {/* TABS */}
-        <div style={{ display: 'flex', borderBottom: '2px solid #e0d5f0', marginBottom: 20 }}>
-          {[
-            ['gps-coords', 'GPS Coordinates']
-          ].map(([k, l]) => (
-            <button key={k} onClick={() => setActiveTab(k)}
-              style={{ padding: '12px 20px', border: 'none', background: 'none', color: activeTab === k ? '#390955' : '#666', fontSize: 13, fontWeight: 600, cursor: 'pointer', borderBottom: activeTab === k ? '3px solid #390955' : '3px solid transparent', marginBottom: -2, fontFamily: 'inherit' }}>
-              {l}
-            </button>
+      {/* Filter & Search Bar */}
+      <SectionCard noPadding className="mb-6">
+        <FilterBar>
+          <FilterBar.Group>
+            <FilterBar.Search
+              placeholder="Search rider by name, ID, vehicle, or hub..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+            <FilterBar.Select
+              aria-label="Filter by duty state"
+              value={dutyFilter}
+              onChange={(e) => setDutyFilter(e.target.value)}
+            >
+              <option value="all" className="font-medium text-slate-700 bg-white">All Duty States</option>
+              <option value="online" className="font-medium text-slate-700 bg-white">On Duty</option>
+              <option value="offline" className="font-medium text-slate-700 bg-white">Off Duty</option>
+            </FilterBar.Select>
+            <FilterBar.Select
+              aria-label="Filter by vehicle type"
+              value={vehicleFilter}
+              onChange={(e) => setVehicleFilter(e.target.value)}
+            >
+              <option value="all" className="font-medium text-slate-700 bg-white">All Vehicles</option>
+              <option value="Motorcycle" className="font-medium text-slate-700 bg-white">Motorcycle</option>
+              <option value="Van" className="font-medium text-slate-700 bg-white">Van</option>
+              <option value="Bicycle" className="font-medium text-slate-700 bg-white">Bicycle</option>
+            </FilterBar.Select>
+            {isFiltered && (
+              <button
+                type="button"
+                onClick={handleResetFilters}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-lg transition-colors cursor-pointer"
+              >
+                <RotateCcw size={11} aria-hidden="true" />
+                <span>Reset</span>
+              </button>
+            )}
+            <FilterBar.Count count={filteredRiders.length} label="couriers" />
+          </FilterBar.Group>
+        </FilterBar>
+      </SectionCard>
+
+      {/* Couriers Grid */}
+      {loading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="animate-pulse bg-white border border-[#e0d5f0] rounded-xl p-5 h-56 shadow-sm" />
           ))}
         </div>
-
-        {/* TAB 1: GPS COORDINATES - Only active DB riders */}
-        {activeTab === 'gps-coords' && (
-          loading ? (
-            <div style={{ textAlign: 'center', padding: 48, color: '#a890c0', fontWeight: 600 }}>
-              Loading riders from database...
-            </div>
-          ) : riders.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: 48, color: '#a890c0', fontWeight: 600 }}>
-              {archivedCount > 0
-                ? `All ${archivedCount} riders are archived. Restore some riders to see them here.`
-                : 'No riders registered yet. Register a rider first.'}
-            </div>
-          ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '20px' }}>
-              {riders.map((r) => (
-                <div key={r.riderId} onClick={() => { setSelectedRider(r); setRiderTab('details'); setRiderTimeline([]); fetchRiderTimeline(r); }} style={{ background: 'white', border: '1px solid #e0d5f0', borderRadius: '12px', padding: '18px', boxShadow: '0 4px 14px rgba(57,9,85,0.04)', display: 'flex', flexDirection: 'column', cursor: 'pointer', transition: 'box-shadow 0.15s' }} onMouseEnter={e => e.currentTarget.style.boxShadow = '0 6px 20px rgba(57,9,85,0.1)'} onMouseLeave={e => e.currentTarget.style.boxShadow = '0 4px 14px rgba(57,9,85,0.04)'}>
-                  <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '12px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: '#f0eaf8', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#390955' }}>
-                          <VehicleIcon type={r.vehicleType} size={19} />
-                        </div>
-                        <div>
-                          <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: '#1a1a1a' }}>{r.fullName}</h4>
-                          <p style={{ margin: 0, fontSize: '11px', color: '#888' }}>{r.riderId} · {r.vehicleType}</p>
-                        </div>
+      ) : filteredRiders.length === 0 ? (
+        <EmptyState
+          title={isFiltered ? "No matching couriers found" : (archivedCount > 0 ? `All ${archivedCount} riders are archived` : "No active riders on duty")}
+          description={isFiltered ? "Try adjusting your search or filters." : (archivedCount > 0 ? "Restore riders in Settings to monitor their live GPS." : "Riders will appear here once they register and connect.")}
+        />
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+          {filteredRiders.map((r) => (
+            <SectionCard
+              key={r.riderId}
+              noPadding
+              onClick={() => { setSelectedRider(r); setRiderTab('details'); setRiderTimeline([]); fetchRiderTimeline(r); }}
+              className="cursor-pointer hover:border-[#390955] transition-all"
+            >
+              <div className="p-5 flex flex-col justify-between h-full">
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '12px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: '#f0eaf8', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#390955' }}>
+                        <VehicleIcon type={r.vehicleType} size={19} />
                       </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 5 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                          {r.accountCategory === 'DEMO' && (
-                            <span style={{ fontSize: '9px', fontWeight: 800, padding: '2px 6px', borderRadius: '4px', background: '#f1f5f9', color: '#475569', border: '1px solid #cbd5e1', letterSpacing: '0.05em' }}>
-                              DEMO
-                            </span>
-                          )}
-                          <span style={{ fontSize: '10px', background: r.liveGps.isOnline ? '#e6f9ed' : '#f5f5f5', color: r.liveGps.isOnline ? '#1e7e34' : '#888', padding: '3px 8px', borderRadius: '10px', fontWeight: 700, display:'flex', alignItems:'center', gap:4 }}>
-                            <span style={{ width:5, height:5, borderRadius:'50%', background: r.liveGps.isOnline ? '#22c55e' : '#bbb', animation: r.liveGps.isOnline ? 'pulse 1.5s infinite' : 'none', display:'inline-block' }}/>
-                            {r.liveGps.isOnline ? 'On Duty' : 'Off Duty'}
-                          </span>
-                        </div>
+                      <div>
+                        <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: '#1a1a1a' }}>{r.fullName}</h4>
+                        <p style={{ margin: 0, fontSize: '11px', color: '#888' }}>{r.riderId} · {r.vehicleType}</p>
                       </div>
                     </div>
-
-                    <div style={{ background: '#fcfbfe', border: '1px solid #f0eaf8', borderRadius: '8px', padding: '10px', fontSize: '12px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ color: '#888' }}>Rider ID:</span>
-                        <span style={{ fontWeight: 600, color: '#390955' }}>{r.riderId}</span>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ color: '#888' }}>Email Address:</span>
-                        <span style={{ fontWeight: 600, fontSize: '11px' }}>{r.email || '—'}</span>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ color: '#888' }}>Phone Number:</span>
-                        <span style={{ fontWeight: 600 }}>{r.phone || '—'}</span>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ color: '#888' }}>Vehicle Info:</span>
-                        <span style={{ fontWeight: 600 }}>{(r.vehicleType || r.vehiclePlateNumber) ? `${r.vehicleType || ''}${r.vehiclePlateNumber ? ` (${r.vehiclePlateNumber})` : ''}`.trim() : '—'}</span>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ color: '#888' }}>Hub Address:</span>
-                        <span style={{ fontWeight: 600, color: '#390955', fontSize: '11px', textAlign: 'right', maxWidth: '60%' }}>{r.assignedHub || r.raw?.assignedHub || r.raw?.assignedHubAddress || r.raw?.address || (r.location?.city ? `${r.location.city} Sorting Hub` : '—')}</span>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ color: '#888' }}>GPS Coords:</span>
-                        <span style={{ fontFamily: 'monospace', fontWeight: 600, fontSize: '11px' }}>{Number(r.liveGps.latitude).toFixed(4)}, {Number(r.liveGps.longitude).toFixed(4)}</span>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 5 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <span style={{ fontSize: '10px', background: r.liveGps.isOnline ? '#e6f9ed' : '#f5f5f5', color: r.liveGps.isOnline ? '#1e7e34' : '#888', padding: '3px 8px', borderRadius: '6px', fontWeight: 700, display:'flex', alignItems:'center', gap:4 }}>
+                          <span style={{ width:5, height:5, borderRadius:'50%', background: r.liveGps.isOnline ? '#22c55e' : '#bbb', animation: r.liveGps.isOnline ? 'pulse 1.5s infinite' : 'none', display:'inline-block' }}/>
+                          {r.liveGps.isOnline ? 'On Duty' : 'Off Duty'}
+                        </span>
                       </div>
                     </div>
+                  </div>
 
-                    <MapView lat={r.liveGps.latitude} lng={r.liveGps.longitude} vehicle={r.vehicleType} uniqueId={r.riderId} />
+                  <div style={{ background: '#fcfbfe', border: '1px solid #f0eaf8', borderRadius: '8px', padding: '10px', fontSize: '12px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: '#888' }}>Rider ID:</span>
+                      <span style={{ fontWeight: 600, color: '#390955' }}>{r.riderId}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: '#888' }}>Email Address:</span>
+                      <span style={{ fontWeight: 600, fontSize: '11px' }}>{r.email || '—'}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: '#888' }}>Phone Number:</span>
+                      <span style={{ fontWeight: 600 }}>{r.phone || '—'}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: '#888' }}>Vehicle Info:</span>
+                      <span style={{ fontWeight: 600 }}>{(r.vehicleType || r.vehiclePlateNumber) ? `${r.vehicleType || ''}${r.vehiclePlateNumber ? ` (${r.vehiclePlateNumber})` : ''}`.trim() : '—'}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: '#888' }}>Hub Address:</span>
+                      <span style={{ fontWeight: 600, color: '#390955', fontSize: '11px', textAlign: 'right', maxWidth: '60%' }}>{r.assignedHub || r.raw?.assignedHub || r.raw?.assignedHubAddress || r.raw?.address || (r.location?.city ? `${r.location.city} Sorting Hub` : '—')}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: '#888' }}>Approx. Location:</span>
+                      <span style={{ fontFamily: 'monospace', fontWeight: 600, fontSize: '11px' }}>
+                        {r.liveGps.latitude != null && r.liveGps.longitude != null
+                          ? `${Number(r.liveGps.latitude).toFixed(4)}, ${Number(r.liveGps.longitude).toFixed(4)} (city-level)`
+                          : 'Location unavailable'}
+                      </span>
+                    </div>
                   </div>
                 </div>
-              ))}
-            </div>
-          )
-        )}
 
-      </div>
+                {r.liveGps.latitude != null && r.liveGps.longitude != null && (
+                  <MapView lat={r.liveGps.latitude} lng={r.liveGps.longitude} vehicle={r.vehicleType} uniqueId={r.riderId} />
+                )}
+              </div>
+            </SectionCard>
+          ))}
+        </div>
+      )}
 
       {/* Rider Detail Modal */}
       {selectedRider && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(26,6,40,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }} onClick={() => setSelectedRider(null)}>
-          <div style={{ background: 'white', borderRadius: 12, width: '90%', maxWidth: 480, maxHeight: '85vh', overflow: 'hidden', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)' }} onClick={e => e.stopPropagation()}>
-            {/* Header */}
-            <div style={{ background: '#390955', padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white' }}><VehicleIcon type={selectedRider.vehicleType} size={22} /></div>
-                <div>
-                  <h3 style={{ color: 'white', margin: 0, fontSize: 15, fontWeight: 700 }}>{selectedRider.fullName || 'Rider'}</h3>
-                  <p style={{ color: 'rgba(255,255,255,0.6)', margin: '2px 0 0', fontSize: 12 }}>{selectedRider.riderId} · {selectedRider.vehicleType}</p>
-                </div>
+        <Modal
+          tint="rgba(26,6,40,0.5)"
+          blur={false}
+          maxWidth={480}
+          padding={0}
+          onBackdropClick={() => setSelectedRider(null)}
+          cardStyle={{ borderRadius: 12, overflow: 'hidden', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)' }}
+        >
+          {/* Header */}
+          <div style={{ background: '#390955', padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white' }}>
+                <VehicleIcon type={selectedRider.vehicleType} size={22} />
               </div>
-              <button onClick={() => setSelectedRider(null)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', fontSize: 20, lineHeight: 1 }}>&times;</button>
+              <div>
+                <h3 style={{ color: 'white', margin: 0, fontSize: 15, fontWeight: 700 }}>{selectedRider.fullName || 'Rider'}</h3>
+                <p style={{ color: 'rgba(255,255,255,0.6)', margin: '2px 0 0', fontSize: 12 }}>{selectedRider.riderId} · {selectedRider.vehicleType}</p>
+              </div>
             </div>
-
-            {/* Tabs */}
-            <div style={{ display: 'flex', borderBottom: '2px solid #f0eaf8' }}>
-              {[{ key: 'details', label: 'Details' }, { key: 'timeline', label: 'Timeline' }].map(tab => (
-                <button key={tab.key} onClick={() => setRiderTab(tab.key)} style={{
-                  flex: 1, padding: '12px 0', border: 'none', cursor: 'pointer',
-                  fontSize: 13, fontWeight: 600, transition: 'all 0.2s',
-                  background: riderTab === tab.key ? '#faf7fd' : 'transparent',
-                  color: riderTab === tab.key ? '#390955' : '#7b6d8d',
-                  borderBottom: riderTab === tab.key ? '2px solid #390955' : '2px solid transparent',
-                  marginBottom: -2,
-                }}>{tab.label}</button>
-              ))}
-            </div>
-
-            {/* Content */}
-            <div style={{ padding: 24, maxHeight: 400, overflowY: 'auto' }}>
-              {riderTab === 'details' && (
-                <>
-                  {[
-                    { label: 'Full Name', value: selectedRider.fullName },
-                    { label: 'Email Address', value: selectedRider.email || '---' },
-                    { label: 'Phone Number', value: selectedRider.phone || '---' },
-                    { label: 'Vehicle Info', value: `${selectedRider.vehicleType}${selectedRider.vehiclePlateNumber ? ` (${selectedRider.vehiclePlateNumber})` : ''}` },
-                    { label: 'Plate Number', value: selectedRider.vehiclePlateNumber || '---' },
-                    { label: 'License Number', value: selectedRider.driverLicenseNumber || '---' },
-                    { label: 'Hub Address', value: selectedRider.assignedHub || selectedRider.raw?.assignedHub || selectedRider.raw?.assignedHubAddress || selectedRider.raw?.address || (selectedRider.location?.city ? `${selectedRider.location.city} Sorting Hub` : 'Pulilan Sorting Hub') },
-                    { label: 'Category', value: selectedRider.accountCategory === 'DEMO' ? 'Demo' : 'Real (Verified)', badge: true, color: selectedRider.accountCategory === 'DEMO' ? { bg: '#f1f5f9', color: '#475569' } : { bg: '#d1fae5', color: '#065f46' } },
-                    { label: 'Duty Status', value: selectedRider.liveGps?.isOnline ? 'On Duty' : 'Off Duty', badge: true, color: selectedRider.liveGps?.isOnline ? { bg: '#e6f9ed', color: '#1e7e34' } : { bg: '#f5f5f5', color: '#888888' } },
-                    { label: 'Account Status', value: selectedRider.status, badge: true, color: selectedRider.status === 'Active' ? { bg: '#d1fae5', color: '#065f46' } : { bg: '#fee2e2', color: '#991b1b' } },
-                    { label: 'Deliveries Completed', value: selectedRider.performance?.deliveriesCount ?? 0 },
-                    { label: 'Rating', value: `${selectedRider.performance?.rating ?? 5.0}/5.0` },
-                    { label: 'Joined', value: selectedRider.joined || '---' },
-                  ].map(row => (
-                    <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 0', borderBottom: '1px solid #f0eaf8' }}>
-                      <span style={{ fontSize: 12, fontWeight: 600, color: '#7b6d8d' }}>{row.label}</span>
-                      {row.badge ? (
-                        <span style={{ padding: '3px 10px', borderRadius: 100, fontSize: 10, fontWeight: 700, background: row.color.bg, color: row.color.color }}>{row.value}</span>
-                      ) : (
-                        <span style={{ fontSize: 13, fontWeight: 500, color: '#1f1329' }}>{row.value}</span>
-                      )}
-                    </div>
-                  ))}
-                </>
-              )}
-
-              {riderTab === 'timeline' && (
-                <>
-                  {timelineLoading ? (
-                    <div style={{ padding: 20, textAlign: 'center', color: '#a890c0', fontSize: 12 }}>Loading timeline...</div>
-                  ) : riderTimeline.length === 0 ? (
-                    <div style={{ padding: 20, textAlign: 'center' }}>
-                      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#d4c8e8" strokeWidth="1.5" style={{ marginBottom: 6 }}>
-                        <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
-                      </svg>
-                      <p style={{ color: '#a890c0', fontSize: 12, margin: 0 }}>No status history yet</p>
-                    </div>
-                  ) : (
-                    <div style={{ position: 'relative', paddingLeft: 24 }}>
-                      <div style={{ position: 'absolute', left: 9, top: 6, bottom: 6, width: 2, background: '#1E88E5', borderRadius: 1, opacity: 0.3 }} />
-                      {riderTimeline.map((evt, idx) => (
-                        <div key={idx} style={{ position: 'relative', marginBottom: idx < riderTimeline.length - 1 ? 16 : 0 }}>
-                          <div style={{ position: 'absolute', left: -24, top: 2, width: 18, height: 18, borderRadius: '50%', background: '#1E88E5', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1, boxShadow: '0 0 0 3px white, 0 0 0 4px rgba(30,136,229,0.2)' }}>
-                            <svg width="10" height="10" viewBox="0 0 24 24" fill="white"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" /></svg>
-                          </div>
-                          <div style={{ padding: '8px 12px', background: '#faf7fd', borderRadius: 8, border: '1px solid #ede6f7' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
-                              <span style={{ fontSize: 11, fontWeight: 700, color: '#1f1329' }}>Status: {evt.status}</span>
-                              <span style={{ fontSize: 9, color: '#a890c0' }}>{formatTimelineDate(evt.changedAt)}</span>
-                            </div>
-                            <p style={{ margin: 0, fontSize: 10, color: '#6b7280' }}>{evt.reason || 'No reason provided'}</p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
+            <button onClick={() => setSelectedRider(null)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', fontSize: 20, lineHeight: 1 }}>&times;</button>
           </div>
-        </div>
+
+          {/* Tabs */}
+          <div style={{ display: 'flex', borderBottom: '2px solid #f0eaf8' }}>
+            {[{ key: 'details', label: 'Details' }, { key: 'timeline', label: 'Timeline' }].map(tab => (
+              <button key={tab.key} onClick={() => setRiderTab(tab.key)} style={{
+                flex: 1, padding: '12px 0', border: 'none', cursor: 'pointer',
+                fontSize: 13, fontWeight: 600, transition: 'all 0.2s',
+                background: riderTab === tab.key ? '#faf7fd' : 'transparent',
+                color: riderTab === tab.key ? '#390955' : '#7b6d8d',
+                borderBottom: riderTab === tab.key ? '2px solid #390955' : '2px solid transparent',
+                marginBottom: -2,
+              }}>{tab.label}</button>
+            ))}
+          </div>
+
+          {/* Content */}
+          <div style={{ padding: 24, maxHeight: 400, overflowY: 'auto' }}>
+            {riderTab === 'details' && (
+              <>
+                {[
+                  { label: 'Full Name', value: selectedRider.fullName },
+                  { label: 'Email Address', value: selectedRider.email || '—' },
+                  { label: 'Phone Number', value: selectedRider.phone || '—' },
+                  { label: 'Vehicle Info', value: `${selectedRider.vehicleType}${selectedRider.vehiclePlateNumber ? ` (${selectedRider.vehiclePlateNumber})` : ''}` },
+                  { label: 'Plate Number', value: selectedRider.vehiclePlateNumber || '—' },
+                  { label: 'License Number', value: selectedRider.driverLicenseNumber || '—' },
+                  { label: 'Hub Address', value: selectedRider.assignedHub || selectedRider.raw?.assignedHub || selectedRider.raw?.assignedHubAddress || selectedRider.raw?.address || (selectedRider.location?.city ? `${selectedRider.location.city} Sorting Hub` : 'Pulilan Sorting Hub') },
+                  { label: 'Duty Status', value: selectedRider.liveGps?.isOnline ? 'On Duty' : 'Off Duty', badge: true, color: selectedRider.liveGps?.isOnline ? { bg: '#e6f9ed', color: '#1e7e34' } : { bg: '#f5f5f5', color: '#888888' } },
+                  { label: 'Account Status', value: selectedRider.status, badge: true, color: selectedRider.status === 'Active' ? { bg: '#d1fae5', color: '#065f46' } : { bg: '#fee2e2', color: '#991b1b' } },
+                  { label: 'Deliveries Completed', value: selectedRider.performance?.deliveriesCount ?? 0 },
+                  { label: 'Rating', value: `${selectedRider.performance?.rating ?? 5.0}/5.0` },
+                  { label: 'Joined', value: selectedRider.joined || '—' },
+                ].map(row => (
+                  <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 0', borderBottom: '1px solid #f0eaf8' }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: '#7b6d8d' }}>{row.label}</span>
+                    {row.badge ? (
+                      <span style={{ padding: '3px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700, background: row.color.bg, color: row.color.color }}>{row.value}</span>
+                    ) : (
+                      <span style={{ fontSize: 13, fontWeight: 500, color: '#1f1329' }}>{row.value}</span>
+                    )}
+                  </div>
+                ))}
+              </>
+            )}
+
+            {riderTab === 'timeline' && (
+              <>
+                {timelineLoading ? (
+                  <div style={{ padding: 20, textAlign: 'center', color: '#a890c0', fontSize: 12 }}>Loading timeline...</div>
+                ) : riderTimeline.length === 0 ? (
+                  <div style={{ padding: 20, textAlign: 'center' }}>
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#d4c8e8" strokeWidth="1.5" style={{ marginBottom: 6 }}>
+                      <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
+                    </svg>
+                    <p style={{ color: '#a890c0', fontSize: 12, margin: 0 }}>No status history yet</p>
+                  </div>
+                ) : (
+                  <div style={{ position: 'relative', paddingLeft: 24 }}>
+                    <div style={{ position: 'absolute', left: 9, top: 6, bottom: 6, width: 2, background: '#1E88E5', borderRadius: 1, opacity: 0.3 }} />
+                    {riderTimeline.map((evt, idx) => (
+                      <div key={idx} style={{ position: 'relative', marginBottom: idx < riderTimeline.length - 1 ? 16 : 0 }}>
+                        <div style={{ position: 'absolute', left: -24, top: 2, width: 18, height: 18, borderRadius: '50%', background: '#1E88E5', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1, boxShadow: '0 0 0 3px white, 0 0 0 4px rgba(30,136,229,0.2)' }}>
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="white"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" /></svg>
+                        </div>
+                        <div style={{ padding: '8px 12px', background: '#faf7fd', borderRadius: 8, border: '1px solid #ede6f7' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+                            <span style={{ fontSize: 11, fontWeight: 700, color: '#1f1329' }}>Status: {evt.status}</span>
+                            <span style={{ fontSize: 9, color: '#a890c0' }}>{formatTimelineDate(evt.changedAt)}</span>
+                          </div>
+                          <p style={{ margin: 0, fontSize: 10, color: '#6b7280' }}>{evt.reason || 'No reason provided'}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </Modal>
       )}
     </div>
   );

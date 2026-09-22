@@ -48,8 +48,22 @@ The sidebar in `AnalyticsDashboard.jsx` is **section-grouped** (`getMenuSections
 - `handleMenuClick`/section-sync work off `visibleMenuItems` (a flatMap of all sections), so parent auto-open and rail flyouts need no per-section logic. Empty role-filtered sections are skipped at render.
 - Breadcrumbs in `PageHeader` consumers must mirror the section names: `['Dashboard', 'People', 'Customer List']`, `['Dashboard', 'Support', 'Issues']`, `['Dashboard', 'Support', 'App Notifications']`, `['Dashboard', 'Admin', 'Activity Log']`, `['Dashboard', 'Shipments', 'Manage Parcels']`, `['Dashboard', 'Admin', 'Archives']`. `ManageParcels` and `Settings` (Archives) render the shared `PageHeader` instead of hand-rolled headers.
 
+### Sidebar Navigation Animation & Transitions (2026-09-19)
+The collapsible navigation rail (`ad-sidebar`, 256px expanded ↔ 72px collapsed) must maintain fluid, continuous easing (`0.28s cubic-bezier(0.32, 0.72, 0, 1)`) synchronized with `ad-main` (`margin-left`). Strict rules to prevent visual snapping, layout jumps, or broken animations:
+1. **Zero `display: none` on collapsible items**: Never hide sidebar nav text, logo text, section headers, badges, chevrons, or user profile strips via `display: none`. Setting `display: none` immediately aborts all CSS transitions on opacity and transform, causing abrupt visual jumps and popping. Use coordinated `max-width: 0`, `max-height: 0`, `opacity: 0`, `overflow: hidden`, `white-space: nowrap`, and `transform: translateX(-8px)/translateY(-4px)`.
+2. **No `transition: none !important` under `@media (prefers-reduced-motion)` on the navigation shell**: Windows machines configured for performance (or with window animations disabled, e.g. `MinAnimate = 0`) automatically trigger Chromium's `prefers-reduced-motion: reduce` query. Placing blanket `transition: none !important` overrides on `.ad-sidebar` or `.ad-main` strips layout transitions and causes instant snapping on desktop environments. Do not suppress structural shell layout transitions.
+3. **Static Axis Icon & Logo Alignment**:
+   - Never use `justify-content: center` to center icons or logos on sidebar collapse; `justify-content` cannot be transitioned and teleports icons horizontally.
+   - Keep `justify-content: flex-start` at all times and use symmetric padding geometry:
+     - 72px rail: Nav container `padding: 16px 12px`, item `padding: 10px 15px`, 18px icon → `12 + 15 + 9 = 36px` center (`72 / 2 = 36px`).
+     - Header: `padding: 20px 14px`, 44px logo circle → `14 + 22 = 36px` center.
+     - Center of all icons and logo circle remains at exact X = 36px across both states (0px horizontal displacement).
+4. **Responsive Density Consistency**:
+   - Whenever media queries target laptop screens (`@media (max-width: 1440px)` in `responsive-density.css`), always explicitly mirror `.ad-wrapper.ad-sidebar--collapsed .ad-sidebar { width: 72px; }` alongside `.ad-main { margin-left: 72px; }` so width transitions seamlessly without cascading asymmetry.
+5. **No inline styles on collapsible containers**: Containers that animate height/padding (such as `.ad-sidebar-user`) must not have hardcoded inline `style={{ padding, border }}` in JSX, which overrides CSS classes and blocks transitions.
+
 ### Design system (`src/components/ui/`)
-`Badge`, `Modal`, `AlertBanner`, `EmptyState`, `ListSkeleton`, `TableSkeleton`, `StatCard`, `PageHeader`, `CardSectionHeader`, `CardFooter`, `StatusBadge`, `ErrorBoundary` (wraps every routed page with Retry/Back UI), `Tooltip` (+ `Tooltip.css`), `ToastContext` (global toast provider in `App.jsx`), `vehicleIcons` (`VehicleIcon` lucide component + `vehicleGlyphSvg` SVG data-URI + `vehicleTypeLabel`), `statusColors.js` (canonical palettes: `PARCEL_STATUS_COLORS`, `SELLER_STATUS_COLORS`, `RIDER_STATUS_COLORS`, `RIDER_STATUS_BADGE`, `STATUS_HINTS`) — plus `ACCOUNT_CATEGORY_TONE` and `ACCOUNT_CATEGORY_LABEL` for the REAL/DEMO account badge.
+`Badge`, `Modal`, `DataTable`, `FilterBar`, `SectionCard`, `EmptyState`, `ListSkeleton`, `TableSkeleton`, `StatCard`, `PageHeader`, `CardSectionHeader`, `CardFooter`, `StatusBadge`, `ErrorBoundary` (wraps every routed page with Retry/Back UI), `Tooltip` (+ `Tooltip.css`), `ToastContext` (global toast provider in `App.jsx`), `vehicleIcons` (`VehicleIcon` lucide component + `vehicleGlyphSvg` SVG data-URI + `vehicleTypeLabel`), `statusColors.js` (canonical palettes: `PARCEL_STATUS_COLORS`, `SELLER_STATUS_COLORS`, `RIDER_STATUS_BADGE`, `STATUS_HINTS`) — the REAL/DEMO account-category helpers `ACCOUNT_CATEGORY_TONE` / `ACCOUNT_CATEGORY_LABEL` and `src/demoUtils.js` cited by older revisions are **not present** in the tree (verified 2026-09-20; see §7 and §11). `AlertBanner.jsx` was deleted 2026-09-20 (no importers).
 
 ### Parcel-status normalization (`src/utils/parcelStatus.js`, 2026-09-14)
 Single source of truth for mapping bridge-synced statuses to display labels: `normalizeParcelStatus()` handles the mobile backend's Title-case vocabulary **and** the legacy lowercase-hyphenated web form, case-insensitively; `isDeliveredStatus` / `isReturnFamilyStatus` / `isInTransitFamilyStatus` power counts and filters. Before this module, `ManageParcels`' 5-entry `REAL_STATUS_MAP` silently coerced mobile statuses it didn't know (`Out for Delivery`, `Picked Up`, `Returning`…) into "Pending", and the dashboard's client-side fallback compared exact Title-case strings against lowercase DB values. Every surface that renders a parcel status must consume this module — never re-derive local maps. The old dashboard `dateRange` select (state never read) was removed in the same pass.
@@ -63,8 +77,24 @@ Single source of truth for mapping bridge-synced statuses to display labels: `no
 - `skills/avoid-ai-design/` is the audit/rewrite skill (upstream: funboy322/avoid-ai-design): use it when asked to audit existing UI for AI-design tells, de-slop a screen, or as the post-build audit of generated frontend. It complements `no-slop-ui` (which stays the build-time guardrail); in rewrite mode it stops at this project's brand tokens and conventions — see `skills/avoid-ai-design/YTO_ADAPTATIONS.md`.
 - **Non-technical UI copy**: All user-facing copy in modals, forms, toast notifications, badges, empty states, and tables must use plain, non-technical words. Avoid engineering, database, and API terminology.
 
+### Corner radius system (2026-09-20 Parity)
+Corners are a mathematical hierarchy, not an arbitrary single value:
+1. **Tiered Scale (`src/design-tokens.css`)**:
+   - `xs` (`4px` / `--yto-radius-xs`): Status tags, micro-badges, indicator dots, nested tags.
+   - `sm` (`6px` / `--yto-radius-sm`): Sub-menu links, table action buttons, small inputs.
+   - `md` (`8px` / `--yto-radius-md`): Standard buttons, form fields, select dropdowns.
+   - `lg` (`12px` / `--yto-radius-lg`): Nested card panels, tab trays, filter bars.
+   - `xl` (`16px` / `--yto-radius-xl`): Primary dashboard cards, table panels, metric widgets.
+   - `2xl` (`20px` / `--yto-radius-2xl`): Modal dialogs, floating overlays, slide sheets.
+   - `full` (`9999px` / `--yto-radius-full`): Strict pill/circle; reserved for avatars, toggle switches, and single-line indicator tags.
+2. **Concentric Arcs Rule ($R_{\text{inner}} = R_{\text{outer}} - \text{Padding}$)**: Child containers nested inside parent cards must follow concentric geometry so corners never crowd or bulge.
+3. **Pill is a Shape, Not a Number**: Never apply pill radii (`100px`, `22px`) to rectangular buttons, multi-line cards, or text fields.
+4. **Boundary Edge Docking**: When elements touch container or screen borders (docked rails, bottom sheets, histogram bars at base), contacting corners must be squared (`0px`).
+5. **Concentric Focus Rings**: Interactive focus halos must use concentric box-shadows (`box-shadow: 0 0 0 2px var(--yto-surface), 0 0 0 4px var(--yto-brand-orange)`) rather than positive-offset outlines that pinch at the corners.
+6. **Media Clipping**: Image containers in cards must either clip to the parent container via `overflow: hidden`, or follow the concentric formula $R_{\text{img}} = R_{\text{card}} - P$.
+
 ### Services
-- `src/services/api.js` — centralized client: `API_ROOT = import.meta.env.VITE_API_URL || 'https://yto-express-backend.onrender.com'`; `apiFetch(path, opts)` attaches `Authorization: Bearer`; on 401 with token-expiry errors clears the token and dispatches `yto:auth_expired`. **Token key: `yto_token`** — `remember=true` → `localStorage`, `remember=false` → `sessionStorage` (session storage wins on read). `adminLogin(email, password, remember)`; `notificationsApi.sendEmail`; collection helpers (`sellersApi`, `ridersApi`, `parcelsApi`, `parcelLocationsApi`, `accountsApi`, `dashboardApi`).
+- `src/services/api.js` — centralized client: `API_ROOT = import.meta.env.VITE_API_URL || 'https://yto-express-backend.onrender.com'`; `apiFetch(path, opts)` attaches `Authorization: Bearer`; on 401 with token-expiry errors clears the token and dispatches `yto:auth_expired`. **Token key: `yto_token`** — `remember=true` → `localStorage`, `remember=false` → `sessionStorage` (session storage wins on read). `adminLogin(email, password, remember)`; `notificationsApi.sendEmail`; collection helpers (`sellersApi`, `ridersApi`, `parcelsApi`, `parcelLocationsApi`, `accountsApi`). `API_BASE` is module-private; the `dashboardApi` helper was removed 2026-09-20 — the dashboard calls `apiFetch('/dashboard/stats')` directly.
 - `src/services/localApi.js` — **removed** (2026-09-14): all views use `services/api.js` exclusively.
 - `src/services/useSSE.js` — real-time hook (see §5). Exposed `mode` is `'sse' | 'polling'` in practice; offline pill renders via `modeConfig` fallback.
 - `src/GlobalSearch.jsx` — cross-entity search with a **60-second snapshot cache**: the parcels/riders/sellers/accounts corpus is fetched once per TTL window (not on every keystroke) and a failed refresh serves the last good snapshot instead of blanking results.
@@ -97,12 +127,13 @@ Single source of truth for mapping bridge-synced statuses to display labels: `no
 | `/api/customers/:id` | PUT | Updates an existing customer record |
 | `/api/customers/stats`, `/api/customers/:id/orders` | GET | Customer aggregates + order history by `customerId` |
 | `/api/activity-log` | GET | Audit trail from registration/statusHistory across roles; `limit` ≤ 200, `role` filter |
-| `/api/app-notifications` (GET) + `/api/app-notifications/:id/read` (PATCH) | GET/PATCH | App-originated notifications (`AdminNotification` collection); `limit` ≤ 200, `type`/`read` filters; PATCH marks one read (auth) |
+| `/api/notifications` (GET) + `/api/notifications/:id/read` (PATCH) | GET/PATCH | App-originated notifications (`AdminNotification` collection); `limit` ≤ 200 (default 50), `role`/`type` filters; PATCH marks one read (auth). Frontend calls `/api/notifications` (`AppNotifications.jsx`, `NotificationBell.jsx`) — the `/api/app-notifications` name previously listed here never existed in `Server.js` (corrected 2026-09-20) |
 | `/api/parcels`, `/api/parcel-locations` | GET/POST/PUT/DELETE | Parcel CRUD; POST bridges parcel to mobile backend via `BridgeClient.syncParcel`; PUT updates status, pushes `BridgeClient.sendStatus` + SSE `parcel-updated` (see §6) |
 | `/api/dashboard/stats` | GET | KPIs: parcels, delivered %, riders, active riders, avg rating, total deliveries, sellers |
 | `/api/accounts` | GET/POST | Admin accounts |
 | `/api/accounts/:id` | PUT | bcrypt-hashes new passwords on change |
 | `/api/accounts/:id/status` | PATCH | Toggle Active/Deactivated; **super_admin cannot be deactivated** |
+| `/api/health` | GET | Liveness probe (added 2026-09-22): `{ status, db, uptimeSeconds }`; 200 when DB connected, 503 otherwise. The login page's server-status pill polls this (was `/`, which returned prose and could not distinguish the API from any other server) |
 | `/api/accounts/login` | POST | JWT 24h (id/email/role); rejects Deactivated |
 | `/api/issues` | GET | Support tickets |
 | `/api/issues/:id/status` | PUT | Sets status/adminNotes → `BridgeClient.sendIssueStatus` + SSE `issue-status-updated` |
@@ -123,7 +154,7 @@ Single source of truth for mapping bridge-synced statuses to display labels: `no
 | `Parcel` | `trackingNumber` (unique), `senderName`, `receiverName`, `senderPhone`/`receiverPhone`/`senderEmail` (bridge-synced contact info — declared on the schema because Mongoose strict mode silently strips undeclared fields), `recipientEmail`, `item`, `weight`, `value`, `origin`, `destination`, `status`, `riderId`, `sellerId`, `podPhoto` (Base64 JPEG), `events[]`, `deliveryFee`, `riderLat`/`riderLng` (last-known rider position, stamped by `receive-status` when the Android payload carries a GPS fix). |
 | `ParcelLocation` | `parcelId` (unique), `lat`, `lng`, `location`, `type` (`Warehouse`), `status`, `geofence` (`Inside`) |
 | `Issue` | `ticketId` (`TICK-2026-XXXXX`), `trackingNumber`, `category`, `description`, `evidenceImages[]`, `reporterName/Email/Phone/Role`, `status` (`Open`→`Under Investigation`→`Resolved`→`Closed`), `adminNotes`, `resolvedAt` |
-| `AdminNotification` | `title`, `body`, `type` (`ORDER`/`SECURITY`/`SYSTEM`), `targetUserId`, `targetRole`, `refId` (shipment id), `read` (bool), `createdAt` — app-originated notifications fanned in via `/api/bridge/sync-notification`, surfaced in the App Notifications panel + bell |
+| `AdminNotification` | `notificationId` (Android `Notification._id` for traceability), `role` (`customer`/`seller`/`rider`/`admin`), `title` (required), `message`, `type` (free string, default `system` — **no enum**), `relatedId` (tracking number / ticket id), `source` (default `mobile-app`), `read` (bool), `readAt`, timestamps — app-originated notifications fanned in via `/api/bridge/sync-notification`, surfaced in the App Notifications panel + bell. (Earlier revisions listed `body`/`targetUserId`/`targetRole`/`ORDER|SECURITY|SYSTEM` — those fields do not exist on the model; corrected 2026-09-20) |
 
 ---
 
@@ -158,7 +189,7 @@ Bidirectional REST bridge with the Android backend (`yto_express_backend`). Ever
 
 ### 7. Realm Model — REAL and DEMO Accounts
 
-The portal holds one live dataset. Accounts additionally carry an explicit `accountCategory` of `REAL` or `DEMO`, so staff can tell an official demo registration from a live one. The category is stored on the models, backfilled to `REAL` for existing non-demo records, and badged through `src/components/ui/statusColors.js` (`ACCOUNT_CATEGORY_TONE`, `ACCOUNT_CATEGORY_LABEL`). Demo detection lives in one module, `src/demoUtils.js`, mirroring the Android app's `isDemoUser()` convention on the web side (`example.com` domain or the three canonical test logins). Demo data ships as an explicit opt-in script, `server/seed_official_demo_accounts.js`, never as client-side mocks.
+The portal holds one live dataset. **`accountCategory` state (verified 2026-09-20):** no file in `server/models/` declares the field and nothing under `src/` reads it, although legacy Atlas documents still carry `'REAL'`/`'DEMO'` values and the maintenance scripts (`backfill_issue_enrichment.js`, `clean_web_db.js`, `audit_web_db.js`) still query/select it. `src/demoUtils.js`, `ACCOUNT_CATEGORY_TONE`, and `ACCOUNT_CATEGORY_LABEL` do **not** exist in the tree. Demo rows belong to the App database; `server/seed_official_demo_accounts.js` is **retired** (2026-09-18) — it refuses to seed and exits 0.
 1. **Accounts**: Canonical admin logins are `superadmin@ytoexpress.com`, `staff@ytoexpress.com`, and `hub@ytoexpress.com` (see §3). Customer/seller/rider accounts arrive via the mobile bridge and retain their signup emails.
 2. **Clean empty states**: 0 records renders the clean empty-state view — zero synthetic or mock injections anywhere in the client. Unreachable backends display an error banner, never simulated data.
 3. **Database specification**: Pinned to Atlas DB `/test` (`server/.env` `MONGO_URI`); operational collections clean.
@@ -173,7 +204,8 @@ The portal holds one live dataset. Accounts additionally carry an explicit `acco
 4. **Input hygiene** — email `.toLowerCase().trim()`; phone `.replaceAll("[^0-9]","")`; no emojis in UI strings or logs; no hardcoded impersonating fallbacks (`"seller@gmail.com"`, `"YTO Rider"`, `"Store Warehouse"`).
 5. **Code quality** — retain docstrings/comments/schemas; responsive desktop + mobile layouts; clear error boundaries.
 6. **Auth** — bcrypt 10 rounds; JWT 24h; token key `yto_token`; 401 interceptor clears storage + emits `yto:auth_expired`.
-7. **Caveman protocol** — When activated (`caveman`), maintain 100% technical accuracy, zero conversational filler, exact paths, and preserve verification gates.
+7. **Persistent shell architecture (2026-09-19)** — `AnalyticsDashboard` is the persistent application shell hosting the sidebar and global header; it must NEVER be keyed to `activePage` (e.g. `key={activePage}`) in `App.jsx`, as key changes unmount the entire shell, resetting sidebar scroll position to 0 and flashing submenus. The route-keyed `ErrorBoundary` (`key={`${activeMenuItem}:${retryNonce}`}`) is scoped inside `.ad-main` wrapping only dynamic page contents (`renderPage()`).
+8. **Caveman protocol** — When activated (`caveman`), maintain 100% technical accuracy, zero conversational filler, exact paths, and preserve verification gates.
 
 ---
 
@@ -181,8 +213,12 @@ The portal holds one live dataset. Accounts additionally carry an explicit `acco
 
 - `Server.js` boot — `ensureAdminAccounts()` initializes canonical admins if enabled (see §3).
 - `server/clean_web_db.js` — Wipes operational data (customers/sellers/riders/parcels/issues). Pinned to Atlas database `/test`. Render `MONGO_URI` env var must end in `/test`.
-- `server/seed_official_demo_accounts.js` — Seeds the official demo seller, customer, and rider accounts. Opt-in; requires `MONGO_URI`. Demo detection itself lives in `src/demoUtils.js`.
-- `server/backfill_issue_enrichment.js` — One-time (idempotent) maintenance pass that persists issue enrichment — stable `ticketId`, `accountCategory`, and product fields from the linked Parcel — mirroring the read-only derivation in `GET /api/issues` field-for-field. Default **dry run**; pass `--write` to persist. Requires `MONGO_URI`. Retire once a dry run reports 0 rows.
+- `server/seed_official_demo_accounts.js` — **RETIRED (2026-09-18):** the Web database is REAL-only, so the script refuses to seed and exits 0. Demo accounts live in the App database, and `src/demoUtils.js` does not exist in this tree.
+- `server/backfill_issue_enrichment.js` — One-time (idempotent) maintenance pass that persists issue enrichment — stable `ticketId`, `accountCategory`, and product fields from the linked Parcel — mirroring the read-only derivation in `GET /api/issues` field-for-field. Default **dry run**; pass `--write` to persist. Requires `MONGO_URI`. Retire once a dry run reports 0 rows. **Fixed 2026-09-20:** the unsupported `accountCategory` write was removed — `Issue` has no such schema path, `GET /api/issues` never derived it, and nothing in `src/` reads it, so the pass had been flagging rows as un-enriched for a field it could never persist. It now enriches exactly `ticketId`, `productName`, `productCategory`, `eta`.
+- `server/audit_web_db.js` — **Read-only** Web database audit (2026-09-18): per-collection row counts plus demo/synthetic/placeholder-row detection (demo emails, pinned fixture IDs/plates/licences, test tracking + ticket IDs, parcels missing real coordinates, orphan `ParcelLocation` rows, unread notification backlog). Contains no `updateOne`/`deleteMany`/upsert — safe to run against Atlas. Requires `MONGO_URI`.
+- `server/purge_web_demo_rows.js` — Removes the canonical mobile demo fixtures from the **Web** database only (`superadmin@gmail.com` / `staff@gmail.com` / `hub@gmail.com`, plus the seller/customer/rider demo rows) and the legacy `AdminNotification` registration noise (`role: 'admin'`, `type: 'security'`, `title: 'New User Registration'`, `source: 'mobile-app'`, empty `relatedId`). Dry-run by default; deletes only under `PURGE_CONFIRM=YES`. Requires `MONGO_URI`. **Executed 2026-09-20** (6 rows deleted); verified state — `Account: 3` (all REAL, `YTOA2026000{1,2,3}`), `AdminNotification: 0`, Seller/Customer/Rider/Parcel/ParcelLocation/Issue: 0 each.
+- **CORS callback contract (2026-09-22, root cause of the login-page hang)** — `isAllowedCorsOrigin` in `Server.js` was a boolean predicate `(origin) => bool`. cors@2.8.6 treats a *function* `origin` option as the async contract `(origin, callback) => void`; the predicate never invoked its 2nd argument, so cors's internal continuation never ran, `next()` never fired, and **every request hung until the client timed out** — the login spinner's ~60s stall + error (`apiFetch` abort) and the perpetually orange "Connecting..." pill. Fixed to `cb(null, origin)` (allow, reflected) / `cb(null, false)` (deny, no ACAO, request proceeds). Verified against the installed `server/node_modules/cors/lib/index.js` (`middlewareWrapper` → `originCallback`).
+- **`app.set('trust proxy', 1)`** (2026-09-22) — Render terminates TLS and forwards the client IP in `X-Forwarded-For`; without it express-rate-limit v8 cannot key counters on the real client IP behind the proxy and its validation layer can 500 every login on the deployed backend.
 - `scripts/dev.cjs` — combined launcher (frontend + server). **`npm run dev` is the standard single command** for the full stack (API @ 3001 + Vite @ 5173, Ctrl+C kills both); granular options: `npm run dev:web` (frontend only), `npm run dev:server` (backend only); `dev:all` retained as alias.
 - `package.json` scripts: `dev` (full stack via dev.cjs), `dev:web` (vite), `dev:server`, `dev:all`, `start` (dev.cjs), `build` (`vite build`), `lint`, `preview`.
 - `scripts/qa/` — `npm run qa:layout` headless layout sweep across every sidebar page x viewport width.
@@ -208,21 +244,21 @@ C:\Users\ADMIN\React_Projects\YTO Latest\
 │  │  │   MonitorParcel, GenerateTrackingInformation, Settings, SettingsArchiveView,
 │  │  │   LoginPage, Logout, GlobalHeader, GlobalSearch, NotificationBell, ...)
 │  │  ├─ components/ui/              (Badge, Modal, EmptyState, skeletons, statusColors.js, ...)
-│  │  ├─ services/                   (api.js, localApi.js, useSSE.js)
+│  │  ├─ services/                   (api.js, useSSE.js)
 │  │  ├─ verification/               (PendingVerificationsTable, ReviewModal, SendSMSModal, ...)
 │  │  └─ (utils: exportUtils, leafletLoader, luzonCityCoords, hubGeofenceData, useRouteAnimation)
 │  │  ├─ (top-level src utilities: AdminProfileDropdown, ConnectionHistoryChart,
 │  │  │   LiveRiderMap, NotificationBell, PaginationControls, ParcelProgressTimeline,
 │  │  │   PeakAlertBanner, sellerRiderData.js)
-│  │  ├─ server/
+│  │  ├─ server/                     (sibling of src/ under my-react-app/)
 │  │  │  ├─ Server.js, bridgeRoutes.js, clean_web_db.js
 │  │  │  ├─ models/                  (Account, Seller, Rider, Customer, Parcel, ParcelLocation, Issue, AdminNotification)
 │  │  │  ├─ utils/                   (BridgeClient.js, sseBroadcaster.js)
 │  │  │  └─ .env                     (MONGO_URI, JWT_SECRET, ADMIN_PASSWORD_*, TWILIO_*, SEMAPHORE_*, EMAIL_*, ANDROID_BACKEND_URL, BRIDGE_API_KEY, SSE_PEAK_THRESHOLD)
-│  │  ├─ scripts/dev.cjs
-│  │  ├─ public/                     (assets, vite.svg)
+│  │  ├─ scripts/                    (dev.cjs, qa/layoutSweep.mjs, qa/seedServer.mjs)
+│  │  ├─ public/                     (assets: WebLoginBg_hi.jpg, yto_express_logo_mark.png)
 │  │  └─ skills/                     (11 SKILL.md files)
-└─ __MACOSX/                         (junk from archive extraction — ignore)
+└─ (no `__MACOSX/` — junk directory absent from the workspace as of 2026-09-20)
 ```
 
 ## 11. Security: Known Issue — `.env` Credential Leak & Pending History Scrub (Future Fix)
@@ -234,7 +270,7 @@ C:\Users\ADMIN\React_Projects\YTO Latest\
 - Local history was scrubbed with `git filter-repo`: `.env` and the junk `Icon\r` file were removed from all 25 commits. New local HEAD: `642ff8d` at scrub time — since advanced by the nodemailer IPv4/CORS fix commits (`c7e0e15` security batch → `70ec918` as of 2026-09-09, plus one uncommitted `family: 4` working-tree change in `Server.js`).
 - `.env` was restored to disk (from backup) and added to `.gitignore` — it must never be committed again.
 - Pre-scrub backup (contains original history incl. `.env`): `C:\Users\ADMIN\React_Projects\yto-express-backup.git`.
-- `vite build` passes; **UPDATE 2026-09-09:** working tree fixes applied and committed locally — nodemailer `family: 4` IPv4 fix, `accountCategory` added to the `Parcel` schema, and the hardcoded `JWT_SECRET` fallback removed (startup now requires the env var). Verify `JWT_SECRET` is set in Render env before the next deploy. **UPDATE 2026-09-13 (de-demo migration):** `accountCategory` was removed from all models at that point. **UPDATE 2026-09-17:** it has since been restored — the models, the API, and the shared badge palette carry it again, so §7 supersedes this note.
+- `vite build` passes; **UPDATE 2026-09-09:** working tree fixes applied and committed locally — nodemailer `family: 4` IPv4 fix, `accountCategory` added to the `Parcel` schema, and the hardcoded `JWT_SECRET` fallback removed (startup now requires the env var). Verify `JWT_SECRET` is set in Render env before the next deploy. **UPDATE 2026-09-13 (de-demo migration):** `accountCategory` was removed from all models at that point. **UPDATE 2026-09-17 (INCORRECT — corrected 2026-09-20):** this note claimed `accountCategory` had been restored; direct inspection of the working tree shows no model field, no `ACCOUNT_CATEGORY_*` palette, and no `src/demoUtils.js`, and `seed_official_demo_accounts.js` is retired. §7 now reflects the verified state.
 
 ### Why the remote still leaks
 A force-push was attempted but rejected (`403 denied`): this machine's cached GitHub credential (account `Natoy0123`) has no push rights to `LewisHamilton444/yto-express`, and the repo owner's credentials are not available on this machine.

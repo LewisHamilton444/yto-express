@@ -1,11 +1,11 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { loadLeaflet } from './leafletLoader';
 import { LOGISTICS_HUBS, haversineKm, HUB_STATUS_COLORS } from './hubGeofenceData';
-import { CITY_COORDS, LUZON_FALLBACK_COORDS } from './luzonCityCoords';
+import { CITY_COORDS } from './luzonCityCoords';
 import { useRouteAnimation } from './useRouteAnimation';
 import { vehicleGlyphSvg, vehicleTypeLabel } from './components/ui/vehicleIconUtils';
 import { VehicleIcon } from './components/ui/vehicleIcons';
-import { CircleDot, Flame, Map, Package, RefreshCw, Satellite, TrafficCone, X } from 'lucide-react';
+import { CircleDot, Flame, Map, Package, Satellite, X } from 'lucide-react';
 import { ridersApi, parcelsApi, parcelLocationsApi } from './services/api';
 import Tooltip from './components/ui/Tooltip';
 import useSSE from './services/useSSE';
@@ -15,16 +15,8 @@ const TILE_LAYERS = {
   satellite: { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', attribution: 'Tiles © Esri' },
 };
 
-// No real traffic-conditions feed exists, so "Traffic" is an illustrative
-// congestion layer derived from each rider's cruising speed relative to
-// their vehicle type — same honesty-over-fabrication approach used for the
-// mock data fallback elsewhere in this app.
-function congestionColor(rider) {
-  const speed = rider.speedKmh || 30;
-  if (speed < 22) return '#ef4444';
-  if (speed < 36) return '#f59e0b';
-  return '#22c55e';
-}
+// Route color is fixed brand orange — traffic overlay unavailable until the
+// mobile app streams real speed/heading telemetry.
 
 
 // Nearest hub to a point — used as the destination for any real rider, since
@@ -53,13 +45,13 @@ function buildRiderIcon(L, vehicleType, bearing, selected) {
     </div>
   `;
   return L.divIcon({ className: '', html, iconSize: [size, size], iconAnchor: [size / 2, size / 2], popupAnchor: [0, -size / 2 - 6] });
-}function buildRiderPopupHtml(rider) {  const hub = LOGISTICS_HUBS.find(h => h.hubId === rider.destinationHubId);  // Position-source honesty: a real GPS fix (from the app's status-update  // telemetry) vs. the city-derived fallback.  const gpsLine = rider.hasRealGps    ? '<span style="color:#16a34a;font-weight:700;">● Live GPS · ' + (rider.speedKmh || 30) + ' km/h (sim. speed)</span><br/>'    : '<span style="color:#b45309;font-weight:700;">● Approximate (city-level) · ' + (rider.speedKmh || 30) + ' km/h (sim.)</span><br/>';  return `    <div style="font-family:sans-serif;font-size:12px;line-height:1.8;min-width:180px;">      <b style="color:#390955;font-size:13px;">${rider.fullName}</b><br/>      <span style="color:#9b82b2;font-size:11px;font-family:monospace;">${rider.riderId}</span><br/>      <span style="color:#555;">${vehicleTypeLabel(rider.vehicleType)} · ${rider.vehicleType}</span><br/>      ${gpsLine}      <span style="color:#888;">${rider.city || 'Luzon'}</span><br/>      <span style="color:#f37021;">${hub ? hub.hubName : '—'}</span>    </div>  `;}
+}function buildRiderPopupHtml(rider) {  const hub = LOGISTICS_HUBS.find(h => h.hubId === rider.destinationHubId);  // Position-source honesty: a real GPS fix (from the app's status-update  // telemetry) vs. the city-derived fallback.  const gpsLine = rider.hasRealGps    ? '<span style="color:#16a34a;font-weight:700;">● Live GPS</span><br/>'    : '<span style="color:#b45309;font-weight:700;">● Approximate (city-level)</span><br/>';  return `    <div style="font-family:sans-serif;font-size:12px;line-height:1.8;min-width:180px;">      <b style="color:#390955;font-size:13px;">${rider.fullName}</b><br/>      <span style="color:#9b82b2;font-size:11px;font-family:monospace;">${rider.riderId}</span><br/>      <span style="color:#555;">${vehicleTypeLabel(rider.vehicleType)} · ${rider.vehicleType}</span><br/>      ${gpsLine}      <span style="color:#888;">${rider.city || 'Luzon'}</span><br/>      <span style="color:#f37021;">${hub ? hub.hubName : '—'}</span>    </div>  `;}
 
 // One instance per active rider. Renders nothing itself — it owns a Leaflet
 // marker + route polyline directly on the shared map and drives them with
 // useRouteAnimation, so movement stays smooth without triggering a React
 // re-render on every animation frame.
-function AnimatedRiderMarker({ L, map, rider, isSelected, onSelect, trafficOn }) {
+function AnimatedRiderMarker({ L, map, rider, isSelected, onSelect }) {
   const markerRef = useRef(null);
   const routeLineRef = useRef(null);
 
@@ -67,7 +59,7 @@ function AnimatedRiderMarker({ L, map, rider, isSelected, onSelect, trafficOn })
     if (!L || !map || !rider.route || rider.route.length < 2) return undefined;
 
     const line = L.polyline(rider.route.map(p => [p.lat, p.lng]), {
-      color: trafficOn ? congestionColor(rider) : '#f37021', weight: 2.5, opacity: 0.45, dashArray: '7,6',
+      color: '#f37021', weight: 2.5, opacity: 0.45, dashArray: '7,6',
     }).addTo(map);
     routeLineRef.current = line;
 
@@ -100,21 +92,29 @@ function AnimatedRiderMarker({ L, map, rider, isSelected, onSelect, trafficOn })
     }
     if (routeLineRef.current) {
       routeLineRef.current.setStyle({
-        color: trafficOn ? congestionColor(rider) : '#f37021',
+        color: '#f37021',
         opacity: isSelected ? 0.95 : 0.45,
         weight: isSelected ? 4.5 : 2.5,
         dashArray: isSelected ? null : '7,6',
       });
       if (isSelected) routeLineRef.current.bringToFront();
     }
-  }, [L, rider, isSelected, trafficOn]);
+  }, [L, rider, isSelected]);
 
-  useRouteAnimation(rider.route, { speedKmh: rider.speedKmh || 30 }, handleFrame);
+  // Route animation drives marker movement along the hub line at a fixed
+  // presentation pace — position only, never a claimed speed.
+  useRouteAnimation(rider.route, { speedKmh: 30 }, handleFrame);
 
   return null;
 }
 
-export default function LiveRiderMap() {
+export default function LiveRiderMap({
+  externalSelectedRiderId,
+  onSelectRider,
+  refreshTrigger,
+  activeRidersCount,
+  activeShipmentsCount,
+}) {
   const [riders, setRiders]           = useState([]);
   const [parcels, setParcels]         = useState([]);
   const [loading, setLoading]         = useState(true);
@@ -122,12 +122,11 @@ export default function LiveRiderMap() {
   const [selectedHub, setSelectedHub]     = useState(null);
   const [selectedRider, setSelectedRider] = useState(null);
   const [riderFilter, setRiderFilter]     = useState('all');
-  // Admin-exclusive filters (shipment status / duty / location scope)
+  // Admin-exclusive filters (shipment status / location scope)
   const [statusFilter, setStatusFilter]   = useState('all');
-  const [dutyFilter, setDutyFilter]       = useState('all');
   const [locationFilter, setLocationFilter] = useState('all');
   const [mapReady, setMapReady]       = useState(false);
-  const [layers, setLayers] = useState({ satellite: false, geofences: true, heatmap: false, traffic: false });
+  const [layers, setLayers] = useState({ satellite: false, geofences: true, heatmap: false });
 
   const divRef       = useRef(null);
   const mapRef       = useRef(null);
@@ -136,6 +135,41 @@ export default function LiveRiderMap() {
   const hubMarkerRefs = useRef({});
   const tileLayerRef  = useRef(null);
   const heatLayerRef  = useRef(null);
+
+  const handleSelectRider = (id) => {
+    setSelectedHub(null);
+    setSelectedRider(id);
+    if (onSelectRider) onSelectRider(id);
+  };
+
+  // The Leaflet map is built exactly once (see the `[]` init effect below), so
+  // its click handlers read the current handler through a ref rather than
+  // closing over a stale one — a changed `onSelectRider` prop must never force
+  // the whole map to be torn down and rebuilt.
+  const handleSelectRiderRef = useRef(handleSelectRider);
+  useEffect(() => { handleSelectRiderRef.current = handleSelectRider; });
+
+  useEffect(() => {
+    if (externalSelectedRiderId !== undefined) {
+      setSelectedRider(externalSelectedRiderId);
+      if (externalSelectedRiderId) setSelectedHub(null);
+    }
+  }, [externalSelectedRiderId]);
+
+  const prevSelectedRiderRef = useRef(selectedRider);
+  useEffect(() => {
+    if (!mapRef.current) return;
+    if (selectedRider) {
+      const target = riders.find(r => r.riderId === selectedRider);
+      if (target && target.lat && target.lng) {
+        mapRef.current.setView([target.lat, target.lng], Math.max(mapRef.current.getZoom(), 14), { animate: true });
+      }
+    } else if (prevSelectedRiderRef.current && LRef.current) {
+      const bounds = LOGISTICS_HUBS.map(h => [h.coordinates.lat, h.coordinates.lng]);
+      mapRef.current.fitBounds(LRef.current.latLngBounds(bounds), { padding: [60, 60] });
+    }
+    prevSelectedRiderRef.current = selectedRider;
+  }, [selectedRider, riders]);
 
   const toggleLayer = (key) => setLayers(prev => ({ ...prev, [key]: !prev[key] }));
 
@@ -171,7 +205,7 @@ export default function LiveRiderMap() {
           return st !== 'archived' && st !== 'inactive';
         })
         .map((r, i) => {
-          const coords = CITY_COORDS[r.city] || LUZON_FALLBACK_COORDS;
+          const coords = CITY_COORDS[r.city];
           // Prefer the rider's own real GPS fix when their currently-held
           // parcel has telemetry; otherwise fall back to the city-derived
           // position (labeled via hasRealGps so popups can be honest).
@@ -179,24 +213,30 @@ export default function LiveRiderMap() {
             p => p.riderId && (p.riderId === (r.registrationId || r._id)) && telemetryByParcel[p.trackingNumber]
           );
           const fix = heldParcel ? telemetryByParcel[heldParcel.trackingNumber] : null;
+          // No city match and no telemetry: skip the pin entirely rather than
+          // parking every unmatched rider on a false Manila coordinate.
+          if (!fix && !coords) return null;
           const lat = fix ? fix.lat : coords.lat + i * 0.004;
           const lng = fix ? fix.lng : coords.lng + i * 0.003;
           const hub = nearestHub(lat, lng);
           return {
             riderId: r.registrationId || r._id,
-            fullName: r.riderName || 'Unknown Rider',
+            fullName: r.riderName || '—',
             vehicleType: r.vehicleType || 'Motorcycle',
             city: r.city || '',
             province: r.state || '',
             lat, lng,
             hasRealGps: !!fix,
-            speedKmh: r.vehicleType === 'Bicycle' ? 18 : r.vehicleType === 'Van' ? 42 : 32,
+            // Speed is not streamed by the app yet — the map labels pin
+            // positions, it does not claim a live speed.
+            speedKmh: null,
             destinationHubId: hub.hubId,
             // Real DB records don't carry a planned path, so the honest
             // representation is a direct line to the nearest hub.
             route: [{ lat, lng }, { lat: hub.coordinates.lat, lng: hub.coordinates.lng }],
           };
-        });
+        })
+        .filter(Boolean);
 
       const activeParcels = safeParcels
         .filter(p => !['delivered', 'returned', 'failed'].includes(p.status))
@@ -204,7 +244,10 @@ export default function LiveRiderMap() {
           // Real telemetry first (per-parcel tracking), city coords as fallback.
           const fix = telemetryByParcel[p.trackingNumber];
           if (fix) return { ...p, lat: fix.lat, lng: fix.lng, hasRealGps: true };
-          const coords = CITY_COORDS[p.destination] || CITY_COORDS[p.origin] || LUZON_FALLBACK_COORDS;
+          const coords = CITY_COORDS[p.destination] || CITY_COORDS[p.origin];
+          // No telemetry and no city match: keep the record in the list with
+          // no map position (Location unavailable) instead of a Manila pin.
+          if (!coords) return { ...p, lat: null, lng: null, hasRealGps: false, noPosition: true };
           return { ...p, lat: coords.lat + i * 0.003, lng: coords.lng + i * 0.0025, hasRealGps: false };
         });
 
@@ -235,6 +278,12 @@ export default function LiveRiderMap() {
     return () => clearInterval(interval);
   }, [fetchData]);
 
+  useEffect(() => {
+    if (refreshTrigger) {
+      fetchData();
+    }
+  }, [refreshTrigger, fetchData]);
+
   // Build the base map + hub geofences ONCE. Rider markers are separate
   // child components (AnimatedRiderMarker) that mount/unmount themselves as
   // the riders list changes, so a 15s data refresh never tears down the map
@@ -251,13 +300,13 @@ export default function LiveRiderMap() {
 
       LOGISTICS_HUBS.forEach(hub => {
         const { lat, lng } = hub.coordinates;
-        const color = hub.status === 'Offline' ? '#999' : hub.status === 'High Capacity' ? '#f37021' : '#390955';
+        const color = hub.status === 'Offline' ? '#999' : '#390955';
 
         const circle = L.circle([lat, lng], {
           radius: hub.geofenceRadius * 1000,
           color, fillColor: color, fillOpacity: 0.07, weight: 2, dashArray: '6,4',
         }).addTo(map);
-        circle.on('click', () => { setSelectedRider(null); setSelectedHub(prev => prev === hub.hubId ? null : hub.hubId); });
+        circle.on('click', () => { handleSelectRiderRef.current(null); setSelectedHub(prev => prev === hub.hubId ? null : hub.hubId); });
         hubCircleRefs.current[hub.hubId] = circle;
 
         const hubMarker = L.marker([lat, lng], {
@@ -273,7 +322,7 @@ export default function LiveRiderMap() {
               <span style="color:#888;font-size:11px;">${hub.hubId} · ${hub.region} · ${hub.geofenceRadius}km radius · ${hub.status}</span>
             </div>
           `)
-          .on('click', () => { setSelectedRider(null); setSelectedHub(prev => prev === hub.hubId ? null : hub.hubId); })
+          .on('click', () => { handleSelectRiderRef.current(null); setSelectedHub(prev => prev === hub.hubId ? null : hub.hubId); })
           .addTo(map);
         hubMarkerRefs.current[hub.hubId] = hubMarker;
       });
@@ -339,7 +388,7 @@ export default function LiveRiderMap() {
       const group = L.layerGroup();
       const points = [
         ...riders.map(r => ({ lat: r.lat, lng: r.lng })),
-        ...parcels.map(p => ({ lat: parseFloat(p.lat), lng: parseFloat(p.lng) })).filter(p => p.lat && p.lng),
+        ...parcels.filter(p => !p.noPosition).map(p => ({ lat: parseFloat(p.lat), lng: parseFloat(p.lng) })).filter(p => p.lat && p.lng),
       ];
       points.forEach(pt => {
         [1400, 900, 500].forEach((radius, i) => {
@@ -378,13 +427,6 @@ export default function LiveRiderMap() {
     ...parcels.map(p => (p.destination || p.origin || '')).filter(Boolean),
   ])).sort();  const visibleRiders = riders.filter(r => {
     if (riderFilter !== 'all' && r.riderId !== riderFilter) return false;
-    // Duty filter over the real synced toggle. The `raw?.isOnDuty === undefined`
-    // fallback keeps pre-telemetry records (no duty data yet, but Active)
-    // visible under "On Duty" instead of vanishing from the map.
-    const riderIsOnDuty = r.isOnDuty === true || (r.raw?.isOnDuty === true);
-    const dutyUnknownButActive = r.raw?.isOnDuty === undefined && String(r.raw?.status || '').toLowerCase() === 'active';
-    if (dutyFilter === 'on-duty' && !(riderIsOnDuty || dutyUnknownButActive)) return false;
-    if (dutyFilter === 'off-duty' && (riderIsOnDuty || dutyUnknownButActive)) return false;
     if (locationFilter !== 'all' && r.city !== locationFilter) return false;
     return true;
   });
@@ -396,8 +438,7 @@ export default function LiveRiderMap() {
 
   const handleSelectRiderFilter = (id) => {
     setRiderFilter(id);
-    setSelectedHub(null);
-    setSelectedRider(id === 'all' ? null : id);
+    handleSelectRider(id === 'all' ? null : id);
   };
 
   // (synthetic alert derivation removed with the REAL-only migration)
@@ -406,72 +447,95 @@ export default function LiveRiderMap() {
   const statRow = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 0', borderBottom: '1px solid #f5f0ff', fontSize: 13 };
   const layerBtn = (active) => ({ padding: '6px 13px', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', border: `1.5px solid ${active ? '#390955' : '#e0d5f0'}`, background: active ? '#390955' : 'white', color: active ? 'white' : '#555' });
 
+  const riderCount = activeRidersCount !== undefined ? activeRidersCount : riders.length;
+  const parcelCount = activeShipmentsCount !== undefined ? activeShipmentsCount : parcels.length;
+
   return (
     <div style={card}>
-      <div style={{ padding: '14px 20px', borderBottom: '1px solid rgba(57,9,85,0.07)', background: 'rgba(57,9,85,0.02)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+      <div style={{ padding: '14px 20px', borderBottom: '1px solid rgba(57,9,85,0.07)', background: 'rgba(57,9,85,0.02)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{ width: 30, height: 30, borderRadius: 8, background: '#390955', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Map size={15} color="white" aria-hidden="true" /></div>
           <div>
-            <div style={{ fontSize: 14, fontWeight: 800, color: '#1a0a2e' }}>Live Rider Map</div>
-            <div style={{ fontSize: 11, color: '#9b82b2' }}>{LOGISTICS_HUBS.length} hubs · {riders.length} riders in motion · App service area: Bulacan Province</div>
+            <div style={{ fontSize: 14, fontWeight: 800, color: '#1a0a2e' }}>Live Tracking Map</div>
+            <div style={{ fontSize: 11, color: '#9b82b2' }}>{LOGISTICS_HUBS.length} hubs · {riderCount} riders in motion · App service area: Bulacan Province</div>
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
 
-          {lastUpdated && <span style={{ fontSize: 10, color: '#9b82b2', fontFamily: 'monospace' }}>Updated {lastUpdated}</span>}
-          <Tooltip content="Re-fetch the latest rider and parcel positions">
-          <button onClick={fetchData} style={{ padding: '5px 12px', background: 'white', border: '1.5px solid #e0d5f0', borderRadius: 8, fontSize: 11, fontWeight: 700, color: '#390955', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}><RefreshCw size={12} aria-hidden="true" /> Refresh</button>
-          </Tooltip>
+        {/* Telemetry status indicators */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 8, background: '#ecfdf5', border: '1px solid #a7f3d0', fontSize: 11, fontWeight: 700, color: '#047857' }}>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#10b981', display: 'inline-block' }} />
+            {riderCount} Active Riders
+          </span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 8, background: 'rgba(57,9,85,0.06)', border: '1px solid rgba(57,9,85,0.12)', fontSize: 11, fontWeight: 700, color: '#390955' }}>
+            <Package size={12} color="#f37021" aria-hidden="true" />
+            {parcelCount} Active Shipments
+          </span>
         </div>
       </div>
 
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 20px', borderBottom: '1px solid rgba(57,9,85,0.07)', flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 11, fontWeight: 700, color: '#9b82b2', textTransform: 'uppercase', letterSpacing: 0.4 }}>Map Layers</span>
-        <Tooltip content="Show live traffic conditions overlay">
-        <button style={{ ...layerBtn(layers.traffic), display: 'inline-flex', alignItems: 'center', gap: 5 }} onClick={() => toggleLayer('traffic')}><TrafficCone size={12} aria-hidden="true" /> Traffic</button>
-        </Tooltip>
-        <Tooltip content="Switch to satellite imagery base layer">
-        <button style={{ ...layerBtn(layers.satellite), display: 'inline-flex', alignItems: 'center', gap: 5 }} onClick={() => toggleLayer('satellite')}><Satellite size={12} aria-hidden="true" /> Satellite</button>
-        </Tooltip>
-        <Tooltip content="Toggle hub geofence zone circles">
-        <button style={{ ...layerBtn(layers.geofences), display: 'inline-flex', alignItems: 'center', gap: 5 }} onClick={() => toggleLayer('geofences')}><CircleDot size={12} aria-hidden="true" /> Geofences</button>
-        </Tooltip>
-        <Tooltip content="Show parcel density heat layer">
-        <button style={{ ...layerBtn(layers.heatmap), display: 'inline-flex', alignItems: 'center', gap: 5 }} onClick={() => toggleLayer('heatmap')}><Flame size={12} aria-hidden="true" /> Heatmap</button>
-        </Tooltip>
-      </div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '10px 20px', borderBottom: '1px solid rgba(57,9,85,0.07)', flexWrap: 'wrap' }}>
+        {/* Map Layers */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: '#9b82b2', textTransform: 'uppercase', letterSpacing: 0.4 }}>Map Layers</span>
+          <Tooltip content="Switch to satellite imagery base layer">
+            <button style={{ ...layerBtn(layers.satellite), display: 'inline-flex', alignItems: 'center', gap: 5 }} onClick={() => toggleLayer('satellite')}>
+              <Satellite size={12} aria-hidden="true" /> Satellite
+            </button>
+          </Tooltip>
+          <Tooltip content="Toggle hub geofence zone circles">
+            <button style={{ ...layerBtn(layers.geofences), display: 'inline-flex', alignItems: 'center', gap: 5 }} onClick={() => toggleLayer('geofences')}>
+              <CircleDot size={12} aria-hidden="true" /> Geofences
+            </button>
+          </Tooltip>
+          <Tooltip content="Show parcel density heat layer">
+            <button style={{ ...layerBtn(layers.heatmap), display: 'inline-flex', alignItems: 'center', gap: 5 }} onClick={() => toggleLayer('heatmap')}>
+              <Flame size={12} aria-hidden="true" /> Heatmap
+            </button>
+          </Tooltip>
+        </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 20px', borderBottom: '1px solid rgba(57,9,85,0.07)', flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 11, fontWeight: 700, color: '#9b82b2', textTransform: 'uppercase', letterSpacing: 0.4 }}>Admin Filters</span>
-        <select value={riderFilter} onChange={(e) => handleSelectRiderFilter(e.target.value)}
-          style={{ padding: '6px 12px', borderRadius: 8, fontSize: 11, fontWeight: 700, fontFamily: 'inherit', border: `1.5px solid ${riderFilter !== 'all' ? '#390955' : '#e0d5f0'}`, background: riderFilter !== 'all' ? '#390955' : 'white', color: riderFilter !== 'all' ? 'white' : '#555', cursor: 'pointer' }}>
-          <option value="all">All riders — show every path</option>
-          {riders.map(r => <option key={r.riderId} value={r.riderId}>{r.fullName} · {r.riderId}</option>)}
-        </select>
-        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
-          style={{ padding: '6px 12px', borderRadius: 8, fontSize: 11, fontWeight: 700, fontFamily: 'inherit', border: `1.5px solid ${statusFilter !== 'all' ? '#390955' : '#e0d5f0'}`, background: statusFilter !== 'all' ? '#390955' : 'white', color: statusFilter !== 'all' ? 'white' : '#555', cursor: 'pointer' }} aria-label="Filter parcels by shipment status">
-          <option value="all">All shipment statuses</option>
-          {PARCEL_STATUS_FILTERS.map(st => <option key={st} value={st}>{st}</option>)}
-        </select>
-        <select value={dutyFilter} onChange={(e) => setDutyFilter(e.target.value)}
-          style={{ padding: '6px 12px', borderRadius: 8, fontSize: 11, fontWeight: 700, fontFamily: 'inherit', border: `1.5px solid ${dutyFilter !== 'all' ? '#390955' : '#e0d5f0'}`, background: dutyFilter !== 'all' ? '#390955' : 'white', color: dutyFilter !== 'all' ? 'white' : '#555', cursor: 'pointer' }} aria-label="Filter riders by duty">
-          <option value="all">Any duty state</option>
-          <option value="on-duty">On Duty (app toggle active)</option>
-          <option value="off-duty">Off Duty</option>
-        </select>
-        <select value={locationFilter} onChange={(e) => setLocationFilter(e.target.value)}
-          style={{ padding: '6px 12px', borderRadius: 8, fontSize: 11, fontWeight: 700, fontFamily: 'inherit', border: `1.5px solid ${locationFilter !== 'all' ? '#390955' : '#e0d5f0'}`, background: locationFilter !== 'all' ? '#390955' : 'white', color: locationFilter !== 'all' ? 'white' : '#555', cursor: 'pointer' }} aria-label="Filter by city location">
-          <option value="all">All locations</option>
-          {availableCities.map(c => <option key={c} value={c}>{c}</option>)}
-        </select>
-        {(riderFilter !== 'all' || statusFilter !== 'all' || dutyFilter !== 'all' || locationFilter !== 'all') && (
-          <button onClick={() => { setRiderFilter('all'); setStatusFilter('all'); setDutyFilter('all'); setLocationFilter('all'); }}
-            style={{ padding: '6px 12px', borderRadius: 8, fontSize: 11, fontWeight: 700, fontFamily: 'inherit', border: '1.5px solid #e0d5f0', background: 'white', color: '#c2410c', cursor: 'pointer' }}>
-            Clear filters
-          </button>
-        )}
-        {riderFilter !== 'all' && <span style={{ fontSize: 11, color: '#9b82b2' }}>Showing 1 of {riders.length} riders</span>}
+        {/* Map Filters */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: '#9b82b2', textTransform: 'uppercase', letterSpacing: 0.4 }}>Filter Map</span>
+          <select
+            value={riderFilter}
+            onChange={(e) => handleSelectRiderFilter(e.target.value)}
+            style={{ padding: '6px 12px', borderRadius: 8, fontSize: 11, fontWeight: 700, fontFamily: 'inherit', border: `1.5px solid ${riderFilter !== 'all' ? '#390955' : '#e0d5f0'}`, background: riderFilter !== 'all' ? '#390955' : 'white', color: riderFilter !== 'all' ? 'white' : '#555', cursor: 'pointer' }}
+            aria-label="Filter map by rider"
+          >
+            <option value="all">All riders — show every path</option>
+            {riders.map(r => <option key={r.riderId} value={r.riderId}>{r.fullName} · {r.riderId}</option>)}
+          </select>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            style={{ padding: '6px 12px', borderRadius: 8, fontSize: 11, fontWeight: 700, fontFamily: 'inherit', border: `1.5px solid ${statusFilter !== 'all' ? '#390955' : '#e0d5f0'}`, background: statusFilter !== 'all' ? '#390955' : 'white', color: statusFilter !== 'all' ? 'white' : '#555', cursor: 'pointer' }}
+            aria-label="Filter parcels by shipment status"
+          >
+            <option value="all">All shipment statuses</option>
+            {PARCEL_STATUS_FILTERS.map(st => <option key={st} value={st}>{st}</option>)}
+          </select>
+          <select
+            value={locationFilter}
+            onChange={(e) => setLocationFilter(e.target.value)}
+            style={{ padding: '6px 12px', borderRadius: 8, fontSize: 11, fontWeight: 700, fontFamily: 'inherit', border: `1.5px solid ${locationFilter !== 'all' ? '#390955' : '#e0d5f0'}`, background: locationFilter !== 'all' ? '#390955' : 'white', color: locationFilter !== 'all' ? 'white' : '#555', cursor: 'pointer' }}
+            aria-label="Filter by city location"
+          >
+            <option value="all">All locations</option>
+            {availableCities.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+          {(riderFilter !== 'all' || statusFilter !== 'all' || locationFilter !== 'all') && (
+            <button
+              onClick={() => { setRiderFilter('all'); setStatusFilter('all'); setLocationFilter('all'); }}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 12px', borderRadius: 8, fontSize: 11, fontWeight: 700, fontFamily: 'inherit', border: '1px solid #cbd5e1', background: 'white', color: '#475569', cursor: 'pointer' }}
+            >
+              <X size={12} aria-hidden="true" /> Clear Filters
+            </button>
+          )}
+          {riderFilter !== 'all' && <span style={{ fontSize: 11, color: '#9b82b2' }}>Showing 1 of {riders.length} riders</span>}
+        </div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 0 }}>
@@ -490,8 +554,7 @@ export default function LiveRiderMap() {
               map={mapRef.current}
               rider={r}
               isSelected={selectedRider === r.riderId}
-              onSelect={(id) => { setSelectedHub(null); setSelectedRider(prev => prev === id ? null : id); }}
-              trafficOn={layers.traffic}
+              onSelect={(id) => handleSelectRider(selectedRider === id ? null : id)}
             />
           ))}
 
@@ -570,12 +633,12 @@ export default function LiveRiderMap() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
                 <div style={{ fontSize: 15, fontWeight: 800, color: '#1a0a2e', display: 'flex', alignItems: 'center', gap: 6 }}><VehicleIcon type={rider.vehicleType} size={16} /> {rider.fullName}</div>
                 <Tooltip content="Close rider details">
-                <button onClick={() => setSelectedRider(null)} aria-label="Close rider details" style={{ width: 22, height: 22, borderRadius: 6, border: '1.5px solid rgba(57,9,85,0.15)', background: 'white', cursor: 'pointer', color: '#9b82b2', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><X size={13} aria-hidden="true" /></button>
+                <button onClick={() => handleSelectRider(null)} aria-label="Close rider details" style={{ width: 22, height: 22, borderRadius: 6, border: '1.5px solid rgba(57,9,85,0.15)', background: 'white', cursor: 'pointer', color: '#9b82b2', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><X size={13} aria-hidden="true" /></button>
                 </Tooltip>
               </div>
               <div style={{ fontSize: 11, color: '#9b82b2', marginBottom: 12, fontFamily: 'monospace' }}>{rider.riderId}</div>
               <div style={statRow}><span style={{ color: '#888' }}>Vehicle Type</span><span style={{ fontWeight: 700 }}>{rider.vehicleType}</span></div>
-              <div style={statRow}><span style={{ color: '#888' }}>Live Status</span><span style={{ fontWeight: 700, color: '#16a34a' }}>● Moving • {rider.speedKmh || 30} km/h</span></div>
+              <div style={statRow}><span style={{ color: '#888' }}>Live Status</span><span style={{ fontWeight: 700, color: rider.hasRealGps ? '#16a34a' : '#b45309' }}>{rider.hasRealGps ? '● Live GPS position' : '● Approximate (city-level)'}</span></div>
               <div style={statRow}><span style={{ color: '#888' }}>Current Location</span><span style={{ fontWeight: 700 }}>{rider.city || '—'}</span></div>
               <div style={statRow}><span style={{ color: '#888' }}>Destination Hub</span><span style={{ fontWeight: 700, color: '#f37021' }}>{riderDestHub?.hubName || '—'}</span></div>
 

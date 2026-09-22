@@ -5,7 +5,7 @@
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
   background-color: #f4f1f8;
 }
 html, body, #root {
@@ -23,3 +23,41 @@ html, body, #root {
     scroll-behavior: auto !important;
   }
 }
+
+/* ── Unified Page & Container Layout Standards ────────────── */
+.yto-page-container {
+  width: 100%;
+  padding: 24px 32px;
+  background-color: var(--yto-bg-canvas, #f4f1f8);
+  min-height: 100%;
+}
+
+@media (max-width: 1440px) {
+  .yto-page-container {
+    padding: 20px 24px;
+  }
+}
+
+@media (max-width: 900px) {
+  .yto-page-container {
+    padding: 16px;
+  }
+}
+
+/* Clean, thin custom scrollbar for horizontal tables and feeds */
+.custom-table-scroll::-webkit-scrollbar {
+  height: 6px;
+  width: 6px;
+}
+.custom-table-scroll::-webkit-scrollbar-track {
+  background: #f1ecf8;
+  border-radius: 4px;
+}
+.custom-table-scroll::-webkit-scrollbar-thumb {
+  background: #d5cbe4;
+  border-radius: 4px;
+}
+.custom-table-scroll::-webkit-scrollbar-thumb:hover {
+  background: #b5a5cb;
+}
+

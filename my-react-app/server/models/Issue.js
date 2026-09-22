@@ -68,11 +68,6 @@ const IssueSchema = new mongoose.Schema({
     default: '',
     trim: true,
   },
-  accountCategory: {
-    type: String,
-    enum: ['REAL', 'DEMO'],
-    default: 'REAL',
-  },
   reporterRole: {
     type: String,
     enum: ['customer', 'seller', 'rider', 'guest'],

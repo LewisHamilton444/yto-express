@@ -75,6 +75,7 @@ function findChrome() {
     '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   ].filter(Boolean);
   for (const c of candidates) {
+    if (fs.existsSync(c)) return c;
     try { execFileSync(c, ['--version'], { stdio: 'ignore' }); return c; } catch {}
   }
   throw new Error('Chrome not found. Set CHROME_PATH to your chrome.exe.');

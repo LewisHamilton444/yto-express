@@ -6,14 +6,20 @@ import Badge from './components/ui/Badge';
 import PageHeader from './components/ui/PageHeader';
 import CardSectionHeader from './components/ui/CardSectionHeader';
 import CardFooter from './components/ui/CardFooter';
+import SectionCard from './components/ui/SectionCard';
+import DataTable from './components/ui/DataTable';
 import TableSkeleton from './components/ui/TableSkeleton';
 import { useToast } from './components/ui/useToast';
 import PaginationControls from './PaginationControls';
+import FilterBar from './components/ui/FilterBar';
+import EmptyState from './components/ui/EmptyState';
+import RefreshButton from './components/ui/RefreshButton';
+import ExportDropdown from './components/ui/ExportDropdown';
+import { exportToCSV, exportToExcel, exportToWord, exportToPDF } from './exportUtils';
 import {
   Eye, Search, ShieldAlert, X,
-  Camera, Tag, User, Hash, Package,
+  Camera, Tag, User, Hash, Package, Activity, Calendar,
 } from 'lucide-react';
-import { isDemoEmail } from './demoUtils';
 
 const STATUS_TONE = {
   'Open': 'red',
@@ -28,23 +34,36 @@ const CATEGORIES = [
   'Delayed Delivery',
   'Wrong Item Received',
   'Lost Package',
-  'Courier Behavior',
+  'Rider Behavior',
   'Incorrect Address',
   'Billing / Payment Issue',
   'Other',
 ];
 
-const STATUS_TABS = ['All', 'Open', 'Under Investigation', 'Resolved', 'Closed'];
+// Status filter options - rendered as a shared FilterBar.Select so this tab's
+// control bar matches the Customers / Sellers / Riders / All Parcels tables.
+const STATUS_OPTIONS = ['All', 'Open', 'Under Investigation', 'Resolved', 'Closed'];
 
 const TABLE_HEADERS = [
-  { label: 'Ticket ID', width: 'min-w-[140px]' },
-  { label: 'Type', width: 'min-w-[130px]' },
-  { label: 'Tracking ID', width: 'min-w-[150px]' },
-  { label: 'Reporter', width: 'min-w-[200px]' },
-  { label: 'Status', width: 'min-w-[120px]' },
-  { label: 'Date Reported', width: 'min-w-[160px]' },
+  { label: 'Ticket ID',     icon: Hash },
+  { label: 'Type',          icon: Tag },
+  { label: 'Tracking ID',   icon: Package },
+  { label: 'Reporter',      icon: User },
+  { label: 'Status',        icon: Activity },
+  { label: 'Date Reported', icon: Calendar },
+  { label: 'Actions',       icon: null },
 ];
-// Triage columns only. Product name/category, ETA, the REAL/DEMO badge, and
+
+const ISSUE_EXPORT_COLUMNS = [
+  { key: 'ticketId', label: 'Ticket ID' },
+  { key: 'category', label: 'Issue Type' },
+  { key: 'trackingNumber', label: 'Tracking ID' },
+  { key: 'reporterName', label: 'Reporter Name' },
+  { key: 'reporterContact', label: 'Reporter Contact' },
+  { key: 'status', label: 'Status' },
+  { key: 'createdAt', label: 'Date Reported' },
+];
+// Triage columns only. Product name/category, ETA, and
 // evidence-photo counts were removed from the grid — each still lives in the
 // View & Resolve detail modal, so triage no longer needs side-to-side
 // scrolling inside the page's max-width container.
@@ -62,6 +81,7 @@ export default function ManageIssues() {
   const [adminNotes, setAdminNotes] = useState('');
   const [newStatus, setNewStatus] = useState('Open');
   const [zoomedImage, setZoomedImage] = useState(null);
+  const [lastUpdated, setLastUpdated] = useState('');
   const toast = useToast();
 
   const { lastEvent } = useSSE();
@@ -75,6 +95,7 @@ export default function ManageIssues() {
       if (!res.ok) throw new Error(`Server responded ${res.status}`);
       const data = await res.json();
       setIssues(Array.isArray(data) ? data : []);
+      setLastUpdated(new Date().toLocaleTimeString());
     } catch (e) {
       console.error('Error fetching issues:', e);
       setIssues([]);
@@ -157,172 +178,225 @@ export default function ManageIssues() {
   const indexOfLast = currentPage * rowsPerPage;
   const currentIssues = filteredIssues.slice(indexOfLast - rowsPerPage, indexOfLast);
 
+  const formatDateTime = (dateStr) => {
+    if (!dateStr) return '-';
+    return new Date(dateStr).toLocaleString('en-PH', {
+      year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+    });
+  };
+
+  const hasActiveFilters = !!search || categoryFilter !== 'All Categories' || statusFilter !== 'All';
+
+  const handleClearFilters = () => {
+    setSearch('');
+    setCategoryFilter('All Categories');
+    setStatusFilter('All');
+    setCurrentPage(1);
+  };
+
+  const handleExport = (format) => {
+    const exportData = filteredIssues.map(i => ({
+      ...i,
+      reporterContact: i.reporterEmail || i.reporterPhone || 'Mobile App',
+      createdAt: formatDateTime(i.createdAt),
+    }));
+    const filename = `yto_issues_${new Date().toISOString().slice(0, 10)}`;
+    if (format === 'excel') {
+      exportToExcel(exportData, ISSUE_EXPORT_COLUMNS, filename);
+    } else if (format === 'word') {
+      exportToWord(exportData, ISSUE_EXPORT_COLUMNS, filename, 'Customer Support & Issues Report');
+    } else if (format === 'pdf') {
+      exportToPDF(exportData, ISSUE_EXPORT_COLUMNS, filename, 'Customer Support & Issues Report');
+    } else {
+      exportToCSV(exportData, ISSUE_EXPORT_COLUMNS, filename);
+    }
+  };
+
   return (
-    <div className="p-8 max-w-7xl mx-auto">
+    <div className="p-6 md:p-8 w-full">
     <div className="space-y-6">
       <PageHeader
         title="Customer Support & Issues"
         subtitle="Manage customer parcel issue reports, damaged goods disputes, and investigation tickets."
         breadcrumb={['Dashboard', 'Support', 'Issues']}
+        actions={
+          <div className="flex items-center gap-2.5 flex-wrap">
+            {lastUpdated && <span className="text-[11px] text-slate-400 font-mono">Updated {lastUpdated}</span>}
+            <RefreshButton
+              onClick={fetchIssues}
+              isRefreshing={loading}
+            />
+          </div>
+        }
       />
 
-
       {/* Main table card */}
-      <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
-        <CardSectionHeader
-          icon={ShieldAlert}
-          title="Support Tickets"
-          subtitle={`${filteredIssues.length} of ${issues.length} records — parcel issue reports and investigations`}
-        />
-
-        {/* Control bar */}
-        <div className="flex flex-row flex-wrap items-center justify-between gap-3 px-6 py-4 border-b border-slate-100">
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="relative">
-              <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />                <input
-                  type="text"
-                  aria-label="Search tickets by ticket number, tracking number, or reporter"
-                  placeholder="Search ticket #, tracking #, reporter..."
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                className="pl-10 pr-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 w-72"
-              />
-            </div>
-            <select
+      <SectionCard
+        noPadding
+        icon={ShieldAlert}
+        title="Support Tickets"
+        subtitle={`${filteredIssues.length} of ${issues.length} records — parcel issue reports and investigations`}
+        className="w-full"
+        footer={(
+          <CardFooter
+            resultsLabel={`Showing ${filteredIssues.length} of ${issues.length} results`}
+            pills={[
+              { label: 'Open', value: stats.open, tone: 'red' },
+              { label: 'Investigating', value: stats.investigating, tone: 'amber' },
+              { label: 'Resolved', value: stats.resolved, tone: 'green' },
+            ]}
+          />
+        )}
+      >
+        {/* Control bar - shared FilterBar, same control set as the other ledgers */}
+        <FilterBar>
+          <FilterBar.Group>
+            <FilterBar.Search
+              aria-label="Search tickets by ticket number, tracking number, or reporter"
+              placeholder="Search ticket #, tracking #, reporter..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
+            <FilterBar.Select
+              aria-label="Filter by issue type"
               value={categoryFilter}
               onChange={e => setCategoryFilter(e.target.value)}
-              className="px-3 py-2 border border-slate-200 rounded-xl text-sm bg-white cursor-pointer font-semibold text-brand-purple"
             >
               {CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-            </select>
-
-            {/* Status filter tabs */}
-            <div className="flex items-center gap-2 flex-wrap">
-              {STATUS_TABS.map(st => {
-                const active = statusFilter === st;
-                return (
-                  <button
-                    key={st}
-                    onClick={() => setStatusFilter(st)}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 7, padding: '9px 15px',
-                      borderRadius: 8, border: 'none', fontSize: 12, fontWeight: 700,
-                      cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.2s ease',
-                      background: active ? '#390955' : '#f1f5f9',
-                      color: active ? '#ffffff' : '#475569',
-                    }}
-                  >
-                    {st}
-                  </button>
-                );
-              })}
-            </div>
-
-            <span className="text-xs text-slate-400 whitespace-nowrap">{filteredIssues.length} results</span>
-          </div>
-        </div>
-
-        {/* Custom scroll styling */}
-        <style>{`
-          .custom-issues-table-scroll {
-            overflow-x: auto;
-            -webkit-overflow-scrolling: touch;
-          }
-          .custom-issues-table-scroll::-webkit-scrollbar {
-            height: 7px;
-          }
-          .custom-issues-table-scroll::-webkit-scrollbar-track {
-            background: #f1f5f9;
-            border-radius: 4px;
-          }
-          .custom-issues-table-scroll::-webkit-scrollbar-thumb {
-            background: #cbd5e1;
-            border-radius: 4px;
-          }
-          .custom-issues-table-scroll::-webkit-scrollbar-thumb:hover {
-            background: #94a3b8;
-          }
-        `}</style>
+            </FilterBar.Select>
+            <FilterBar.Select
+              aria-label="Filter by status"
+              value={statusFilter}
+              onChange={e => setStatusFilter(e.target.value)}
+            >
+              {STATUS_OPTIONS.map(st => <option key={st} value={st}>{st === 'All' ? 'All Statuses' : st}</option>)}
+            </FilterBar.Select>
+            <FilterBar.Count count={filteredIssues.length} label="results" />
+          </FilterBar.Group>
+          <FilterBar.Actions>
+            {hasActiveFilters && (
+              <button
+                onClick={handleClearFilters}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white text-[#475569] text-xs font-bold border border-[#cbd5e1] hover:brightness-105 active:scale-95 transition-all shadow-xs cursor-pointer"
+              >
+                <X size={13} aria-hidden="true" /> Clear Filters
+              </button>
+            )}
+            <ExportDropdown
+              onExport={handleExport}
+              disabled={filteredIssues.length === 0}
+            />
+          </FilterBar.Actions>
+        </FilterBar>
 
         {/* Tickets Table */}
-        <div className="overflow-x-auto w-full custom-issues-table-scroll rounded-lg border border-slate-100">
-          <table className="w-full border-collapse text-left">
-            <thead className="bg-[#390955] text-white">
+        <div style={{ padding: '8px 24px 24px' }}>
+          <DataTable className="min-w-[1060px]" containerClassName="border border-[#e4d8f2] rounded-xl">
+            <DataTable.Head>
               <tr>
-                {TABLE_HEADERS.map(h => (
-                  <th
+                {TABLE_HEADERS.map((h, idx) => (
+                  <DataTable.Th
                     key={h.label}
-                    className={`whitespace-nowrap px-4 py-3.5 text-xs font-semibold uppercase tracking-wider text-left ${h.width}`}
+                    className="whitespace-nowrap"
+                    stickyLeft={idx === 0}
+                    align={idx === TABLE_HEADERS.length - 1 ? 'right' : 'left'}
                   >
-                    {h.label}
-                  </th>
+                    {h.label === 'Actions' ? (
+                      <span>{h.label}</span>
+                    ) : (
+                      <span className="flex items-center gap-1.5"><h.icon size={12} className="text-slate-400" />{h.label}</span>
+                    )}
+                  </DataTable.Th>
                 ))}
-                <th className="whitespace-nowrap px-4 py-3.5 text-xs font-semibold uppercase tracking-wider text-center min-w-[140px]">
-                  Action
-                </th>
               </tr>
-            </thead>
+            </DataTable.Head>
             <tbody>
               {loading ? (
-                <TableSkeleton rows={6} columns={TABLE_HEADERS.length + 1} />
+                <TableSkeleton rows={6} columns={TABLE_HEADERS.length} />
               ) : currentIssues.length === 0 ? (
                 <tr>
-                  <td colSpan={TABLE_HEADERS.length + 1} className="py-12 text-sm text-center text-slate-400">
-                    {issues.length === 0
-                      ? 'No active production records found.'
-                      : 'No records match the current filters.'}
+                  <td colSpan={TABLE_HEADERS.length} style={{ padding: '32px 16px' }}>
+                    {issues.length === 0 ? (
+                      <EmptyState
+                        icon={ShieldAlert}
+                        title="No issue tickets yet"
+                        description="Tickets appear here when a customer reports a problem from the mobile app."
+                      />
+                    ) : (
+                      <EmptyState
+                        icon={Search}
+                        title="No tickets match your search"
+                        description="Try a different ticket number, tracking number, or reporter, then clear the type or status filter if needed."
+                        action={
+                          <button
+                            onClick={handleClearFilters}
+                            className="h-[34px] px-3.5 bg-[#390955] text-white text-xs font-bold rounded-lg hover:brightness-110 cursor-pointer shadow-sm"
+                          >
+                            Clear Filters
+                          </button>
+                        }
+                      />
+                    )}
                   </td>
                 </tr>
               ) : (
-                currentIssues.map((issue, idx) => {
-                  const dateStr = issue.createdAt ? new Date(issue.createdAt).toLocaleString() : 'N/A';
-                  return (
-                    <tr key={issue._id || idx} className="border-b border-slate-100 text-[13px] transition hover:bg-slate-50">
-                      <td className="whitespace-nowrap px-4 py-3.5 font-extrabold text-brand-purple font-mono">{issue.ticketId}</td>
-                      <td className="whitespace-nowrap px-4 py-3.5 font-semibold text-gray-700">{issue.category}</td>
-                      <td className="whitespace-nowrap px-4 py-3.5 font-bold text-brand-orange">{issue.trackingNumber}</td>
-                      <td className="whitespace-nowrap px-4 py-3.5">
-                        <div className="font-bold text-gray-800">{issue.reporterName || 'Customer'}</div>
-                        <div className="text-[11px] text-gray-500">{issue.reporterEmail || issue.reporterPhone || 'Mobile App'}</div>
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3.5"><Badge tone={STATUS_TONE[issue.status] || 'red'} hint={{ Open: 'Reported — awaiting first action', Investigating: 'Being investigated by operations staff', Resolved: 'Closed after a resolution was confirmed' }[issue.status]}>{issue.status}</Badge></td>
-                      <td className="whitespace-nowrap px-4 py-3.5 text-xs text-gray-500">{dateStr}</td>
-                      <td className="whitespace-nowrap px-4 py-3.5 text-center">
-                        <button
-                          onClick={() => handleOpenDetail(issue)}
-                          className="inline-flex items-center gap-1.5 rounded-md bg-brand-orange px-3 py-1.5 text-xs font-bold text-white transition hover:bg-orange-600 active:scale-95"
-                        >
-                          <Eye size={13} /> View &amp; Resolve
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })
+                currentIssues.map((issue, idx) => (
+                  <DataTable.Row
+                    key={issue._id || idx}
+                    onClick={() => handleOpenDetail(issue)}
+                  >
+                    <DataTable.Cell stickyLeft className="font-mono text-xs font-bold text-brand-purple whitespace-nowrap">
+                      {issue.ticketId}
+                    </DataTable.Cell>
+                    <DataTable.Cell className="text-xs font-semibold text-gray-700 whitespace-nowrap">
+                      {issue.category}
+                    </DataTable.Cell>
+                    <DataTable.Cell className="font-mono text-xs font-bold text-brand-orange whitespace-nowrap">
+                      {issue.trackingNumber}
+                    </DataTable.Cell>
+                    <DataTable.Cell className="whitespace-nowrap">
+                      <div className="font-bold text-gray-800">{issue.reporterName || 'Customer'}</div>
+                      <div className="text-[11px] text-gray-500">{issue.reporterEmail || issue.reporterPhone || 'Mobile App'}</div>
+                    </DataTable.Cell>
+                    <DataTable.Cell className="whitespace-nowrap">
+                      <Badge tone={STATUS_TONE[issue.status] || 'red'} hint={{ Open: 'Reported — awaiting first action', Investigating: 'Being investigated by operations staff', Resolved: 'Closed after a resolution was confirmed' }[issue.status]}>
+                        {issue.status}
+                      </Badge>
+                    </DataTable.Cell>
+                    <DataTable.Cell tabularNums className="text-xs text-gray-500 whitespace-nowrap">
+                      {formatDateTime(issue.createdAt)}
+                    </DataTable.Cell>
+                    <DataTable.Cell align="right" className="whitespace-nowrap" onClick={e => e.stopPropagation()}>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleOpenDetail(issue);
+                        }}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-purple-200 text-brand-purple text-xs font-bold hover:bg-purple-50 transition opacity-80 group-hover:opacity-100 group-focus-within:opacity-100 whitespace-nowrap"
+                      >
+                        <Eye size={12} /> View Details
+                      </button>
+                    </DataTable.Cell>
+                  </DataTable.Row>
+                ))
               )}
             </tbody>
-          </table>
+          </DataTable>
+
+          {/* Pagination inside Card */}
+          {!loading && filteredIssues.length > 0 && (
+            <div className="pt-4">
+              <PaginationControls
+                currentPage={currentPage}
+                totalRecords={filteredIssues.length}
+                rowsPerPage={rowsPerPage}
+                onPageChange={setCurrentPage}
+                onRowsPerPageChange={(n) => { setRowsPerPage(n); setCurrentPage(1); }}
+              />
+            </div>
+          )}
         </div>
-
-        <CardFooter
-          resultsLabel={`Showing ${filteredIssues.length} of ${issues.length} results`}
-          pills={[
-            { label: 'Open', value: stats.open, tone: 'red' },
-            { label: 'Investigating', value: stats.investigating, tone: 'amber' },
-            { label: 'Resolved', value: stats.resolved, tone: 'green' },
-          ]}
-        />
-      </div>
-
-      {/* Pagination */}
-      {!loading && filteredIssues.length > 0 && (
-        <PaginationControls
-          currentPage={currentPage}
-          totalRecords={filteredIssues.length}
-          rowsPerPage={rowsPerPage}
-          onPageChange={setCurrentPage}
-          onRowsPerPageChange={(n) => { setRowsPerPage(n); setCurrentPage(1); }}
-        />
-      )}
+      </SectionCard>
     </div>
 
       {/* Ticket Detail & Resolution Modal — outside the space-y-6 flow group
@@ -352,7 +426,7 @@ export default function ManageIssues() {
           <div className="max-h-[70vh] overflow-y-auto p-6">
             <div className="mb-4 grid grid-cols-1 gap-3.5 sm:grid-cols-2">
               <div className="rounded-lg bg-brand-purple-50 p-3">
-                <div className="flex items-center gap-1.5 text-[11px] font-bold text-brand-muted"><Package size={12} /> PARCEL TRACKING NUMBER</div>
+                <div className="flex items-center gap-1.5 text-[11px] font-bold text-brand-muted"><Package size={12} /> TRACKING ID</div>
                 <div className="mt-0.5 text-[15px] font-extrabold text-brand-orange">{selectedIssue.trackingNumber}</div>
               </div>
               <div className="rounded-lg bg-brand-purple-50 p-3">
@@ -375,18 +449,6 @@ export default function ManageIssues() {
             <div className="mb-4 rounded-lg border border-brand-purple-200 bg-white p-3.5">
               <div className="mb-1.5 flex items-center justify-between">
                 <div className="flex items-center gap-1.5 text-xs font-bold text-brand-purple"><User size={13} /> Reporter Information</div>
-                <span style={{
-                  fontSize: '9px',
-                  fontWeight: 800,
-                  padding: '2px 7px',
-                  borderRadius: '5px',
-                  background: (selectedIssue.accountCategory === 'DEMO' || isDemoEmail(selectedIssue.reporterEmail)) ? '#f3f4f6' : '#ecfdf5',
-                  color: (selectedIssue.accountCategory === 'DEMO' || isDemoEmail(selectedIssue.reporterEmail)) ? '#6b7280' : '#059669',
-                  border: `1px solid ${(selectedIssue.accountCategory === 'DEMO' || isDemoEmail(selectedIssue.reporterEmail)) ? '#d1d5db' : '#a7f3d0'}`,
-                  textTransform: 'uppercase',
-                }}>
-                  {(selectedIssue.accountCategory === 'DEMO' || isDemoEmail(selectedIssue.reporterEmail)) ? 'DEMO' : 'REAL'}
-                </span>
               </div>
               <div className="grid grid-cols-1 gap-2 text-xs sm:grid-cols-2">
                 <div><span className="text-gray-500">Name:</span> <strong>{selectedIssue.reporterName || 'Customer'}</strong></div>
@@ -451,7 +513,7 @@ export default function ManageIssues() {
                   <label className="mb-1 block text-[11px] font-bold text-gray-600">ADMIN INVESTIGATION NOTES &amp; RESPONSE (Sent to Mobile User)</label>
                   <textarea
                     rows={3}
-                    placeholder="Enter resolution notes, refund confirmation, or courier action taken..."
+                    placeholder="Enter resolution notes, refund confirmation, or rider action taken..."
                     value={adminNotes}
                     onChange={e => setAdminNotes(e.target.value)}
                     className="w-full resize-y rounded-md border-[1.5px] border-brand-purple-300 p-2.5 text-xs outline-none focus:ring-2 focus:ring-[#f37021] focus:border-brand-purple"

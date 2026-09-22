@@ -13,11 +13,11 @@
 @media (max-width: 1440px) {
   .ad-sidebar { width: 232px; }
   .ad-main { margin-left: 232px; }
+  .ad-wrapper.ad-sidebar--collapsed .ad-sidebar { width: 72px; }
   .ad-wrapper.ad-sidebar--collapsed .ad-main { margin-left: 72px; }
 }
 
-/* Ultra-wide: cap the line length like the dashboard root does, so
-   full-bleed inline pages don't stretch edge-to-edge on QHD+. */
+/* Ultra-wide: keep full width across large viewports. */
 @media (min-width: 2000px) {
-  .ad-main > div[style] { max-width: 1760px; }
+  .ad-main > div[style] { width: 100%; }
 }

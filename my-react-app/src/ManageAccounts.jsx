@@ -1,11 +1,21 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { apiFetch } from './services/api';
 import Modal from './components/ui/Modal';
+import DataTable from './components/ui/DataTable';
 import TableSkeleton from './components/ui/TableSkeleton';
 import EmptyState from './components/ui/EmptyState';
+import PageHeader from './components/ui/PageHeader';
+import Badge from './components/ui/Badge';
+import SectionCard from './components/ui/SectionCard';
+import StatCard from './components/ui/StatCard';
 import { useToast } from './components/ui/useToast';
-import { Users, AlertTriangle, ClipboardList, Package } from 'lucide-react';
-import { isDemoEmail } from './demoUtils';
+import CardFooter from './components/ui/CardFooter';
+import FilterBar from './components/ui/FilterBar';
+import PaginationControls from './PaginationControls';
+import RefreshButton from './components/ui/RefreshButton';
+import ExportDropdown from './components/ui/ExportDropdown';
+import { exportToCSV, exportToExcel, exportToWord, exportToPDF } from './exportUtils';
+import { Hash, User, Mail, Shield, ShieldCheck, Activity, Calendar, X, Users, ClipboardList, Package } from 'lucide-react';
 
 const ROLE_LABELS = {
   super_admin:  'Super Admin',
@@ -19,11 +29,27 @@ const ROLE_COLORS = {
   hub_receiver: { bg: '#fef3c7', color: '#92400e' },
 };
 
-const MOCK_ACCOUNTS = [
-  { _id: 'mock-1', adminId: 'YTOA20260001', name: 'Super Admin',      email: 'superadmin@ytoexpress.com', role: 'super_admin',  status: 'Active',      accountCategory: 'REAL', createdDate: '2026-01-01' },
-  { _id: 'mock-2', adminId: 'YTOA20260002', name: 'Operations Staff', email: 'staff@ytoexpress.com',      role: 'staff',        status: 'Active',      accountCategory: 'REAL', createdDate: '2026-01-01' },
-  { _id: 'mock-3', adminId: 'YTOA20260003', name: 'Hub Receiver',     email: 'hub@ytoexpress.com',        role: 'hub_receiver', status: 'Active',      accountCategory: 'REAL', createdDate: '2026-01-01' },
+const TABLE_HEADERS = [
+  { label: 'Admin ID', icon: Hash },
+  { label: 'Full Admin Name', icon: User },
+  { label: 'Email Address', icon: Mail },
+  { label: 'Role', icon: Shield },
+  { label: 'Status', icon: Activity },
+  { label: 'Date Created', icon: Calendar },
+  { label: 'Actions', icon: null },
 ];
+
+const ACCOUNT_EXPORT_COLUMNS = [
+  { key: 'adminId', label: 'Admin ID' },
+  { key: 'name', label: 'Full Admin Name' },
+  { key: 'email', label: 'Email Address' },
+  { key: 'role', label: 'Role' },
+  { key: 'status', label: 'Status' },
+  { key: 'createdDate', label: 'Date Created' },
+];
+
+// No local fallback rows: an empty or unreachable accounts collection renders
+// its error/empty state instead of impersonating placeholder admin people.
 
 export default function ManageAccounts() {
   const [accounts,     setAccounts]     = useState([]);
@@ -31,7 +57,8 @@ export default function ManageAccounts() {
   const [searchTerm,   setSearchTerm]   = useState('');
   const [roleFilter,   setRoleFilter]   = useState('All');
   const [statusFilter, setStatusFilter] = useState('All');
-  const [categoryFilter, setCategoryFilter] = useState('All');
+  const [currentPage,   setCurrentPage]  = useState(1);
+  const [rowsPerPage,   setRowsPerPage]  = useState(10);
   const [showModal,    setShowModal]    = useState(false);
   const [editingAccount, setEditingAccount] = useState(null);
   const [showDeactivateConfirm, setShowDeactivateConfirm] = useState(null);
@@ -44,20 +71,22 @@ export default function ManageAccounts() {
   // ── Fetch all accounts on mount ──────────────────────────────────────────
   const flash = useCallback((msg, type = 'success') => toast(msg, type === 'error' ? 'error' : 'success'), [toast]);
 
+  const [fetchError,    setFetchError]    = useState('');
+  const [lastUpdated,   setLastUpdated]   = useState(() => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+
   const fetchAccounts = useCallback(async () => {
     setLoading(true);
+    setFetchError('');
     try {
       const res = await apiFetch('/accounts');
       if (!res.ok) throw new Error(`Server responded ${res.status}`);
       const data = await res.json();
-      if (Array.isArray(data) && data.length > 0) {
-        setAccounts(data);
-      } else {
-        setAccounts(MOCK_ACCOUNTS);
-      }
+      setAccounts(Array.isArray(data) ? data : []);
+      setLastUpdated(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
     } catch {
-      setAccounts(MOCK_ACCOUNTS);
-      flash('Could not reach server. Showing local accounts.', 'error');
+      setAccounts([]);
+      setFetchError('Could not reach the accounts list. Check your connection, then refresh to try again.');
+      flash('Could not reach the accounts list. Please refresh to try again.', 'error');
     } finally {
       setLoading(false);
     }
@@ -158,25 +187,43 @@ export default function ManageAccounts() {
                         (a.adminId && a.adminId.toLowerCase().includes(term));
     const matchRole   = roleFilter   === 'All' || a.role   === roleFilter;
     const matchStatus = statusFilter === 'All' || a.status === statusFilter;
-    const cat = a.accountCategory || (isDemoEmail(a.email) ? 'DEMO' : 'REAL');
-    const matchCat    = categoryFilter === 'All' || cat === categoryFilter;
-    return matchSearch && matchRole && matchStatus && matchCat;
+    return matchSearch && matchRole && matchStatus;
   });
 
+  // Page slice - one page at a time, same as the other ledgers. safePage clamps
+  // the page when a filter change shrinks the result set below it.
+  const totalPages = Math.max(1, Math.ceil(filtered.length / rowsPerPage));
+  const safePage = Math.min(currentPage, totalPages);
+  const pageRows = filtered.slice((safePage - 1) * rowsPerPage, safePage * rowsPerPage);
+
+  const handleClearFilters = () => {
+    setSearchTerm('');
+    setRoleFilter('All');
+    setStatusFilter('All');
+  };
+
+  const hasActiveFilters = Boolean(searchTerm || roleFilter !== 'All' || statusFilter !== 'All');
+
+  const handleExport = (format) => {
+    const exportData = filtered.map(a => ({
+      ...a,
+      role: ROLE_LABELS[a.role] || a.role,
+    }));
+    const title = 'Accounts Directory';
+    const filename = 'yto_accounts';
+    if (format === 'csv') exportToCSV(exportData, ACCOUNT_EXPORT_COLUMNS, filename);
+    else if (format === 'excel') exportToExcel(exportData, ACCOUNT_EXPORT_COLUMNS, filename, title);
+    else if (format === 'word') exportToWord(exportData, ACCOUNT_EXPORT_COLUMNS, filename, title);
+    else if (format === 'pdf') exportToPDF(exportData, ACCOUNT_EXPORT_COLUMNS, filename, title);
+  };
+
+  useEffect(() => { setCurrentPage(1); }, [searchTerm, roleFilter, statusFilter]);
   // ── Styles ────────────────────────────────────────────────────────────────
   const s = {
-    main:        { flex: 1, padding: '24px 30px 48px', minHeight: '100vh', background: '#f0ecf7', fontFamily: "'DM Sans', sans-serif", color: '#390955' },
-    header:      { marginBottom: '24px', background: 'white', padding: '20px 24px', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgba(57,9,85,0.07)' },
-    h1:          { fontSize: '22px', fontWeight: 800, color: '#390955', margin: 0, letterSpacing: '-0.5px' },
-    subtitle:    { color: '#a890c0', fontSize: '13px', margin: '4px 0 0', fontWeight: 500 },
-    panel:       { background: 'white', border: '1px solid rgba(57,9,85,0.08)', borderRadius: '12px', marginBottom: '20px', boxShadow: '0 4px 12px rgba(57,9,85,0.04)', overflow: 'hidden' },
-    panelHeader: { padding: '16px 24px', background: '#390955', display: 'flex', alignItems: 'center', justifyContent: 'space-between' },
-    panelHeading:{ fontSize: '15px', fontWeight: 700, color: 'white', margin: 0 },
-    panelBody:   { padding: '24px' },
     input:       { padding: '10px 14px', background: 'white', border: '1.5px solid #e4d8f2', borderRadius: '10px', color: '#390955', fontSize: '13px', outline: 'none', width: '100%', boxSizing: 'border-box', fontFamily: 'inherit' },
     select:      { padding: '10px 14px', background: 'white', border: '1.5px solid #e4d8f2', borderRadius: '10px', color: '#390955', fontSize: '13px', outline: 'none', width: '100%', boxSizing: 'border-box', fontFamily: 'inherit', appearance: 'none', backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23390955' stroke-width='2.5'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E\")", backgroundRepeat: 'no-repeat', backgroundPosition: 'calc(100% - 12px) center', paddingRight: '32px' },
     table:       { width: '100%', borderCollapse: 'collapse', fontSize: '13px' },
-    th:          { padding: '14px 16px', textAlign: 'left', fontWeight: 700, color: 'white', background: '#390955', textTransform: 'uppercase', fontSize: '11px', letterSpacing: '0.5px' },
+    th:          { padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#64748b', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', textTransform: 'uppercase', fontSize: '11px', letterSpacing: '0.05em' },
     td:          { padding: '14px 16px', color: '#390955', borderBottom: '1px solid #f3edfb', verticalAlign: 'middle' },
     btnPrimary:  { padding: '9px 18px', borderRadius: '9px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', background: '#f37021', color: 'white', border: 'none', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: '6px' },
     btnOutline:  { padding: '7px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', background: 'white', color: '#390955', border: '1.5px solid #e4d8f2', fontFamily: 'inherit' },
@@ -187,176 +234,263 @@ export default function ManageAccounts() {
   };
 
   const RoleBadge = ({ role }) => {
-    const c = ROLE_COLORS[role] || { bg: '#f3f3f3', color: '#555' };
-    return <span style={{ fontSize: '10px', fontWeight: 700, padding: '3px 9px', borderRadius: '100px', background: c.bg, color: c.color, textTransform: 'uppercase', letterSpacing: '0.4px' }}>{ROLE_LABELS[role] || role}</span>;
+    const toneMap = {
+      super_admin: 'purple',
+      staff: 'blue',
+      hub_receiver: 'amber',
+    };
+    return <Badge tone={toneMap[role] || 'slate'}>{ROLE_LABELS[role] || role}</Badge>;
   };
 
   const StatusBadge = ({ status }) => (
-    <span style={{ fontSize: '11px', fontWeight: 700, padding: '4px 10px', borderRadius: '100px', background: status === 'Active' ? '#d1fae5' : '#fee2e2', color: status === 'Active' ? '#065f46' : '#991b1b' }}>
+    <Badge tone={status === 'Active' ? 'green' : 'red'}>
       {status}
-    </span>
+    </Badge>
   );
 
-  const CategoryBadge = ({ category, email }) => {
-    const isDemo = category === 'DEMO' || (category !== 'REAL' && isDemoEmail(email));
-    return (
-      <span style={{
-        fontSize: '10px',
-        fontWeight: 800,
-        padding: '3px 8px',
-        borderRadius: '6px',
-        background: isDemo ? '#f3f4f6' : '#ecfdf5',
-        color: isDemo ? '#6b7280' : '#059669',
-        border: `1px solid ${isDemo ? '#d1d5db' : '#a7f3d0'}`,
-        textTransform: 'uppercase',
-      }}>
-        {isDemo ? 'DEMO' : 'REAL'}
-      </span>
-    );
-  };
-
   return (
-    <div style={s.main}>
-      <header style={s.header}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-          <div>
-            <h1 style={s.h1}>Manage Accounts</h1>
-            <p style={s.subtitle}>Create and manage Staff and Hub Receiver accounts</p>
+    <div className="p-6 md:p-8 w-full">
+      <div className="space-y-6">
+      <PageHeader
+        title="Manage Accounts"
+        subtitle="Create and manage Staff and Hub Receiver accounts"
+        breadcrumb={['Dashboard', 'Manage Accounts']}
+        actions={
+          <div className="flex items-center gap-3">
+            {lastUpdated && (
+              <span className="text-xs text-slate-400 font-medium">Updated {lastUpdated}</span>
+            )}
+            <RefreshButton onClick={fetchAccounts} isRefreshing={loading} />
+            <button style={s.btnPrimary} onClick={openAddModal}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Add Account
+            </button>
           </div>
-          <button style={s.btnPrimary} onClick={openAddModal}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            Add Account
-          </button>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '12px', borderTop: '1px solid #f3eff7', paddingTop: '10px' }}>
-          {['Dashboard', 'Manage Accounts'].map((item, i, arr) => (
-            <React.Fragment key={item}>
-              <span style={{ fontSize: '12px', color: i === arr.length - 1 ? '#390955' : '#a890c0', fontWeight: i === arr.length - 1 ? 700 : 500 }}>{item}</span>
-              {i < arr.length - 1 && <span style={{ fontSize: '11px', color: '#dcd3e8' }}>/</span>}
-            </React.Fragment>
-          ))}
-        </div>
-      </header>
+        }
+      />
 
       {/* Stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr 1fr', marginBottom: '20px', background: 'white', border: '1px solid #d5cbe4', borderRadius: '12px', overflow: 'hidden' }}>
-        {[
-          { label: 'Total Accounts', value: accounts.length,                                        color: '#390955', accent: true },
-          { label: 'Staff',          value: accounts.filter(a => a.role === 'staff').length,        color: '#1e5f9e', accent: false },
-          { label: 'Hub Receivers',  value: accounts.filter(a => a.role === 'hub_receiver').length, color: '#92400e', accent: false },
-          { label: 'Active',         value: accounts.filter(a => a.status === 'Active').length,     color: '#065f46', accent: false },
-        ].map((stat, i) => (
-          <div key={stat.label} style={{ padding: '14px 20px', borderLeft: i === 0 ? 'none' : '1px solid #e8e1f2', background: stat.accent ? '#faf7fd' : 'white' }}>
-            <div style={{ fontSize: '11px', fontWeight: 800, color: '#a890c0', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{stat.label}</div>
-            <div style={{ fontSize: stat.accent ? '26px' : '22px', fontWeight: 800, color: stat.color, lineHeight: 1, marginTop: '3px' }}>{stat.value}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* Filters */}
-      <div style={s.panel}>
-        <div style={s.panelHeader}><h2 style={s.panelHeading}>Search & Filter</h2></div>
-        <div style={s.panelBody}>
-          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: '16px' }}>
-            <div><label style={s.label}>Search Admin, ID, or Email</label><input style={s.input} placeholder="Type to search..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} /></div>
-            <div><label style={s.label}>Category</label>
-              <select style={s.select} value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}>
-                <option value="All">All Categories</option>
-                <option value="REAL">Real Accounts</option>
-                <option value="DEMO">Demo Accounts</option>
-              </select>
-            </div>
-            <div><label style={s.label}>Role</label>
-              <select style={s.select} value={roleFilter} onChange={e => setRoleFilter(e.target.value)}>
-                <option value="All">All Roles</option>
-                <option value="super_admin">Super Admin</option>
-                <option value="staff">Staff</option>
-                <option value="hub_receiver">Hub Receiver</option>
-              </select>
-            </div>
-            <div><label style={s.label}>Status</label>
-              <select style={s.select} value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
-                <option value="All">All Statuses</option>
-                <option value="Active">Active</option>
-                <option value="Deactivated">Deactivated</option>
-              </select>
-            </div>
-          </div>
-        </div>
-      </div>
+      <StatCard.Grid cols={4} className="mb-6">
+        <StatCard
+          label="Total Accounts"
+          value={accounts.length}
+          sub="Registered admin personnel"
+          tone="purple"
+          trend="Total"
+          trendTone="neutral"
+        />
+        <StatCard
+          label="Staff"
+          value={accounts.filter(a => a.role === 'staff').length}
+          sub="Operations and logistics staff"
+          tone="blue"
+          trend="Staff"
+          trendTone="neutral"
+        />
+        <StatCard
+          label="Hub Receivers"
+          value={accounts.filter(a => a.role === 'hub_receiver').length}
+          sub="Sorting facility personnel"
+          tone="orange"
+          trend="Receivers"
+          trendTone="neutral"
+        />
+        <StatCard
+          label="Active Accounts"
+          value={accounts.filter(a => a.status === 'Active').length}
+          sub={`${accounts.filter(a => a.status !== 'Active').length} deactivated`}
+          tone="emerald"
+          trend={accounts.filter(a => a.status === 'Active').length > 0 ? "Healthy" : "None"}
+          trendTone="positive"
+        />
+      </StatCard.Grid>
 
       {/* Table */}
-      <div style={s.panel}>
-        <div style={s.panelHeader}>
-          <h2 style={s.panelHeading}>Account Directory</h2>
-          <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.65)', fontWeight: 600 }}>{filtered.length} {filtered.length === 1 ? 'account' : 'accounts'}</span>
-        </div>
+      <SectionCard
+        icon={ShieldCheck}
+        title="Account Directory"
+        subtitle={`${filtered.length} of ${accounts.length} accounts registered`}
+        noPadding
+        className="mb-6"
+        footer={(
+          <CardFooter
+            resultsLabel={`Showing ${filtered.length} of ${accounts.length} accounts`}
+            pills={[
+              { label: 'Active', value: accounts.filter(a => a.status === 'Active').length, tone: 'green' },
+              { label: 'Deactivated', value: accounts.filter(a => a.status !== 'Active').length, tone: 'red' },
+              { label: 'Staff', value: accounts.filter(a => a.role === 'staff').length, tone: 'blue' },
+              { label: 'Hub Receivers', value: accounts.filter(a => a.role === 'hub_receiver').length, tone: 'amber' },
+            ]}
+          />
+        )}
+      >
+        {/* Control bar - shared FilterBar, same control set as the other ledgers */}
+        <FilterBar>
+          <FilterBar.Group>
+            <FilterBar.Search
+              aria-label="Search accounts by name, ID, or email"
+              placeholder="Search by name, ID, or email..."
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+            />
+            <FilterBar.Select
+              aria-label="Filter by role"
+              value={roleFilter}
+              onChange={e => setRoleFilter(e.target.value)}
+            >
+              <option value="All">All Roles</option>
+              <option value="super_admin">Super Admin</option>
+              <option value="staff">Staff</option>
+              <option value="hub_receiver">Hub Receiver</option>
+            </FilterBar.Select>
+            <FilterBar.Select
+              aria-label="Filter by status"
+              value={statusFilter}
+              onChange={e => setStatusFilter(e.target.value)}
+            >
+              <option value="All">All Statuses</option>
+              <option value="Active">Active</option>
+              <option value="Deactivated">Deactivated</option>
+            </FilterBar.Select>
+            <FilterBar.Count count={filtered.length} label="results" />
+          </FilterBar.Group>
+          <FilterBar.Actions>
+            {hasActiveFilters && (
+              <button
+                onClick={handleClearFilters}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white text-[#475569] text-xs font-bold border border-[#cbd5e1] hover:brightness-105 active:scale-95 transition-all shadow-sm"
+              >
+                <X size={13} aria-hidden="true" /> Clear Filters
+              </button>
+            )}
+            <ExportDropdown onExport={handleExport} disabled={filtered.length === 0} />
+          </FilterBar.Actions>
+        </FilterBar>
         <div style={{ padding: '8px 24px 24px' }}>
-          <div style={{ overflowX: 'auto', border: '1px solid #e4d8f2', borderRadius: '12px' }}>
-            <table style={s.table}>
-              <thead>
+          {fetchError && (
+            <div style={{ marginBottom: 12, padding: '12px 16px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10, color: '#991b1b', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+              <span>{fetchError}</span>
+              <button onClick={fetchAccounts} style={{ ...s.btnOutline, flexShrink: 0 }}>Retry</button>
+            </div>
+          )}
+          <DataTable className="min-w-[960px]" containerClassName="border border-[#e4d8f2] rounded-xl">
+            <DataTable.Head>
+              <tr>
+                {TABLE_HEADERS.map((h, idx) => (
+                  <DataTable.Th
+                    key={h.label}
+                    className="whitespace-nowrap"
+                    stickyLeft={idx === 0}
+                    align={idx === TABLE_HEADERS.length - 1 ? 'right' : 'left'}
+                  >
+                    {h.label === 'Actions' ? (
+                      <span>{h.label}</span>
+                    ) : (
+                      <span className="flex items-center gap-1.5"><h.icon size={12} className="text-slate-400" />{h.label}</span>
+                    )}
+                  </DataTable.Th>
+                ))}
+              </tr>
+            </DataTable.Head>
+            <tbody>
+              {loading ? (
+                <TableSkeleton rows={6} columns={TABLE_HEADERS.length} />
+              ) : filtered.length === 0 ? (
                 <tr>
-                  <th style={s.th}>Admin ID</th>
-                  <th style={s.th}>Category</th>
-                  <th style={s.th}>Full Admin Name</th>
-                  <th style={s.th}>Email Address</th>
-                  <th style={s.th}>Role</th>
-                  <th style={s.th}>Status</th>
-                  <th style={s.th}>Date Created</th>
-                  <th style={{ ...s.th, textAlign: 'right' }}>Actions</th>
+                  <td colSpan={TABLE_HEADERS.length} style={{ padding: '32px 16px' }}>
+                    <EmptyState
+                      icon={Users}
+                      title="No accounts found"
+                      description={hasActiveFilters ? 'No accounts match your current filters. Try changing or clearing your filters.' : 'Create a Staff or Hub Receiver account to get started.'}
+                      action={hasActiveFilters ? (
+                        <button
+                          onClick={handleClearFilters}
+                          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white text-[#475569] text-xs font-bold border border-[#cbd5e1] hover:brightness-105 active:scale-95 transition-all shadow-sm"
+                        >
+                          <X size={13} aria-hidden="true" /> Clear Filters
+                        </button>
+                      ) : undefined}
+                    />
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {loading ? (
-                  <TableSkeleton rows={6} columns={8} />
-                ) : filtered.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} style={{ ...s.td, padding: 0 }}>
-                      <EmptyState
-                        icon={Users}
-                        title="No accounts found"
-                        description={accounts.length === 0 ? 'Create a Staff or Hub Receiver account to get started.' : 'Try a different search, role, or status filter.'}
-                        className="m-4"
-                      />
-                    </td>
-                  </tr>
-                ) : filtered.map((account, idx) => (
-                  <tr key={account._id} style={{ background: idx % 2 === 0 ? 'white' : '#faf7fd' }}>
-                    <td style={{ ...s.td, fontFamily: 'monospace', fontWeight: 700, fontSize: '12px', color: '#5b21b6' }}>
+              ) : (
+                pageRows.map((account) => (
+                  <DataTable.Row key={account._id}>
+                    <DataTable.Cell stickyLeft className="font-mono text-xs font-bold text-brand-purple whitespace-nowrap">
                       {account.adminId || '—'}
-                    </td>
-                    <td style={s.td}><CategoryBadge category={account.accountCategory} email={account.email} /></td>
-                    <td style={{ ...s.td, fontWeight: 700 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#390955', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 800, color: 'white', flexShrink: 0 }}>
-                          {account.name.charAt(0).toUpperCase()}
+                    </DataTable.Cell>
+                    <DataTable.Cell className="whitespace-nowrap">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-full bg-[#390955] flex items-center justify-center text-xs font-extrabold text-white shrink-0">
+                          {account.name ? account.name.charAt(0).toUpperCase() : 'A'}
                         </div>
-                        {account.name}
-                        {account.role === 'super_admin' && <span style={{ fontSize: '9px', background: '#f37021', color: 'white', padding: '2px 6px', borderRadius: '4px', fontWeight: 700 }}>YOU</span>}
+                        <span className="font-bold text-gray-900">{account.name}</span>
+                        {account.role === 'super_admin' && (
+                          <span className="text-[9px] bg-[#f37021] text-white px-1.5 py-0.5 rounded font-bold">YOU</span>
+                        )}
                       </div>
-                    </td>
-                    <td style={{ ...s.td, fontSize: '12px' }}>{account.email}</td>
-                    <td style={s.td}><RoleBadge role={account.role} /></td>
-                    <td style={s.td}><StatusBadge status={account.status} /></td>
-                    <td style={{ ...s.td, color: '#a890c0', fontSize: '12px' }}>{account.createdDate}</td>
-                    <td style={{ ...s.td, textAlign: 'right' }}>
+                    </DataTable.Cell>
+                    <DataTable.Cell className="text-xs text-gray-500 whitespace-nowrap">
+                      {account.email}
+                    </DataTable.Cell>
+                    <DataTable.Cell className="whitespace-nowrap">
+                      <RoleBadge role={account.role} />
+                    </DataTable.Cell>
+                    <DataTable.Cell className="whitespace-nowrap">
+                      <StatusBadge status={account.status} />
+                    </DataTable.Cell>
+                    <DataTable.Cell tabularNums className="text-xs text-gray-500 whitespace-nowrap">
+                      {account.createdDate || '-'}
+                    </DataTable.Cell>
+                    <DataTable.Cell align="right" className="whitespace-nowrap" onClick={e => e.stopPropagation()}>
                       {account.role === 'super_admin' ? (
-                        <span style={{ fontSize: '11px', color: '#c4b5d4', fontStyle: 'italic' }}>Protected</span>
+                        <span className="text-xs text-purple-400 italic">Protected</span>
                       ) : (
-                        <div style={{ display: 'inline-flex', gap: '8px' }}>
-                          <button style={s.btnOutline} onClick={() => openEditModal(account)}>Edit</button>
-                          {account.status === 'Active'
-                            ? <button style={s.btnDanger}   onClick={() => handleToggleStatus(account)}>Deactivate</button>
-                            : <button style={s.btnSuccess}  onClick={() => handleToggleStatus(account)}>Reactivate</button>}
+                        <div className="inline-flex items-center gap-2">
+                          <button
+                            onClick={() => openEditModal(account)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-purple-200 text-brand-purple text-xs font-bold hover:bg-purple-50 transition opacity-80 group-hover:opacity-100 group-focus-within:opacity-100 whitespace-nowrap"
+                          >
+                            Edit
+                          </button>
+                          {account.status === 'Active' ? (
+                            <button
+                              onClick={() => handleToggleStatus(account)}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-200 bg-red-50 text-red-700 text-xs font-bold hover:bg-red-100 transition whitespace-nowrap"
+                            >
+                              Deactivate
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => handleToggleStatus(account)}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 text-xs font-bold hover:bg-emerald-100 transition whitespace-nowrap"
+                            >
+                              Reactivate
+                            </button>
+                          )}
                         </div>
                       )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                    </DataTable.Cell>
+                  </DataTable.Row>
+                ))
+              )}
+            </tbody>
+          </DataTable>
+
+          {/* Pagination inside Card */}
+          {!loading && filtered.length > 0 && (
+            <div className="pt-4">
+              <PaginationControls
+                currentPage={safePage}
+                totalRecords={filtered.length}
+                rowsPerPage={rowsPerPage}
+                onPageChange={setCurrentPage}
+                onRowsPerPageChange={(n) => { setRowsPerPage(n); setCurrentPage(1); }}
+              />
+            </div>
+          )}
         </div>
+      </SectionCard>
       </div>
 
       {/* Add / Edit Modal */}

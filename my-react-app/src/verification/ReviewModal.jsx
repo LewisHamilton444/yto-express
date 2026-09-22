@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import Modal from '../components/ui/Modal';
 import Tooltip from '../components/ui/Tooltip';
-import { FileText } from 'lucide-react';
+import { FileText, Smartphone } from 'lucide-react';
 
 const s = {
   header:      { background: '#390955', padding: '18px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0 },
@@ -61,12 +61,6 @@ const ReviewModal = ({ item, type, onClose, onApprove, onReject }) => {
               <div style={s.infoCard}>
                 <span style={s.infoLabel}>Full Name</span>
                 <span style={s.infoValue}>{item.fullName}</span>
-              </div>
-              <div style={s.infoCard}>
-                <span style={s.infoLabel}>Account Category</span>
-                <span style={{ ...s.infoValue, color: item.accountCategory === 'DEMO' ? '#6b7280' : '#059669' }}>
-                  {item.accountCategory || 'REAL'}
-                </span>
               </div>
               <div style={s.infoCard}>
                 <span style={s.infoLabel}>Email Address</span>
@@ -139,7 +133,7 @@ const ReviewModal = ({ item, type, onClose, onApprove, onReject }) => {
               </div>
             ) : (
               <div style={{ padding: '14px 16px', background: '#faf7fd', border: '1px solid #e4d8f2', borderRadius: '10px', fontSize: '12px', color: '#6b7280', display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{ fontSize: '16px' }}>📱</span>
+                <Smartphone size={16} aria-hidden="true" style={{ flexShrink: 0, color: '#390955' }} />
                 <span>Submitted directly from the mobile app. Phone & email authenticated via OTP verification.</span>
               </div>
             )}

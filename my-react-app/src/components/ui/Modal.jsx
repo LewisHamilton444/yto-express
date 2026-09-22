@@ -89,7 +89,7 @@ export default function Modal({
         aria-modal="true"
         aria-label={label}
         style={{
-          background: 'white', borderRadius: 12, padding, maxWidth, width: '90%',
+          background: 'white', borderRadius: 'var(--yto-radius-xl, 16px)', padding, maxWidth, width: '90%',
           maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)',
           outline: 'none',
           ...cardStyle,

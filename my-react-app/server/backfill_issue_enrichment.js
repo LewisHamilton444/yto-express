@@ -12,6 +12,14 @@
 // retire this script once every row is enriched (the summary prints how many
 // rows still need work; re-run until it reports 0).
 //
+// 2026-09-20: the accountCategory write was REMOVED. The Issue schema has no
+// such path (Mongoose strict mode dropped the write silently), GET /api/issues
+// never derived it, and nothing under src/ reads it — so the pass reported rows
+// as "needing enrichment" for a field it could never persist. Enriched fields
+// are now exactly the four the route derives: ticketId, productName,
+// productCategory, eta. Add accountCategory back only together with the schema
+// path, the route derivation, and a real consumer.
+//
 // Usage:
 //   node backfill_issue_enrichment.js          dry run — prints what would change
 //   node backfill_issue_enrichment.js --write  persists the changes
@@ -36,9 +44,6 @@ if (!MONGO_URI) {
 
 const WRITE = process.argv.includes('--write');
 
-// Mirrors the canonical demo logins used by GET /api/issues.
-const DEMO_REPORTER_EMAILS = ['customer@gmail.com', 'seller@gmail.com', 'rider@gmail.com'];
-
 // Same deterministic ticket id shape as the read route: year + 5 digits derived
 // from the tail of _id. The route does not care about collisions (response
 // only); persistence does, because ticketId is unique — so on a collision the
@@ -62,12 +67,12 @@ async function backfill() {
   console.log('Connected to Web MongoDB.');
 
   // Only rows that are actually missing something. Rows missing none of the
-  // five fields cannot change, so they are excluded from the scan entirely.
+  // four persistable fields cannot change, so they are excluded from the scan
+  // entirely.
   const MISSING = { $in: [null, ''] };
   const issues = await Issue.find({
     $or: [
       { ticketId: MISSING },
-      { accountCategory: MISSING },
       { productName: MISSING },
       { productCategory: MISSING },
       { eta: MISSING },
@@ -95,7 +100,7 @@ async function backfill() {
   console.log(`[Backfill] linked parcels found: ${parcelByTracking.size}`);
 
   const totals = { scanned: issues.length, changed: 0, skipped: 0, errors: 0 };
-  const perField = { ticketId: 0, accountCategory: 0, productName: 0, productCategory: 0, eta: 0 };
+  const perField = { ticketId: 0, productName: 0, productCategory: 0, eta: 0 };
 
   for (const issue of issues) {
     try {
@@ -105,11 +110,6 @@ async function backfill() {
         const year = new Date(issue.createdAt || Date.now()).getFullYear();
         const suffix = String(parseInt(String(issue._id).slice(-6), 16) % 100000).padStart(5, '0');
         updates.ticketId = await deriveFreeTicketId(`TICK-${year}-${suffix}`);
-      }
-
-      if (!issue.accountCategory) {
-        const reporterEmail = (issue.reporterEmail || '').toLowerCase().trim();
-        updates.accountCategory = DEMO_REPORTER_EMAILS.includes(reporterEmail) ? 'DEMO' : 'REAL';
       }
 
       if (!issue.productName || !issue.productCategory || !issue.eta) {
