@@ -1,39 +1,35 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   PackageCheck, Bike, Truck, UserCheck,
-  TrendingUp, TrendingDown,
   ClipboardList, Download, Share2,
   Users, PackageSearch, AlertTriangle,
-  RefreshCw,
 } from 'lucide-react';
 import { apiFetch, parcelsApi, ridersApi, sellersApi, customersApi } from './services/api';
 import { exportToCSV } from './exportUtils';
-import { barHeightPercent } from './utils/barHeight';
+import { barHeightPercent, niceAxisMax, axisTicks } from './utils/barHeight';
 import useSSE from './services/useSSE';
 import './AnalyticsDashboard.css';
 import Tooltip from './components/ui/Tooltip';
+import StatCard from './components/ui/StatCard';
+import SectionCard from './components/ui/SectionCard';
+import CardFooter from './components/ui/CardFooter';
+import DataTable from './components/ui/DataTable';
+import RefreshButton from './components/ui/RefreshButton';
 import yto_logo from './yto_express_logo.png';
 
 // Page components come from the single registry in pageMap.js — the same map
 // App.jsx uses for hash validation — so there is exactly one key -> component
 // source of truth for the whole portal.
 import { PAGE_MAP } from './pageMap';
-import ConnectionHistoryChart             from "./ConnectionHistoryChart";
-import PeakAlertBanner                   from "./PeakAlertBanner";import GlobalHeader from "./GlobalHeader";
+import PeakAlertBanner                   from "./PeakAlertBanner";
+import GlobalHeader                      from "./GlobalHeader";
 import ListSkeleton from "./components/ui/ListSkeleton";
 import EmptyState from "./components/ui/EmptyState";
 import ErrorBoundary from "./components/ui/ErrorBoundary";
 import { initialPendingSellers, initialPendingRiders } from "./verification/registrationCredentials";
-import { isDeliveredStatus, isReturnFamilyStatus, isInTransitFamilyStatus } from "./utils/parcelStatus";
-import {
-  shouldPreviewData,
-  SAMPLE_PARCELS,
-  SAMPLE_RIDERS,
-  SAMPLE_SELLERS,
-  SAMPLE_PENDING_RIDERS,
-  SAMPLE_CUSTOMERS,
-  SAMPLE_ISSUES,
-} from "./dashboardPreviewData";
+import { isDeliveredStatus, isReturnFamilyStatus, isInTransitFamilyStatus, normalizeParcelStatus } from "./utils/parcelStatus";
+import { PARCEL_STATUS_COLORS } from "./components/ui/statusColors";
+import TrendArea from "./components/ui/TrendArea";
 
 function mapSellerToPendingItem(seller) {
   return {
@@ -94,6 +90,61 @@ const escHtml = (v) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt
 
 function dashboardExportCSV(parcels) {
   exportToCSV(parcels, DASH_PARCEL_COLUMNS, `yto-parcel-report-${new Date().toISOString().slice(0, 10)}`);
+}
+
+// ── Chart helpers ───────────────────────────────────────────────────────
+// The axis ceiling and its tick values live in utils/barHeight.js, shared with
+// the TrendArea primitive, so the bar plot and every trend line agree on one
+// scale instead of each carrying its own copy.
+
+// Only a single clear winner is highlighted. When several periods tie for the
+// top, none is — a flat week used to render as every bar being the peak.
+function isUniquePeak(value, series) {
+  return value > 0 && series.filter((v) => v === value).length === 1;
+}
+
+// Composition ring for the parcel-status breakdown. Dependency-free SVG: an arc
+// is a stroke-dasharray offset on a circle, so no charting library is needed.
+// Every slice is also printed in the legend beside it, so no value is carried
+// by colour alone.
+function StatusDonut({ rows, total }) {
+  const size = 132;
+  const thickness = 16;
+  const radius = (size - thickness) / 2;
+  const circumference = 2 * Math.PI * radius;
+  let offset = 0;
+
+  return (
+    <svg
+      className="ed-donut"
+      viewBox={`0 0 ${size} ${size}`}
+      role="img"
+      aria-label={`Parcel status split: ${rows.map((row) => `${row.status} ${row.count}`).join(', ')}.`}
+    >
+      <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="#f1ecf8" strokeWidth={thickness} />
+      {total > 0 && rows.map((row) => {
+        const length = (row.count / total) * circumference;
+        const arc = (
+          <circle
+            key={row.status}
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            fill="none"
+            stroke={row.color}
+            strokeWidth={thickness}
+            strokeDasharray={`${length} ${circumference - length}`}
+            strokeDashoffset={-offset}
+            transform={`rotate(-90 ${size / 2} ${size / 2})`}
+          />
+        );
+        offset += length;
+        return arc;
+      })}
+      <text className="ed-donut-value" x="50%" y="49%" textAnchor="middle" dominantBaseline="middle">{total}</text>
+      <text className="ed-donut-label" x="50%" y="63%" textAnchor="middle">{total === 1 ? 'parcel' : 'parcels'}</text>
+    </svg>
+  );
 }
 
 function dashboardExportPDF(parcels) {
@@ -483,11 +534,6 @@ export default function AnalyticsDashboard({
   const [issues, setIssues]           = useState([]);
   const [dashboardLoading, setDashboardLoading] = useState(true);
   const [isRefreshing, setIsRefreshing]         = useState(false);
-  // Owner-requested layout preview: placeholder figures render ONLY while
-  // every collection is empty (see dashboardPreviewData.js). Dismissing
-  // restores the strict empty states; any real record disables it entirely.
-  const [previewOn, setPreviewOn] = useState(true);
-
   // Top KPI row is bound to the real GET /api/dashboard/stats aggregate
   // (server-computed counts, cheaper than shipping the full parcels/riders
   // arrays just to total them). `dashboardStats` is null until it resolves —
@@ -547,47 +593,24 @@ export default function AnalyticsDashboard({
   // locally-computed numbers instead of throwing.
   const hasNum = (v) => typeof v === 'number' && Number.isFinite(v);
 
-  // Effective collections: real rows win; placeholder rows (previewing) stand
-  // in only while every collection is empty. Every figure below reads these,
-  // so preview and live modes can never mix real and placeholder rows.
-  // Server aggregates are the tiebreaker: if /dashboard/stats reports real
-  // rows while a list endpoint hiccups, placeholders stay off and the honest
-  // stats figures render instead of sample data.
-  const statsHaveCounts = hasNum(dashboardStats?.totalParcels) && dashboardStats.totalParcels > 0;
-  const previewing = previewOn && !statsHaveCounts && shouldPreviewData({ parcels, riders, sellers, customers });
-  const dParcels   = previewing ? SAMPLE_PARCELS : parcels;
-  const dRiders    = previewing ? SAMPLE_RIDERS : riders;
-  const dSellers   = previewing ? SAMPLE_SELLERS : sellers;
-  const dCustomers = previewing ? SAMPLE_CUSTOMERS : customers;
-  const dIssues    = previewing ? SAMPLE_ISSUES : issues;
-  const effPendingSellers = previewing
-    ? SAMPLE_SELLERS.filter(s => /pending|verif/i.test(s.status || '')).map(mapSellerToPendingItem)
-    : pendingSellers;
-  const effPendingRiders = previewing
-    ? SAMPLE_PENDING_RIDERS.map(mapRiderToPendingItem)
-    : pendingRiders;
-
-  const totalParcels    = hasNum(dashboardStats?.totalParcels) && !previewing ? dashboardStats.totalParcels : dParcels.length;
-  const deliveredCount  = hasNum(dashboardStats?.deliveredCount) && !previewing ? dashboardStats.deliveredCount : dParcels.filter(p => isDeliveredStatus(p.status)).length;
-  const returnedCount   = dParcels.filter(p => isReturnStatus(p.status)).length;
-  const deliverySuccessPct = hasNum(dashboardStats?.deliverySuccessPct) && !previewing
+  // Strict empty states: every figure on this page reads the real rows above,
+  // or renders an empty state. The sample-preview layer that used to stand in
+  // while all collections were empty was removed 2026-09-22 (AGENTS2 section 7
+  // requires zero synthetic rows in the client).
+  const totalParcels    = hasNum(dashboardStats?.totalParcels) ? dashboardStats.totalParcels : parcels.length;
+  const deliveredCount  = hasNum(dashboardStats?.deliveredCount) ? dashboardStats.deliveredCount : parcels.filter(p => isDeliveredStatus(p.status)).length;
+  const deliverySuccessPct = hasNum(dashboardStats?.deliverySuccessPct)
     ? dashboardStats.deliverySuccessPct.toFixed(1)
     : totalParcels ? ((deliveredCount / totalParcels) * 100).toFixed(1) : '0.0';
-  const returnRatePct      = totalParcels ? ((returnedCount / totalParcels) * 100).toFixed(1) : '0.0';
-
-  const totalRidersCount  = hasNum(dashboardStats?.totalRiders) && !previewing ? dashboardStats.totalRiders : dRiders.length;
-  const activeRidersCount = hasNum(dashboardStats?.activeRidersCount) && !previewing ? dashboardStats.activeRidersCount : dRiders.filter(r => r.status === 'Active').length;
-  const avgRating   = hasNum(dashboardStats?.avgRiderRating) && !previewing
+  const totalRidersCount  = hasNum(dashboardStats?.totalRiders) ? dashboardStats.totalRiders : riders.length;
+  const activeRidersCount = hasNum(dashboardStats?.activeRidersCount) ? dashboardStats.activeRidersCount : riders.filter(r => r.status === 'Active').length;
+  const avgRating   = hasNum(dashboardStats?.avgRiderRating)
     ? dashboardStats.avgRiderRating.toFixed(1)
-    : dRiders.length ? (dRiders.reduce((s, r) => s + (r.rating || 0), 0) / dRiders.length).toFixed(1) : '0.0';
-  const totalRides  = hasNum(dashboardStats?.totalDeliveries) && !previewing ? dashboardStats.totalDeliveries : dRiders.reduce((s, r) => s + (r.deliveries || 0), 0);
+    : riders.length ? (riders.reduce((s, r) => s + (r.rating || 0), 0) / riders.length).toFixed(1) : '0.0';
+  const totalRides  = hasNum(dashboardStats?.totalDeliveries) ? dashboardStats.totalDeliveries : riders.reduce((s, r) => s + (r.deliveries || 0), 0);
 
-  const last7 = useMemo(() => buildLast7Days(dParcels), [dParcels]);
+  const last7 = useMemo(() => buildLast7Days(parcels), [parcels]);
   const createdVals  = last7.map(d => d.created);
-  const deliveryVals = last7.map(d => d.delivered);
-  const returnVals   = last7.map(d => d.returned);
-  const maxDelivery = Math.max(1, ...deliveryVals);
-  const maxReturn   = Math.max(1, ...returnVals);
 
   // Week-over-week windows, reused below for the one primary KPI with enough
   // history for a real trend.
@@ -600,8 +623,8 @@ export default function AnalyticsDashboard({
   // comparison (parcels carry real createdAt timestamps). The other three are
   // point-in-time snapshots (live rider roster, current queue), so we don't
   // fabricate a trend for them.
-  const thisWeekParcels = dParcels.filter(p => p.createdAt && new Date(p.createdAt) >= startThisWeek);
-  const prevWeekParcels = dParcels.filter(p => p.createdAt && new Date(p.createdAt) >= startPrevWeek && new Date(p.createdAt) <= endPrevWeek);
+  const thisWeekParcels = parcels.filter(p => p.createdAt && new Date(p.createdAt) >= startThisWeek);
+  const prevWeekParcels = parcels.filter(p => p.createdAt && new Date(p.createdAt) >= startPrevWeek && new Date(p.createdAt) <= endPrevWeek);
   const thisWeekSuccessPct = thisWeekParcels.length ? (thisWeekParcels.filter(p => isDeliveredStatus(p.status)).length / thisWeekParcels.length) * 100 : null;
   const prevWeekSuccessPct = prevWeekParcels.length ? (prevWeekParcels.filter(p => isDeliveredStatus(p.status)).length / prevWeekParcels.length) * 100 : null;
   const successTrendPts = (thisWeekSuccessPct !== null && prevWeekSuccessPct !== null)
@@ -612,13 +635,13 @@ export default function AnalyticsDashboard({
   // Riders with no assigned parcels are unranked (successRate null) — they
   // sort below every ranked rider instead of defaulting to a false 100%.
   const ridersWithLiveDeliveries = useMemo(() => {
-    return dRiders.map(r => {
+    return riders.map(r => {
       const rName = (r.riderName || '').trim().toLowerCase();
       const rId = String(r._id || '');
       const regId = (r.registrationId || '').trim();
 
       // Count delivered parcels where this rider was assigned
-      const parcelDeliveries = dParcels.filter(p => {
+      const parcelDeliveries = parcels.filter(p => {
         if (!isDeliveredStatus(p.status)) return false;
         const pRiderId = String(p.riderId || '');
         const pRiderName = String(p.riderName || '').trim().toLowerCase();
@@ -626,7 +649,7 @@ export default function AnalyticsDashboard({
       }).length;
 
       // Count total parcels assigned to this rider
-      const totalAssigned = dParcels.filter(p => {
+      const totalAssigned = parcels.filter(p => {
         const pRiderId = String(p.riderId || '');
         const pRiderName = String(p.riderName || '').trim().toLowerCase();
         return (regId && pRiderId === regId) || (rId && pRiderId === rId) || (rName && pRiderName === rName);
@@ -644,36 +667,32 @@ export default function AnalyticsDashboard({
         totalAssigned,
       };
     });
-  }, [dRiders, dParcels]);
+  }, [riders, parcels]);
 
   // Ranked riders only — unassigned riders never headline the leaderboard.
-  const rankedRiders = ridersWithLiveDeliveries.filter(r => r.successRate !== null);
-  const topRiders   = [...rankedRiders].sort((a, b) => (b.successRate || 0) - (a.successRate || 0)).slice(0, 7);
-  const riderScores = topRiders.map(r => r.successRate || 0);
-  const riderLabels = topRiders.map(r => (r.riderName || 'Rider').split(' ')[0]);
-  const maxRider     = Math.max(1, ...riderScores);
+  const rankeriders = ridersWithLiveDeliveries.filter(r => r.successRate !== null);
+  const topRiders   = [...rankeriders].sort((a, b) => (b.successRate || 0) - (a.successRate || 0)).slice(0, 7);
   const peakRider     = topRiders[0]?.riderName || 'No ranked rider yet';
 
-  const offlineRidersCount = dRiders.length - activeRidersCount;
-  const inTransitCount = dParcels.filter(p => isInTransitFamilyStatus(p.status)).length;
-  const pendingVerificationsCount = effPendingSellers.length + effPendingRiders.length;
+  const inTransitCount = parcels.filter(p => isInTransitFamilyStatus(p.status)).length;
+  const pendingVerificationsCount = pendingSellers.length + pendingRiders.length;
 
   // Delivery-fee revenue (2026-09-11 parity): the mobile app's booking fee
   // now bridges onto every Parcel as deliveryFee — sum it over completed
   // deliveries, mirroring the app's Transactions screen. Hidden entirely
   // when no fee data has synced yet (honest empty state, not a zero lie).
-  const completedFeeParcels = dParcels.filter(p => isDeliveredStatus(p.status) && typeof p.deliveryFee === 'number' && p.deliveryFee > 0);
+  const completedFeeParcels = parcels.filter(p => isDeliveredStatus(p.status) && typeof p.deliveryFee === 'number' && p.deliveryFee > 0);
   const collectedFees = completedFeeParcels.reduce((sum, p) => sum + p.deliveryFee, 0);
 
   // ── People analytics (sellers + customers) ──────────────────────────────
   // Status matching is case-insensitive: the seller refresh asks for
   // PENDING_VERIFICATION while the rider refresh asks for Pending.
   const isPendingSeller = (s) => /pending|verif/i.test(s.status || '');
-  const activeSellers = dSellers.filter(s => !isPendingSeller(s));
-  const pendingSellerItems = dSellers.filter(isPendingSeller);
-  const newSellers7d = dSellers.filter(s => s.createdAt && new Date(s.createdAt) >= startThisWeek).length;
+  const activeSellers = sellers.filter(s => !isPendingSeller(s));
+  const pendingSellerItems = sellers.filter(isPendingSeller);
+  const newSellers7d = sellers.filter(s => s.createdAt && new Date(s.createdAt) >= startThisWeek).length;
 
-  const newCustomers7d = dCustomers.filter(c => c.createdAt && new Date(c.createdAt) >= startThisWeek).length;
+  const newCustomers7d = customers.filter(c => c.createdAt && new Date(c.createdAt) >= startThisWeek).length;
   const last14Days = useMemo(() => {
     const days = [];
     for (let i = 13; i >= 0; i--) {
@@ -682,68 +701,152 @@ export default function AnalyticsDashboard({
       const dayKey = d.toISOString().slice(0, 10);
       days.push({
         label: d.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' }),
-        count: dCustomers.filter(c => toDayKey(c.createdAt) === dayKey).length,
+        value: customers.filter(c => toDayKey(c.createdAt) === dayKey).length,
       });
     }
     return days;
-  }, [dCustomers]);
-  const maxNewCustomers = Math.max(1, ...last14Days.map(d => d.count));
+  }, [customers]);
 
   // ── Support snapshot ────────────────────────────────────────────────────
-  const openIssues = dIssues.filter(t => (t.status || '').toLowerCase() === 'open');
-  const investigatingIssues = dIssues.filter(t => /investigat|progress/i.test(t.status || ''));
-  const closedIssues = dIssues.filter(t => /resolv|clos/i.test(t.status || ''));
+  const openIssues = issues.filter(t => (t.status || '').toLowerCase() === 'open');
+  const investigatingIssues = issues.filter(t => /investigat|progress/i.test(t.status || ''));
+  const closedIssues = issues.filter(t => /resolv|clos/i.test(t.status || ''));
 
-  // Four primary metric cards — replaces the old 8-card KPI grid.
+  // ── The KPI row ───────────────────────────────────────────────────────
+  // Exactly four headline figures. Everything else this page used to repeat
+  // here (seller count, customer count, fees, on-duty breakdown) now appears
+  // once, inside the section that owns it, so no number is drawn twice.
   const dutyRatePct = totalRidersCount > 0 ? Math.round((activeRidersCount / totalRidersCount) * 100) : 0;
   const inTransitPct = totalParcels > 0 ? Math.round((inTransitCount / totalParcels) * 100) : 0;
 
-  // Ticker honesty rule: only genuine week-over-week deltas wear the trend
-  // pill (delivery-success anchor). Every other ticker carries `meta` — a
-  // plain point-in-time note — except Pending Verifications, whose
-  // attention pill marks work waiting, not a trend.
+  // Only the delivery-success figure has an honest week-over-week comparison —
+  // parcel rows carry real dates. The rest are point-in-time snapshots, so no
+  // trend badge is invented for them.
+  const successTrendText = successTrendPts === null
+    ? null
+    : `${successTrendPts >= 0 ? '+' : ''}${successTrendPts} pts`;
+
   const primaryKpis = [
     {
       key: 'delivery-success', label: 'Delivery Success', icon: PackageCheck, tone: 'purple',
-      value: `${deliverySuccessPct}%`, sub: `${deliveredCount} of ${totalParcels} parcels`, trend: successTrendPts,
+      value: `${deliverySuccessPct}%`,
+      sub: totalParcels > 0 ? `${deliveredCount} of ${totalParcels} parcels delivered` : 'No parcels booked yet',
+      trendText: successTrendText,
+      trendTone: successTrendPts !== null && successTrendPts < 0 ? 'negative' : 'positive',
     },
     {
-      key: 'active-riders', label: 'Active Riders', icon: Bike, tone: 'orange',
-      value: `${activeRidersCount}/${totalRidersCount}`, sub: totalRidersCount > 0 ? `${offlineRidersCount} offline` : '0 registered', meta: totalRidersCount > 0 ? `${dutyRatePct}% on duty` : null,
+      key: 'in-transit', label: 'In Transit', icon: Truck, tone: 'orange',
+      value: `${inTransitCount}`,
+      sub: totalParcels > 0 ? `${inTransitPct}% of all parcels are on the road` : 'Nothing on the road yet',
     },
     {
-      key: 'in-transit', label: 'In-Transit Parcels', icon: Truck, tone: 'orange',
-      value: `${inTransitCount}`, sub: totalParcels > 0 ? 'moving through the network' : 'No parcels in transit', meta: totalParcels > 0 ? `${inTransitPct}% of volume` : null,
+      key: 'on-duty-riders', label: 'Riders On Duty', icon: Bike, tone: 'emerald',
+      value: `${activeRidersCount}/${totalRidersCount}`,
+      sub: totalRidersCount > 0 ? `${dutyRatePct}% of riders are on duty` : 'No riders registered yet',
     },
     {
-      key: 'pending-verifications', label: 'Pending Verifications', icon: UserCheck, tone: 'purple',
-      value: `${pendingVerificationsCount}`, sub: pendingVerificationsCount === 0 ? 'All reviews up to date' : `${effPendingSellers.length} sellers · ${effPendingRiders.length} riders`, attention: pendingVerificationsCount > 0 ? `${pendingVerificationsCount} waiting` : 'All clear',
+      key: 'awaiting-review', label: 'Waiting For Review', icon: UserCheck, tone: 'blue',
+      value: `${pendingVerificationsCount}`,
+      sub: pendingVerificationsCount > 0
+        ? `${pendingSellers.length} sellers and ${pendingRiders.length} riders to check`
+        : 'Nothing is waiting for review',
     },
-    ...(currentUser?.role !== 'hub_receiver' ? [
-    {
-      key: 'active-sellers', label: 'Active Sellers', icon: Users, tone: 'purple',
-      value: `${activeSellers.length}`, sub: dSellers.length > 0 ? `${pendingSellerItems.length} waiting for review` : 'No sellers yet', meta: newSellers7d > 0 ? `+${newSellers7d} this week` : null,
-    },
-    {
-      key: 'customers', label: 'Registered Customers', icon: Users, tone: 'orange',
-      value: `${dCustomers.length}`, sub: dCustomers.length > 0 ? 'ordering through the app' : 'No customers yet', meta: newCustomers7d > 0 ? `+${newCustomers7d} this week` : null,
-    },
-    ] : []),
-    ...(collectedFees > 0 ? [{
-      key: 'collected-fees', label: 'Delivery Fees Collected', icon: Truck, tone: 'purple',
-      value: `₱${collectedFees.toFixed(2)}`, sub: `from ${completedFeeParcels.length} completed ${completedFeeParcels.length !== 1 ? 'deliveries' : 'delivery'}`, meta: null,
-    }] : []),
   ];
 
-  const weekly = useMemo(() => buildLastNWeeks(dParcels, 6), [dParcels]);
-  const volumeVals = volumeView === 'daily' ? createdVals : weekly.map(w => w.created);
-  const volumeLabels = volumeView === 'daily' ? last7.map(d => d.label) : weekly.map(w => w.label);
-  const maxVolume = Math.max(1, ...volumeVals);
+  const weekly = useMemo(() => buildLastNWeeks(parcels, 6), [parcels]);
 
-  const activityRiders = [...ridersWithLiveDeliveries].sort((a, b) => (b.deliveries || 0) - (a.deliveries || 0)).slice(0, 7);
-  const activityVals   = activityRiders.map(r => r.deliveries || 0);
-  const activityLabels = activityRiders.map(r => (r.riderName || 'Rider').split(' ')[0]);
-  const maxActivity     = Math.max(1, ...activityVals);
+  // Hour granularity for the Parcel Volume card. The standalone "Hourly
+  // Activity" panel drew a second parcel-over-time chart for the same metric at
+  // a finer scale; that scale now lives in this card's period switch instead of
+  // in a card of its own.
+  const hourly = useMemo(() => {
+    const now = new Date();
+    const buckets = [];
+    for (let i = 13; i >= 0; i--) {
+      const slot = new Date(now.getTime() - i * 3600000);
+      const dayKey = slot.toISOString().slice(0, 10);
+      const hour = slot.getHours();
+      const countedAt = (iso) => {
+        if (!iso) return false;
+        const at = new Date(iso);
+        return !Number.isNaN(at.getTime()) && at.toISOString().slice(0, 10) === dayKey && at.getHours() === hour;
+      };
+      buckets.push({
+        label: `${String(hour).padStart(2, '0')}:00`,
+        booked: parcels.filter((p) => countedAt(p.createdAt)).length,
+        delivered: parcels.filter((p) => isDeliveredStatus(p.status) && countedAt(p.updatedAt)).length,
+      });
+    }
+    return buckets;
+  }, [parcels]);
+
+  const isHourlyView = volumeView === 'hourly';
+  const volumeVals = isHourlyView
+    ? hourly.map((h) => h.booked)
+    : volumeView === 'daily' ? createdVals : weekly.map(w => w.created);
+  const volumeLabels = isHourlyView
+    ? hourly.map((h) => h.label)
+    : volumeView === 'daily' ? last7.map(d => d.label) : weekly.map(w => w.label);
+  const maxVolume = Math.max(1, ...volumeVals);
+  const volumeMax = niceAxisMax(maxVolume);
+  const volumeTicks = axisTicks(volumeMax);
+  const hasVolume = volumeVals.some((v) => v > 0);
+  const hourlyBooked = hourly.reduce((sum, h) => sum + h.booked, 0);
+  const hourlyDelivered = hourly.reduce((sum, h) => sum + h.delivered, 0);
+  const hourlyActiveHours = hourly.filter((h) => h.booked > 0).length || 1;
+  const hourlyAvg = Math.round((hourlyBooked / hourlyActiveHours) * 10) / 10;
+
+  // ── Parcel status composition ──────────────────────────────────────────
+  // Grouped through the canonical normalizer (never a local status map) and
+  // coloured from the shared parcel palette — same fallback StatusBadge uses for
+  // a status the palette does not carry.
+  const statusBreakdown = useMemo(() => {
+    const counts = new Map();
+    parcels.forEach((p) => {
+      const key = normalizeParcelStatus(p.status);
+      counts.set(key, (counts.get(key) || 0) + 1);
+    });
+    const rows = [...counts.entries()]
+      .map(([status, count]) => ({
+        status,
+        count,
+        color: (PARCEL_STATUS_COLORS[status] || PARCEL_STATUS_COLORS.Pending).color,
+      }))
+      .sort((a, b) => b.count - a.count);
+    // Six slices plus an aggregated remainder keeps the ring readable.
+    if (rows.length > 6) {
+      const head = rows.slice(0, 6);
+      const rest = rows.slice(6).reduce((sum, row) => sum + row.count, 0);
+      return [...head, { status: 'Other', count: rest, color: PARCEL_STATUS_COLORS.Returned.color }];
+    }
+    return rows;
+  }, [parcels]);
+
+  // Whole-number shares that add up to exactly 100. Rounding each slice on its
+  // own produced a legend of 25+23+20+18+15 = 101, which reads as an error on a
+  // page whose whole point is honest numbers — so the largest remainders take
+  // the leftover points.
+  const statusShares = useMemo(() => {
+    const total = parcels.length;
+    const shares = new Map();
+    if (!total || statusBreakdown.length === 0) return shares;
+
+    const floors = statusBreakdown.map((row) => {
+      const exact = (row.count / total) * 100;
+      return { status: row.status, whole: Math.floor(exact), remainder: exact - Math.floor(exact) };
+    });
+
+    let leftover = 100 - floors.reduce((sum, row) => sum + row.whole, 0);
+    const byRemainder = [...floors].sort((a, b) => b.remainder - a.remainder);
+    for (const row of byRemainder) {
+      if (leftover <= 0) break;
+      row.whole += 1;
+      leftover -= 1;
+    }
+
+    floors.forEach((row) => shares.set(row.status, row.whole));
+    return shares;
+  }, [statusBreakdown, parcels.length]);
 
   // Per-page prop contracts. Every page gets currentUser from the common base
   // below; this adds only the extras. key -> component lives in pageMap.js,
@@ -751,8 +854,8 @@ export default function AnalyticsDashboard({
   // (The two verification pages are also handed onNavigateToSettings by the
   // historical code, but neither consumes it — not carried forward.)
   const pagePropsFor = (key) => ({
-    'process-seller': { pendingSellers: effPendingSellers, setPendingSellers },
-    'process-rider':  { pendingRiders: effPendingRiders,  setPendingRiders  },
+    'process-seller': { pendingSellers, setPendingSellers },
+    'process-rider':  { pendingRiders,  setPendingRiders  },
     'tracking-info':  { reports: trackingReports, onReportsChange: setTrackingReports },
     'logout':         { setActivePage: setActiveMenuItem, onLogout, onCancel: () => setActiveMenuItem('dashboard') },
   }[key] || {});
@@ -881,7 +984,7 @@ export default function AnalyticsDashboard({
       <main className="ad-main">
         <GlobalHeader
           currentUser={currentUser}
-          riders={dRiders}
+          riders={riders}
           pendingCount={pendingVerificationsCount}
           onNavigate={handleMenuClick}
           onNavigateSettings={goToSettings}
@@ -900,43 +1003,14 @@ export default function AnalyticsDashboard({
             <header className="ed-toolbar">
               <div className="ed-toolbar-titles">
                 <h1>Dashboard</h1>
-                <p className="ed-toolbar-period">Logistics Performance · Today, {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                <p>Logistics Performance · Today, {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
               </div>
-              <div className="ed-toolbar-controls" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Tooltip content="Refresh dashboard metrics">
-                  <button
-                    type="button"
-                    onClick={() => fetchDashboardData(true)}
-                    disabled={isRefreshing || dashboardLoading}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px',
-                      background: 'white', border: '1px solid #e0d5f0', borderRadius: 8,
-                      fontSize: 11, fontWeight: 700, color: '#390955', cursor: (isRefreshing || dashboardLoading) ? 'not-allowed' : 'pointer',
-                      transition: 'all 0.15s ease', opacity: (isRefreshing || dashboardLoading) ? 0.7 : 1,
-                    }}
-                  >
-                    <RefreshCw size={12} style={{ animation: isRefreshing ? 'spin 1s linear infinite' : 'none' }} />
-                    <span>{isRefreshing ? 'Refreshing...' : 'Refresh'}</span>
-                  </button>
-                </Tooltip>
-                {/* SSE Connection Count */}
-                <Tooltip content="Admin clients currently connected to the realtime dashboard feed">
-                <div style={{
-                  display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px',
-                  background: sseConnected ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)',
-                  borderRadius: 8, border: `1px solid ${sseConnected ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)'}`,
-                }}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={sseConnected ? '#16a34a' : '#dc2626'} strokeWidth="2">
-                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-                    <circle cx="9" cy="7" r="4"/>
-                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
-                    <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-                  </svg>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: sseConnected ? '#16a34a' : '#dc2626' }}>
-                    {sseClientCount} connected
-                  </span>
-                </div>
-                </Tooltip>
+              <div className="ed-toolbar-controls">
+                <RefreshButton
+                  onClick={() => fetchDashboardData(true)}
+                  isRefreshing={isRefreshing}
+                  disabled={dashboardLoading}
+                />
               </div>
             </header>
 
@@ -947,297 +1021,217 @@ export default function AnalyticsDashboard({
               <ListSkeleton rows={6} />
             ) : (
               <>
-                {statsError && !previewing && (
+                {statsError && (
                   <div style={{ fontSize: '11px', fontWeight: 600, color: '#c2410c', background: '#fff4ec', padding: '6px 12px', borderRadius: '8px', marginBottom: '10px', display: 'block' }}>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><AlertTriangle size={13} aria-hidden="true" /> Some totals could not be loaded just now. The figures below are counted from the full parcel and rider lists.</span>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><AlertTriangle size={13} aria-hidden="true" /> Some totals could not be loaded just now. The numbers below are counted from the parcel and rider lists instead.</span>
                   </div>
                 )}
-                {previewing && (
-                  <div className="ed-preview-banner" role="status">
-                    <span><strong>Sample preview.</strong> Placeholder figures so every graph can be reviewed while the database is empty. Real figures return automatically once records exist.</span>
-                    <button type="button" className="ed-preview-hide" onClick={() => setPreviewOn(false)}>Hide preview</button>
-                  </div>
-                )}
-                <PeakAlertBanner />
-                {/* Dominant KPI anchor + secondary stack + Connection history aligned on the right */}
-                <div className="ed-anchor-row">
-                  {(() => {
-                    const anchor = primaryKpis[0];
-                    const hasTrend = anchor.trend !== null && anchor.trend !== undefined;
-                    const trendUp = hasTrend && anchor.trend >= 0;
-                    return (
-                      <div className="ed-anchor-metric">
-                        <div className="ed-anchor-header">
-                          <span className="ed-anchor-label">Delivery Success Rate</span>
-                          <span className="ed-anchor-tag">Last 7 Days</span>
-                        </div>
-                        <div className="ed-anchor-val-row">
-                          <h2>{anchor.value}</h2>
-                          {hasTrend && (
-                            <Tooltip content={`${anchor.label}: change vs the previous week`}>
-                              <span className={`ed-kpi-trend ${trendUp ? 'up' : 'down'}`}>
-                                {trendUp ? <TrendingUp size={12} strokeWidth={3} /> : <TrendingDown size={12} strokeWidth={3} />}
-                                {trendUp ? '+' : ''}{anchor.trend} pts
-                              </span>
-                            </Tooltip>
-                          )}
-                        </div>
-                        <p className="ed-anchor-sub">{deliveredCount} of {totalParcels} parcels completed</p>
-                        <div className="ed-anchor-breakdown">
-                          <div className="ed-anchor-breakdown-item">
-                            <label>Delivered</label>
-                            <strong>{deliveredCount} parcels ({totalParcels ? Math.round((deliveredCount / totalParcels) * 100) : 0}%)</strong>
-                          </div>
-                          <div className="ed-anchor-breakdown-item">
-                            <label>In Transit</label>
-                            <strong>{inTransitCount} parcels ({totalParcels ? Math.round((inTransitCount / totalParcels) * 100) : 0}%)</strong>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })()}
-                  <div className="ed-ticker-rail">
-                    {primaryKpis.slice(1).map((kpi) => (
-                      <div className="ed-ticker-card" key={kpi.key}>
-                        <div className="ed-ticker-info">
-                          <label>{kpi.label}</label>
-                          <span>{kpi.sub}</span>
-                        </div>
-                        <div className="ed-ticker-stat">
-                          <strong>{kpi.value}</strong>
-                          {kpi.meta && (
-                            <span className="ed-ticker-meta">{kpi.meta}</span>
-                          )}
-                          {kpi.attention && (
-                            <span className={`ed-ticker-delta ${pendingVerificationsCount > 0 ? 'warning' : ''}`}>
-                              {kpi.attention}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  <ConnectionHistoryChart parcels={dParcels} />
-                </div>
-
-                {/* Core logistics work first; connection diagnostics are
-                    secondary and live at the bottom of the page. */}
+                {/* Four headline figures, one card each. Seller count, customer
+                    count and collected fees are deliberately not repeated here —
+                    they live in the sections that own them. */}
+                <StatCard.Grid cols={4} className="ed-kpi-grid">
+                  {primaryKpis.map((kpi) => (
+                    <StatCard
+                      key={kpi.key}
+                      label={kpi.label}
+                      value={kpi.value}
+                      sub={kpi.sub}
+                      trend={kpi.trendText}
+                      trendTone={kpi.trendTone}
+                      icon={kpi.icon}
+                      tone={kpi.tone}
+                    />
+                  ))}
+                </StatCard.Grid>
                 <div className="ed-canvas-grid">
-                  <section className="ed-canvas">
-                    <div className="ed-panel-head">
-                      <div>
-                        <h2>Parcel Volume</h2>
-                      </div>
-                      <div style={{ display: 'flex', gap: 6 }}>
-                        {['daily', 'weekly'].map(v => (
+                  <SectionCard
+                    title="Parcel Volume"
+                    subtitle={volumeView === 'daily' ? 'Parcels booked per day, last 7 days' : volumeView === 'weekly' ? 'Parcels booked per week, last 6 weeks' : 'Parcels booked per hour, last 14 hours'}
+                    actions={(
+                      <div className="ed-segmented" role="group" aria-label="Chart period">
+                        {['daily', 'weekly', 'hourly'].map((v) => (
                           <button
                             key={v}
+                            type="button"
+                            className={`ed-segmented-btn${volumeView === v ? ' is-active' : ''}`}
+                            aria-pressed={volumeView === v}
                             onClick={() => setVolumeView(v)}
-                            style={{
-                              padding: '5px 12px', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', textTransform: 'capitalize',
-                              border: `1px solid ${volumeView === v ? '#390955' : '#d5cbe4'}`,
-                              background: volumeView === v ? '#390955' : 'white',
-                              color: volumeView === v ? 'white' : '#390955',
-                            }}
                           >
-                            {v}
+                            {v === 'daily' ? 'Daily' : v === 'weekly' ? 'Weekly' : 'Hourly'}
                           </button>
                         ))}
                       </div>
-                    </div>
-
-                    {volumeVals.every(v => v === 0) ? (
-                      <EmptyState icon={PackageSearch} title="No parcel volume data yet" description="New parcel activity will populate this chart automatically." />
+                    )}
+                    footer={!hasVolume ? null : (
+                      <CardFooter
+                        resultsLabel={isHourlyView
+                          ? `${hourlyBooked} booked and ${hourlyDelivered} delivered in the last 14 hours`
+                          : `${volumeVals.reduce((a, b) => a + b, 0)} parcels booked in this period`}
+                        pills={isHourlyView
+                          ? [
+                              { label: 'Peak hour', value: maxVolume, tone: 'purple' },
+                              { label: 'Average per active hour', value: hourlyAvg, tone: 'slate' },
+                            ]
+                          : [
+                              { label: 'Busiest', value: volumeLabels[volumeVals.indexOf(maxVolume)], tone: 'purple' },
+                              { label: 'Peak', value: maxVolume, tone: 'slate' },
+                            ]}
+                      />
+                    )}
+                  >
+                    {!hasVolume ? (
+                      <EmptyState icon={PackageSearch} title="No parcel activity yet" description="Parcels booked through the app will show up here." />
+                    ) : isHourlyView ? (
+                      <TrendArea
+                        points={hourly.map((h) => ({ label: h.label, value: h.booked }))}
+                        reference={{ value: hourlyAvg, label: `Average ${hourlyAvg}` }}
+                        height={200}
+                        ariaLabel={`Parcels booked per hour over the last 14 hours, ${hourlyBooked} in total.`}
+                      />
                     ) : (
-                      <div className="ed-chart-axis-row">
-                        <div className="ed-axis-ticks">
-                          <span>{maxVolume}</span>
-                          <span>{Math.round(maxVolume / 2)}</span>
-                          <span>0</span>
-                        </div>
-                        <div className="ed-bar-chart">
-                          {volumeVals.map((v, i) => (
-                            <div className="ed-bar-column" key={i}>
-                              <span className="ed-bar-score" style={{ color: v === maxVolume ? '#f37021' : '#390955' }}>{v}</span>
-                              <div className="ed-bar-track">
-                                <div className={`ed-bar-fill ${v === maxVolume ? 'peak' : 'standard'}`} style={{ height: `${barHeightPercent(v, maxVolume)}%` }} />
-                              </div>
-                              <span className="ed-bar-day">{volumeLabels[i]}</span>
+                      <>
+                        <div className="ed-plot">
+                          <div className="ed-plot-y" aria-hidden="true">
+                            {volumeTicks.map((tick) => <span key={tick}>{tick}</span>)}
+                          </div>
+                          <div className="ed-plot-area">
+                            <div className="ed-plot-grid" aria-hidden="true">
+                              {volumeTicks.map((tick) => <span key={tick} />)}
                             </div>
-                          ))}
+                            <div className="ed-plot-bars">
+                              {volumeVals.map((v, i) => {
+                                const pct = barHeightPercent(v, volumeMax);
+                                return (
+                                  <div className="ed-plot-col" key={volumeLabels[i]}>
+                                    <div className="ed-plot-track" title={`${volumeLabels[i]}: ${v} ${v === 1 ? 'parcel' : 'parcels'} booked`}>
+                                      <div
+                                        className={`ed-plot-fill${isUniquePeak(v, volumeVals) ? ' is-peak' : ''}`}
+                                        style={{ height: `${pct}%` }}
+                                      />
+                                    </div>
+                                    <span className="ed-plot-value" style={{ bottom: `calc(${pct}% + 6px)` }}>{v}</span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
                         </div>
-                      </div>
+                        <div className="ed-plot-x" aria-hidden="true">
+                          {volumeVals.map((v, i) => <span key={volumeLabels[i]}>{volumeLabels[i]}</span>)}
+                        </div>
+                      </>
                     )}
+                  </SectionCard>
 
-                    <div className="ed-canvas-footer">
-                      <div className="ed-rail-stat"><label>Total ({volumeView === 'daily' ? 'Last 7 days' : 'Last 6 weeks'})</label><strong>{volumeVals.reduce((a, b) => a + b, 0)}</strong></div>
-                      <div className="ed-rail-stat"><label>Peak</label><strong>{maxVolume}</strong></div>
-                    </div>
-                  </section>
-
-                  <aside className="ed-rail">
-                    <div className="ed-rail-block">
-                      <div className="ed-block-head"><h2>Parcel Operations</h2></div>
-                      <div className="ed-rail-stats">
-                        <div className="ed-rail-stat"><label>Overall Success Rate</label><strong>{deliverySuccessPct}%</strong><span>{deliveredCount} of {totalParcels} parcels</span></div>
-                        <div className="ed-rail-stat"><label>Return Rate</label><strong>{returnRatePct}%</strong><span>{returnedCount} of {totalParcels} parcels</span></div>
-                      </div>
-
-                      <div className="ed-mini-histogram-block">
-                        <div className="ed-mini-head"><h6>Parcel Deliveries (7d)</h6><span>{deliveryVals.reduce((a, b) => a + b, 0)}</span></div>
-                        <div className="ed-mini-bars purple">
-                          {deliveryVals.map((v, i) => (
-                            <div
-                              key={i}
-                              className="ed-mini-bar"
-                              title={`${last7[i]?.label || 'Day'}: ${v} ${v === 1 ? 'delivery' : 'deliveries'}`}
-                              style={{ height: `${barHeightPercent(v, maxDelivery)}%`, background: v === maxDelivery && v > 0 ? '#f37021' : '#390955' }}
-                            />
-                          ))}
+                  <div className="ed-rail">
+                    <SectionCard
+                      title="Parcel Operations"
+                      subtitle="Where every parcel stands"
+                      footer={(
+                        <div className="ed-card-actions">
+                          <button type="button" className="ed-action-btn primary" onClick={() => handleMenuClick('manage-parcels')}>
+                            <ClipboardList size={15} aria-hidden="true" /> View parcels
+                          </button>
+                          <button type="button" className="ed-action-btn secondary" disabled={parcels.length === 0} onClick={() => dashboardExportPDF(parcels)}>
+                            <Download size={15} aria-hidden="true" /> Download PDF
+                          </button>
+                          <button type="button" className="ed-action-btn secondary" disabled={parcels.length === 0} onClick={() => dashboardExportCSV(parcels)}>
+                            <Share2 size={15} aria-hidden="true" /> Export CSV
+                          </button>
                         </div>
-                      </div>
-
-                      <div className="ed-mini-histogram-block">
-                        <div className="ed-mini-head"><h6>Returned Parcels (7d)</h6><span style={{ color: '#f37021' }}>{maxReturn} peak</span></div>
-                        <div className="ed-mini-bars orange">
-                          {returnVals.map((v, i) => (
-                            <div
-                              key={i}
-                              className="ed-mini-bar"
-                              title={`${last7[i]?.label || 'Day'}: ${v} ${v === 1 ? 'return' : 'returns'}`}
-                              style={{ height: `${barHeightPercent(v, maxReturn)}%`, background: v === maxReturn && v > 0 ? '#390955' : '#f37021' }}
-                            />
-                          ))}
-                        </div>
-                      </div>
-
-                    </div>
-
-                    <div className="ed-action-bar">
-                      <Tooltip content="Open the full Manage Parcels page">
-                      <button className="ed-action-btn primary" onClick={() => handleMenuClick('manage-parcels')}>
-                        <ClipboardList size={15} /> View parcels
-                      </button>
-                      </Tooltip>
-                      <Tooltip content="Download the current parcel list as a PDF report">
-                      <button className="ed-action-btn secondary" disabled={dParcels.length === 0} onClick={() => dashboardExportPDF(dParcels)}>
-                        <Download size={15} /> Download PDF
-                      </button>
-                      </Tooltip>
-                      <Tooltip content="Export the current parcel list as a CSV file">
-                      <button className="ed-action-btn secondary" disabled={dParcels.length === 0} onClick={() => dashboardExportCSV(dParcels)}>
-                        <Share2 size={15} /> Export CSV
-                      </button>
-                      </Tooltip>
-                    </div>
-                  </aside>
-                </div>
-
-                {/* Secondary analytics row — the two rider blocks pair side by
-                    side instead of stacking three-deep in the rail; the
-                    operational canvas pairs with Parcel Operations above. */}
-                <div className="ed-secondary-row">
-                  <div className="ed-rail-block">
-                    <div className="ed-block-head">
-                      <h2>Rider Performance</h2>
-                      <span className="ed-live-indicator"><span className="ed-live-dot" />Live</span>
-                    </div>
-
-                    {topRiders.length === 0 ? (
-                      <EmptyState icon={Users} title={dRiders.length === 0 ? "No riders registered yet" : "No deliveries assigned yet"} description={dRiders.length === 0 ? "Performance rankings will appear here once riders are added." : "Rankings appear once riders start completing assigned parcels."} />
-                    ) : (
-                      <div className="ed-chart-axis-row">
-                        <div className="ed-axis-ticks">
-                          <span>{maxRider}%</span>
-                          <span>{Math.round(maxRider / 2)}%</span>
-                          <span>0%</span>
-                        </div>
-                        <div className="ed-bar-chart">
-                          {riderScores.map((score, i) => {
-                            const isTop = score === maxRider;
-                            return (
-                              <div
-                                className="ed-bar-column"
-                                key={i}
-                                title={`${topRiders[i]?.riderName || 'Rider'}: ${score}% success rate`}
-                              >
-                                <span className="ed-bar-score" style={{ color: isTop ? '#f37021' : '#390955' }}>{score}%</span>
-                                <div className="ed-bar-track">
-                                  <div className={`ed-bar-fill ${isTop ? 'peak' : 'standard'}`} style={{ height: `${(score / maxRider) * 100}%` }} />
+                      )}
+                    >
+                      {statusBreakdown.length === 0 ? (
+                        <EmptyState icon={PackageSearch} title="No parcels yet" description="The status breakdown appears once parcels are booked." />
+                      ) : (
+                        <>
+                          <div className="ed-donut-row">
+                            <StatusDonut rows={statusBreakdown} total={parcels.length} />
+                            <div className="ed-status-legend">
+                              {statusBreakdown.map((row) => (
+                                <div className="ed-status-row" key={row.status}>
+                                  <i className="ed-status-swatch" style={{ background: row.color }} aria-hidden="true" />
+                                  <span className="ed-status-name">{row.status}</span>
+                                  <strong className="ed-status-count">{row.count}</strong>
+                                  <span className="ed-status-share">{statusShares.get(row.status)}%</span>
                                 </div>
-                                <span className="ed-bar-day" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 50 }} title={topRiders[i]?.riderName || riderLabels[i]}>
-                                  {riderLabels[i]}
-                                </span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="ed-rail-stats">
-                      <div className="ed-rail-stat"><label>Top Performing Rider</label><strong>{peakRider}</strong></div>
-                      <div className="ed-rail-stat"><label>Average Delivery Rating</label><strong>{avgRating} / 5</strong></div>
-                      <div className="ed-rail-stat"><label>Total Completed Rides</label><strong>{totalRides.toLocaleString()}</strong></div>
-                    </div>
-                  </div>
-
-                  <div className="ed-rail-block">
-                    <div className="ed-block-head"><h2>Rider Activity</h2></div>
-                    {activityRiders.length === 0 ? (
-                      <EmptyState icon={Users} title="No riders registered yet" description="Delivery activity per rider will show up here once riders are added." />
-                    ) : (
-                      <div className="ed-mini-histogram-block">
-                        <div className="ed-mini-head"><h6>Deliveries per Rider (Top 7)</h6><span>{activityVals.reduce((a, b) => a + b, 0)} total</span></div>
-                        <div className="ed-mini-bars purple">
-                          {activityVals.map((v, i) => (
-                            <div
-                              key={i}
-                              className="ed-mini-bar"
-                              title={`${activityRiders[i]?.riderName || 'Rider'}: ${v} ${v === 1 ? 'delivery' : 'deliveries'}`}
-                              style={{ height: `${barHeightPercent(v, maxActivity)}%`, background: v === maxActivity && v > 0 ? '#f37021' : '#390955' }}
-                            />
-                          ))}
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 4, marginTop: 6 }}>
-                          {activityLabels.map((label, i) => (
-                            <span
-                              key={i}
-                              title={activityRiders[i]?.riderName || label}
-                              style={{
-                                fontSize: 10,
-                                color: '#64748b',
-                                flex: 1,
-                                textAlign: 'center',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap',
-                              }}
-                            >
-                              {label}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    <div className="ed-rail-stats">
-                      <div className="ed-rail-stat"><label>Riders On Duty</label><strong>{activeRidersCount} of {dRiders.length}</strong></div>
-                      <div className="ed-rail-stat"><label>Not On Duty</label><strong>{offlineRidersCount}</strong></div>
-                    </div>
+                              ))}
+                            </div>
+                          </div>
+                          {collectedFees > 0 && (
+                            <p className="ed-caption">
+                              Delivery fees collected: <strong>₱{collectedFees.toFixed(2)}</strong> from {completedFeeParcels.length} completed {completedFeeParcels.length === 1 ? 'delivery' : 'deliveries'}.
+                            </p>
+                          )}
+                        </>
+                      )}
+                    </SectionCard>
                   </div>
                 </div>
 
-                {/* People analytics — sellers + customers, aggregate only. No
-                    personal rows here; every block links out to its ledger.
-                    Hidden for hub receivers, who have no People section. */}
+                {/* Rider performance — the only per-rider block on the page. The
+                    "Rider Activity" chart that used to sit beside it drew the same
+                    per-rider counts a second time, so they are now a column here,
+                    and hour granularity moved into the volume card. */}
+                <SectionCard
+                  title="Rider Performance"
+                  subtitle="Ranked by success rate on the parcels each rider was given"
+                  actions={<button type="button" className="ed-link-btn" onClick={() => handleMenuClick('monitor-rider')}>Duty monitor</button>}
+                  footer={topRiders.length === 0 ? null : (
+                    <CardFooter
+                      resultsLabel={`${activeRidersCount} of ${riders.length} riders on duty`}
+                      pills={[
+                        { label: 'Top performer', value: peakRider, tone: 'green' },
+                        { label: 'Average rating', value: `${avgRating} / 5`, tone: 'purple' },
+                        { label: 'Deliveries', value: totalRides.toLocaleString(), tone: 'slate' },
+                      ]}
+                    />
+                  )}
+                >
+                  {topRiders.length === 0 ? (
+                    <EmptyState icon={Users} title={riders.length === 0 ? 'No riders registered yet' : 'No deliveries assigned yet'} description={riders.length === 0 ? 'Riders approved through the app will appear here.' : 'Rankings appear once riders start completing assigned parcels.'} />
+                  ) : (
+                    <DataTable>
+                      <DataTable.Head>
+                        <tr>
+                          <DataTable.Th>Rider</DataTable.Th>
+                          <DataTable.Th>Duty</DataTable.Th>
+                          <DataTable.Th align="right">Parcels</DataTable.Th>
+                          <DataTable.Th align="right">Delivered</DataTable.Th>
+                          <DataTable.Th align="right">Success</DataTable.Th>
+                          <DataTable.Th align="right">Rating</DataTable.Th>
+                        </tr>
+                      </DataTable.Head>
+                      <tbody>
+                        {topRiders.map((r) => (
+                          <DataTable.Row key={r.registrationId || String(r._id) || r.riderName}>
+                            <DataTable.Cell>
+                              <span className="ed-rider-name">{r.riderName || 'Unnamed rider'}</span>
+                              <span className="ed-rider-id">{r.registrationId || 'No rider ID yet'}</span>
+                            </DataTable.Cell>
+                            <DataTable.Cell>{r.isOnDuty ? 'On duty' : 'Off duty'}</DataTable.Cell>
+                            <DataTable.Cell align="right" tabularNums>{(r.totalAssigned || 0).toLocaleString()}</DataTable.Cell>
+                            <DataTable.Cell align="right" tabularNums>{(r.deliveries || 0).toLocaleString()}</DataTable.Cell>
+                            <DataTable.Cell align="right" tabularNums>{r.successRate}%</DataTable.Cell>
+                            <DataTable.Cell align="right" tabularNums>{r.rating ? Number(r.rating).toFixed(1) : 'Not rated'}</DataTable.Cell>
+                          </DataTable.Row>
+                        ))}
+                      </tbody>
+                    </DataTable>
+                  )}
+                </SectionCard>
+
+                {/* People analytics — sellers + customers + support, aggregate
+                    only. No personal rows here; every block links out to its
+                    ledger. Hidden for hub receivers, who have no People section. */}
                 {currentUser?.role !== 'hub_receiver' && (
                 <div className="ed-people-row">
-                  <div className="ed-rail-block">
-                    <div className="ed-block-head">
-                      <h2>Seller Pipeline</h2>
-                      <button type="button" className="ed-link-btn" onClick={() => handleMenuClick('process-seller')}>Review queue</button>
-                    </div>
-                    {dSellers.length === 0 ? (
+                  <SectionCard
+                    title="Seller Pipeline"
+                    subtitle="Where every seller stands"
+                    actions={<button type="button" className="ed-link-btn" onClick={() => handleMenuClick('process-seller')}>Review queue</button>}
+                  >
+                    {sellers.length === 0 ? (
                       <EmptyState icon={Users} title="No sellers yet" description="The approval pipeline will appear here once sellers register through the app." />
                     ) : (
                       <>
@@ -1252,7 +1246,7 @@ export default function AnalyticsDashboard({
                               <div className="ed-funnel-track">
                                 <div
                                   className={`ed-funnel-fill ${stage.bar}`}
-                                  style={{ width: `${dSellers.length ? Math.max(stage.count > 0 ? 8 : 0, Math.round((stage.count / dSellers.length) * 100)) : 0}%` }}
+                                  style={{ width: `${sellers.length ? Math.max(stage.count > 0 ? 8 : 0, Math.round((stage.count / sellers.length) * 100)) : 0}%` }}
                                 />
                               </div>
                               <strong className="ed-funnel-count">{stage.count}</strong>
@@ -1260,55 +1254,42 @@ export default function AnalyticsDashboard({
                           ))}
                         </div>
                         <div className="ed-rail-stats">
-                          <div className="ed-rail-stat"><label>Total sellers</label><strong>{dSellers.length}</strong></div>
+                          <div className="ed-rail-stat"><label>Total sellers</label><strong>{sellers.length}</strong></div>
                           <div className="ed-rail-stat"><label>Approval backlog</label><strong>{pendingSellerItems.length}</strong></div>
                         </div>
                       </>
                     )}
-                  </div>
+                  </SectionCard>
 
-                  <div className="ed-rail-block">
-                    <div className="ed-block-head">
-                      <h2>Customer Growth</h2>
-                      <button type="button" className="ed-link-btn" onClick={() => handleMenuClick('customer-list')}>View customers</button>
-                    </div>
-                    {dCustomers.length === 0 ? (
+                  <SectionCard
+                    title="Customer Growth"
+                    subtitle="New sign-ups over the last 14 days"
+                    actions={<button type="button" className="ed-link-btn" onClick={() => handleMenuClick('customer-list')}>View customers</button>}
+                  >
+                    {customers.length === 0 ? (
                       <EmptyState icon={Users} title="No customers yet" description="Registration activity will appear here once customers sign up through the app." />
                     ) : (
                       <>
-                        <div className="ed-mini-histogram-block">
-                          <div className="ed-mini-head"><h6>New customers (14 days)</h6><span>{newCustomers7d} this week</span></div>
-                          <div className="ed-mini-bars purple">
-                            {last14Days.map((d, i) => (
-                              <div
-                                key={i}
-                                className="ed-mini-bar"
-                                title={`${d.label}: ${d.count} new ${d.count === 1 ? 'customer' : 'customers'}`}
-                                style={{ height: `${barHeightPercent(d.count, maxNewCustomers)}%`, background: d.count === maxNewCustomers && d.count > 0 ? '#f37021' : '#390955' }}
-                              />
-                            ))}
-                          </div>
-                        </div>
+                        <TrendArea
+                          points={last14Days}
+                          color="#390955"
+                          height={120}
+                          ariaLabel={`New customers per day over the last 14 days. ${newCustomers7d} joined this week.`}
+                        />
                         <div className="ed-rail-stats">
-                          <div className="ed-rail-stat"><label>Registered customers</label><strong>{dCustomers.length}</strong></div>
+                          <div className="ed-rail-stat"><label>Registered customers</label><strong>{customers.length}</strong></div>
                           <div className="ed-rail-stat"><label>Joined this week</label><strong>{newCustomers7d}</strong></div>
                         </div>
                       </>
                     )}
-                  </div>
-                </div>
-                )}
+                  </SectionCard>
 
-                {/* Operations strip — support snapshot plus one-tap jumps to the
-                    working tabs. Hidden for hub receivers (support is staff-only). */}
-                {currentUser?.role !== 'hub_receiver' && (
-                <div className="ed-ops-strip">
-                  <div className="ed-rail-block">
-                    <div className="ed-block-head">
-                      <h2>Support Snapshot</h2>
-                      <button type="button" className="ed-link-btn" onClick={() => handleMenuClick('manage-issues')}>Open issues</button>
-                    </div>
-                    {dIssues.length === 0 ? (
+                  <SectionCard
+                    title="Support Snapshot"
+                    subtitle="Customer and rider reports"
+                    actions={<button type="button" className="ed-link-btn" onClick={() => handleMenuClick('manage-issues')}>Open issues</button>}
+                  >
+                    {issues.length === 0 ? (
                       <EmptyState icon={ClipboardList} title="No support tickets" description="Customer and rider reports will be counted here once tickets arrive." />
                     ) : (
                       <div className="ed-rail-stats">
@@ -1317,21 +1298,23 @@ export default function AnalyticsDashboard({
                         <div className="ed-rail-stat"><label>Resolved or closed</label><strong>{closedIssues.length}</strong></div>
                       </div>
                     )}
-                  </div>
-
-                  <div className="ed-rail-block">
-                    <div className="ed-block-head"><h2>Working Tabs</h2></div>
-                    <div className="ed-quick-links">
-                      <button type="button" className="ed-action-btn secondary" onClick={() => handleMenuClick('manage-parcels')}>All parcels</button>
-                      <button type="button" className="ed-action-btn secondary" onClick={() => handleMenuClick('monitor-rider')}>Duty monitor</button>
-                      <button type="button" className="ed-action-btn secondary" onClick={() => handleMenuClick('tracking-info')}>Tracking reports</button>
-                      <button type="button" className="ed-action-btn secondary" onClick={() => handleMenuClick('activity-log')}>Activity log</button>
-                    </div>
-                  </div>
+                  </SectionCard>
                 </div>
                 )}
 
-                {/* Bottom of dashboard: ends cleanly after rider operations */}
+                {/* Admin-side diagnostics. Deliberately the last card on the page
+                    and the only place connection health is reported, so it stays
+                    out of the way until someone goes looking for it. */}
+                <SectionCard title="System Activity" subtitle="Dashboard connections and alerts">
+                  <div className="ed-rail-stats">
+                    <div className="ed-rail-stat">
+                      <label>Admin connections</label>
+                      <strong>{sseConnected ? sseClientCount : 0}</strong>
+                      <span>{sseConnected ? 'Live updates are flowing' : 'Live updates are paused'}</span>
+                    </div>
+                  </div>
+                  <PeakAlertBanner />
+                </SectionCard>
               </>
             )}
           </div>

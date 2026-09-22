@@ -477,13 +477,27 @@ html, body, #root {
 /* ============================================================
    ENHANCED WORKSPACE VISUAL STYLES
    ============================================================ */
+/* One rhythm scale for the whole page. Every gap between top-level blocks and
+   between the cards inside a block is --ed-gap; this used to mix 14px (root),
+   16px (grids) and 12px/18px (density steps). --ed-plot-axis-* keeps the bar
+   chart's x-labels locked to its y-axis without a hardcoded offset. */
 .enhanced-dashboard-root {
+  --ed-gap: 16px;
+  --ed-plot-axis-w: 34px;
+  --ed-plot-axis-gap: 12px;
   padding: 20px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: var(--ed-gap);
   box-sizing: border-box;
 }
+
+/* StatCard.Grid ships a built-in 24px bottom margin for page-level stacks. This
+   page is a flex column with its own uniform --ed-gap, so that margin doubled
+   the space under the KPI row (16 + 24 = 40px against 16px everywhere else).
+   Scoped override rather than editing the shared primitive, which five other
+   pages rely on. */
+.enhanced-dashboard-root .ed-kpi-grid { margin-bottom: 0; }
 
 /* Flat operational toolbar — no card chrome, 1px divider */
 .ed-toolbar {
@@ -512,365 +526,169 @@ html, body, #root {
   display: flex;
   gap: 12px;
 }
-/* .ed-select-container rules removed with the ghost dateRange control —
-   re-add alongside a functional date filter. */
+/* No period selector is rendered on this dashboard yet. When one is added,
+   it must actually scope the chart windows (buildLast7Days/buildLastNWeeks)
+   before any markup is added — the removed dateRange control changed nothing. */
 
-/* Asymmetric KPI Hero — Dominant anchor card + vertical stack of secondary cards + Connection History on the right */
-.ed-anchor-row {
-  display: grid;
-  grid-template-columns: minmax(270px, 1.05fr) minmax(230px, 0.95fr) minmax(360px, 1.4fr);
-  gap: 16px;
-  margin-bottom: 20px;
-  align-items: stretch;
-}
-@media (max-width: 1180px) {
-  .ed-anchor-row {
-    grid-template-columns: 1.15fr 0.85fr;
-  }
-  .ed-anchor-row > :nth-child(3) {
-    grid-column: 1 / -1;
-  }
-}
-@media (max-width: 860px) {
-  .ed-anchor-row {
-    grid-template-columns: 1fr;
-  }
-}
-.ed-anchor-metric {
-  background: linear-gradient(135deg, #2a0640 0%, #390955 65%, #4a0d6e 100%);
-  color: white;
-  border-radius: var(--yto-radius-xl, 16px);
-  padding: 20px 22px;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: 0 4px 20px rgba(42, 6, 64, 0.22);
-  height: 100%;
-  box-sizing: border-box;
-}
-.ed-anchor-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 6px;
-}
-.ed-anchor-label {
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: rgba(255, 255, 255, 0.70);
-}
-.ed-anchor-tag {
-  font-size: 10.5px;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.90);
-  background: rgba(255, 255, 255, 0.15);
-  padding: 2px 8px;
-  border-radius: var(--yto-radius-xs, 4px);
-}
-.ed-anchor-val-row {
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-  margin: 4px 0 6px;
-}
-.ed-anchor-metric h2 {
-  margin: 0;
-  font-size: 40px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  font-variant-numeric: tabular-nums;
-  line-height: 1;
-  color: white;
-}
-.ed-anchor-metric .ed-kpi-trend { align-self: center; }
-.ed-anchor-metric .ed-kpi-trend.up   { color: #bbf7d0; background: rgba(22, 163, 74, 0.35); }
-.ed-anchor-metric .ed-kpi-trend.down { color: #fecaca; background: rgba(220, 38, 38, 0.35); }
-.ed-anchor-sub {
-  margin: 0;
-  font-size: 12px;
-  font-weight: 500;
-  color: rgba(255, 255, 255, 0.75);
-}
-.ed-anchor-breakdown {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  border-top: 1px solid rgba(255, 255, 255, 0.14);
-  margin-top: 16px;
-  padding-top: 14px;
-}
-.ed-anchor-breakdown-item label {
-  display: block;
-  font-size: 10px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: rgba(255, 255, 255, 0.60);
-}
-.ed-anchor-breakdown-item strong {
-  display: block;
-  margin-top: 2px;
-  font-size: 13.5px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  color: white;
-}
-
-/* Vertical Stack of Secondary Cards (Tell 03) */
-.ed-ticker-rail {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  border: none;
-  background: transparent;
-  overflow: visible;
-}
-.ed-ticker-card {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 18px;
-  background: white;
-  border: 1px solid var(--yto-border, #e8e0f0);
-  border-radius: var(--yto-radius-lg, 12px);
-  box-shadow: 0 2px 8px rgba(57, 9, 85, 0.03);
-  flex: 1;
-  transition: all 0.18s ease;
-}
-.ed-ticker-card:hover {
-  border-color: #cbd5e1;
-  box-shadow: 0 4px 12px rgba(57, 9, 85, 0.06);
-  transform: translateY(-1px);
-}
-
-/* Connection History Card — Top Row Placement */
-.ed-connection-history-card {
-  background: white;
-  border-radius: var(--yto-radius-xl, 16px);
-  border: 1px solid var(--yto-border, #e8e0f0);
-  padding: 18px 20px;
-  box-shadow: 0 2px 8px rgba(57, 9, 85, 0.03);
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  height: 100%;
-  box-sizing: border-box;
-  transition: all 0.18s ease;
-}
-.ed-connection-history-card:hover {
-  border-color: #cbd5e1;
-  box-shadow: 0 4px 12px rgba(57, 9, 85, 0.06);
-}
-.ed-ticker-info {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-.ed-ticker-info label {
-  font-size: 12px;
-  font-weight: 700;
-  color: #1e293b;
-  letter-spacing: 0.01em;
-}
-.ed-ticker-info span {
-  font-size: 11px;
-  font-weight: 500;
-  color: #64748b;
-}
-.ed-ticker-stat {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-shrink: 0;
-}
-.ed-ticker-stat strong {
-  font-size: 18px;
-  font-weight: 800;
-  color: #1e293b;
-  font-variant-numeric: tabular-nums;
-}
-.ed-ticker-delta {
-  font-size: 10.5px;
-  font-weight: 600;
-  padding: 3px 8px;
-  border-radius: var(--yto-radius-xs, 4px);
-  background: #f1f5f9;
-  color: #475569;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-.ed-ticker-delta.positive {
-  background: #f0fdf4;
-  color: #16a34a;
-}
-.ed-ticker-delta.warning {
-  background: #fffbeb;
-  color: #b45309;
-}
-
-/* Trend pill — text-only, no tinted icon square */
-.ed-kpi-trend {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  font-size: 11.5px;
-  font-weight: 800;
-  padding: 3px 8px;
-  border-radius: var(--yto-radius-xs, 4px);
-}
-.ed-kpi-trend.up   { color: #16a34a; background: rgba(34, 197, 94, 0.12); }
-.ed-kpi-trend.down { color: #dc2626; background: rgba(239, 68, 68, 0.10); }
-
-/* Operational canvas (2.2fr) + compact data rail (1fr), then a balanced
-   two-column row for the secondary analytics so the rail never stacks
-   three blocks under a lone wide chart. */
+/* Operational canvas (2.2fr) + compact data rail (1fr). */
 .ed-canvas-grid {
   display: grid;
   grid-template-columns: 2.2fr 1fr;
-  gap: 16px;
+  gap: var(--ed-gap);
   align-items: start;
 }
-.ed-secondary-row {
-  display: grid;
-  grid-template-columns: 1.6fr 1fr;
-  gap: 16px;
-  align-items: start;
-}
-.ed-canvas,
-.ed-rail > .ed-rail-block,
-.ed-secondary-row > .ed-rail-block {
-  background: white;
-  border: 1px solid var(--yto-border, #e8e0f0);
-  border-radius: var(--yto-radius-xl, 16px);
-  box-shadow: 0 2px 10px rgba(57, 9, 85, 0.04);
-  padding: 20px 22px;
-  min-width: 0;
-}
-.ed-canvas { display: flex; flex-direction: column; }
+/* Every panel on this page is a SectionCard from the shared UI kit, so no
+   card chrome is declared here. These grids only arrange them. */
 .ed-rail {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--ed-gap);
   min-width: 0;
 }
-.ed-panel-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid #f0eaf8;
-}
-.ed-panel-head h2,
-.ed-block-head h2 {
-  margin: 0;
-  font-size: 12.5px;
-  font-weight: 800;
-  color: var(--yto-brand-purple);
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
-}
-.ed-block-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid #e8e1f2;
+
+/* Grid children must be allowed to shrink — a wide table inside a card would
+   otherwise force its whole row wider than the viewport. */
+.ed-canvas-grid > *,
+.ed-people-row > * {
+  min-width: 0;
 }
 
-.ed-live-indicator {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 11px;
-  font-weight: 700;
-  color: #8c7f9d;
-}
-.ed-live-dot {
-  width: 6px;
-  height: 6px;
-  background: var(--yto-brand-orange);
-  border-radius: 50%;
-}
-
-/* Chart internals — solid brand fills, high-contrast tracks */
-.ed-chart-axis-row {
+/* ── Bar plot ───────────────────────────────────────────────────────────
+   The y axis and the plot area are both exactly --plot-h tall, so the grid
+   lines and the tick labels always line up with the bars. The previous
+   version aligned them with literal top/bottom margins against a 150px track
+   inside a 200px chart, so the tallest bar never reached its own top label.
+   The axis ceiling therefore equals the tallest bar (100%), never above it. */
+.ed-plot {
+  --plot-h: 200px;
   display: flex;
-  gap: 12px;
-  margin-bottom: 12px;
+  gap: var(--ed-plot-axis-gap);
+  padding-top: 18px;
 }
-.ed-axis-ticks {
+.ed-plot-y {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  width: 30px;
+  width: var(--ed-plot-axis-w);
+  height: var(--plot-h);
   flex-shrink: 0;
-  margin-top: 20px;
-  margin-bottom: 23px;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   color: var(--yto-brand-purple);
   text-align: right;
+  font-variant-numeric: tabular-nums;
 }
-.ed-bar-chart {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
+.ed-plot-area {
+  position: relative;
   flex: 1;
-  height: 200px;
+  height: var(--plot-h);
+  min-width: 0;
 }
-.ed-bar-column {
+.ed-plot-grid {
+  position: absolute;
+  inset: 0;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  flex: 1;
+  justify-content: space-between;
+  pointer-events: none;
 }
-.ed-bar-score {
-  font-size: 12px;
-  font-weight: 700;
-  margin-bottom: 8px;
+.ed-plot-grid span {
+  display: block;
+  height: 1px;
+  background: #f0eaf8;
 }
-.ed-bar-track {
-  width: 100%;
-  max-width: 44px;
-  min-width: 20px;
-  height: 150px;
-  background-color: #f7f5fa;
-  border: 1px solid #e8e1f2;
-  border-bottom: none;
-  border-radius: var(--yto-radius-sm, 6px) var(--yto-radius-sm, 6px) 0 0;
+.ed-plot-grid span:last-child {
+  background: #d5cbe4;
+}
+.ed-plot-bars {
+  position: absolute;
+  inset: 0;
   display: flex;
   align-items: flex-end;
+  gap: 8px;
+}
+.ed-plot-col {
+  position: relative;
+  flex: 1;
+  height: 100%;
+  min-width: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.ed-plot-track {
+  width: 100%;
+  max-width: 44px;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+  background: #f7f5fa;
+  border-radius: var(--yto-radius-xs, 4px) var(--yto-radius-xs, 4px) 0 0;
   overflow: hidden;
 }
-.ed-bar-fill {
+.ed-plot-fill {
   width: 100%;
+  background: var(--yto-brand-purple);
   border-radius: inherit;
   transition: height 0.3s ease;
 }
-.ed-bar-fill.standard { background: var(--yto-brand-purple); }
-.ed-bar-fill.peak { background: var(--yto-brand-orange); }
-.ed-bar-day {
-  margin-top: 8px;
-  font-size: 12px;
+.ed-plot-fill.is-peak { background: var(--yto-brand-orange); }
+.ed-plot-value {
+  position: absolute;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--yto-brand-purple);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+.ed-plot-x {
+  display: flex;
+  gap: 8px;
+  /* Offset by the y-axis width + its gap so the labels stay under their bars
+     (was a hardcoded 46px that only worked while the axis stayed 34px). */
+  margin: 8px 0 0 calc(var(--ed-plot-axis-w) + var(--ed-plot-axis-gap));
+}
+.ed-plot-x span {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+  font-size: 11px;
   font-weight: 600;
   color: var(--yto-brand-purple);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Period switch (Daily / Weekly) — 8px controls, active state uses the brand
+   colour rather than a pill. */
+.ed-segmented {
+  display: inline-flex;
+  gap: 4px;
+}
+.ed-segmented-btn {
+  padding: 5px 12px;
+  border-radius: var(--yto-radius-md, 8px);
+  border: 1px solid #d5cbe4;
+  background: white;
+  color: var(--yto-brand-purple);
+  font-size: 11px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.ed-segmented-btn:hover { border-color: var(--yto-brand-purple); }
+.ed-segmented-btn.is-active {
+  background: var(--yto-brand-purple);
+  border-color: var(--yto-brand-purple);
+  color: white;
 }
 
 /* Compact stat rows — label left / value right, 1px dividers */
-.ed-canvas-footer {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  border-top: 1px solid #f0eaf8;
-  margin-top: 16px;
-  padding-top: 12px;
-}
 .ed-rail-stats {
   display: flex;
   flex-direction: column;
@@ -883,8 +701,8 @@ html, body, #root {
   padding: 7px 0;
   border-bottom: 1px solid #f0ecf7;
   min-width: 0;
+  flex-wrap: wrap;
 }
-.ed-canvas-footer .ed-rail-stat { border-bottom: none; }
 .ed-rail-stat label {
   font-size: 11.5px;
   font-weight: 700;
@@ -906,45 +724,152 @@ html, body, #root {
   white-space: nowrap;
 }
 
-/* Micro histograms — flat bordered blocks (was tinted fill) */
-.ed-mini-histogram-block {
-  border: 1px solid #e8e1f2;
-  padding: 10px 12px;
-  border-radius: var(--yto-radius-md, 8px);
-  margin-bottom: 10px;
-}
-.ed-mini-head {
+/* ── Area trend ─────────────────────────────────────────────────────────
+   For a CONTINUOUS series (per hour, per day), where a line reads the shape
+   correctly. Discrete periods keep the bar plot above. The axis and the plot
+   are both --area-h tall so the grid lines line up with the tick labels.
+   Sized by the TrendArea primitive. */
+.ed-area-body {
   display: flex;
+  gap: var(--ed-plot-axis-gap);
+  padding-top: 6px;
+}
+.ed-area-y {
+  display: flex;
+  flex-direction: column;
   justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
-}
-.ed-mini-head h6 { margin: 0; font-size: 12px; font-weight: 700; color: var(--yto-brand-purple); }
-.ed-mini-head span { font-size: 11.5px; font-weight: 700; color: var(--yto-brand-purple); }
-.ed-mini-bars {
-  display: flex;
   align-items: flex-end;
-  justify-content: space-between;
-  height: 20px;
-  gap: 4px;
+  width: var(--ed-plot-axis-w);
+  height: var(--area-h, 140px);
+  flex-shrink: 0;
+  font-size: 10px;
+  color: #8c7f9d;
+  font-variant-numeric: tabular-nums;
 }
-.ed-mini-bar {
+.ed-area-plot {
+  position: relative;
   flex: 1;
-  border-radius: 2px 2px 0 0;
+  min-width: 0;
+  height: var(--area-h, 140px);
+}
+.ed-area-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  overflow: visible;
+}
+.ed-area-ref {
+  position: absolute;
+  right: 0;
+  font-size: 10px;
+  font-weight: 700;
+  color: #ea580c;
+  background: white;
+  padding: 0 4px;
+  border-radius: var(--yto-radius-xs, 4px);
+}
+.ed-area-x {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+  padding-left: calc(var(--ed-plot-axis-w) + var(--ed-plot-axis-gap));
+}
+.ed-area-x span {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+  font-size: 10px;
+  color: #64748b;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-/* Action bar — flat controls, no hover transform or shadow */
-.ed-action-bar {
+/* ── Status composition ─────────────────────────────────────────────────
+   Ring plus a legend that prints every value, so the split is never carried
+   by colour alone. */
+.ed-donut-row {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+.ed-donut {
+  width: 132px;
+  height: 132px;
+  flex-shrink: 0;
+}
+.ed-donut-value {
+  font-size: 22px;
+  font-weight: 800;
+  fill: var(--yto-brand-purple);
+}
+.ed-donut-label {
+  font-size: 9px;
+  font-weight: 700;
+  fill: #8c7f9d;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.ed-status-legend {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.ed-status-row {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) 40px 44px;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid #f0ecf7;
+  font-size: 12px;
+}
+.ed-status-row:last-child { border-bottom: none; }
+.ed-status-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: var(--yto-radius-xs, 4px);
+}
+.ed-status-name {
+  color: #475569;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ed-status-count {
+  text-align: right;
+  font-weight: 800;
+  color: var(--yto-brand-purple);
+  font-variant-numeric: tabular-nums;
+}
+.ed-status-share {
+  text-align: right;
+  font-size: 11px;
+  color: #8c7f9d;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Quiet line carrying a single figure — deliberately not a stat row. */
+.ed-caption {
+  margin: 12px 0 0;
+  font-size: 11.5px;
+  color: #64748b;
+}
+.ed-caption strong { color: var(--yto-brand-purple); }
+
+/* Card footer actions — flat controls that size to their label. They used to
+   be a bare flex row inside a 1fr rail with min-width 120px, which forced the
+   three buttons to wrap inside their own card and float outside it. */
+.ed-card-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: auto;
-  padding-top: 12px;
-  border-top: 1px solid #e8e1f2;
+  /* Matches the shared CardFooter rows (px-6 py-4). */
+  padding: 16px 24px;
 }
 .ed-action-btn {
-  flex: 1;
-  min-width: 120px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -979,103 +904,37 @@ html, body, #root {
   cursor: not-allowed;
 }
 
-/* Empty / zero-data states — stylized placeholder instead of plain text */
-.ed-empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  padding: 40px 20px;
-  gap: 4px;
-}
-.ed-empty-icon {
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
-  background: rgba(57, 9, 85, 0.08);
-  color: var(--yto-brand-purple);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 8px;
-}
-.ed-empty-title {
-  margin: 0;
-  font-size: 13px;
-  font-weight: 700;
-  color: #6b5f7d;
-}
-.ed-empty-sub {
-  margin: 0;
-  font-size: 11.5px;
-  color: #a698ba;
-  max-width: 240px;
-}
-
 /* Density step for laptop widths — tighter paddings/gaps/type so the
    1366-class viewport keeps the FHD information density. */
 @media (max-width: 1440px) {
-  .enhanced-dashboard-root { padding: 16px; gap: 12px; }
+  .enhanced-dashboard-root { padding: 16px; }
   .ed-toolbar { padding: 0 0 10px; }
   .ed-toolbar-titles h1 { font-size: 21px; }
-  .ed-anchor-row { gap: 10px; }
-  .ed-canvas-grid { gap: 12px; }
 }
 
 /* Ultra-wide (QHD+) — mirror the login upscale so shell + dashboard keep
    presence at distance on large panels. */
 @media (min-width: 2000px) {
-  .enhanced-dashboard-root { padding: 28px; gap: 18px; width: 100%; }
+  .enhanced-dashboard-root { padding: 28px; width: 100%; }
   .ed-toolbar-titles h1 { font-size: 26px; }
-  .ed-anchor-metric h2 { font-size: 38px; }
   .ad-sidebar { width: 280px; }
   .ad-main { margin-left: 280px; }
   .ad-wrapper.ad-sidebar--collapsed .ad-main { margin-left: 72px; }
 }
 
-/* System Monitor Query Adjustments */
-@media (max-width: 1250px) {
-  .ed-ticker-rail { grid-auto-flow: row; grid-template-columns: repeat(2, 1fr); }
-  .ed-ticker:nth-child(odd) { border-left: none; }
-  .ed-ticker:nth-child(n+3) { border-top: 1px solid #e8e1f2; }
-}
 @media (max-width: 1080px) {
   .ed-canvas-grid,
-  .ed-secondary-row,
-  .ed-people-row,
-  .ed-ops-strip { grid-template-columns: 1fr; }
+  .ed-people-row { grid-template-columns: 1fr; }
 }
 
-/* Unified-dashboard rows (D0): people analytics + operations strip share the
-   secondary-row card language — 12px cards, 8px controls, no new motion. */
+/* People analytics (sellers + customers + support) in one row. auto-fit so
+   the three cards sit on one line when there is width for them and wrap to
+   two or one on smaller screens, without a breakpoint to keep in sync. */
 .ed-people-row {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: var(--ed-gap);
   align-items: start;
-}
-.ed-people-row > .ed-rail-block {
-  background: white;
-  border: 1px solid var(--yto-border, #e8e0f0);
-  border-radius: var(--yto-radius-xl, 16px);
-  box-shadow: 0 2px 10px rgba(57, 9, 85, 0.04);
-  padding: 20px 22px;
-  min-width: 0;
-}
-.ed-ops-strip {
-  display: grid;
-  grid-template-columns: 1.6fr 1fr;
-  gap: 16px;
-  align-items: start;
-}
-.ed-ops-strip > .ed-rail-block {
-  background: white;
-  border: 1px solid var(--yto-border, #e8e0f0);
-  border-radius: var(--yto-radius-xl, 16px);
-  box-shadow: 0 2px 10px rgba(57, 9, 85, 0.04);
-  padding: 20px 22px;
-  min-width: 0;
 }
 
 /* Section-link buttons: text action, 8px hit area, no pill, no lift. */
@@ -1139,48 +998,25 @@ html, body, #root {
   font-variant-numeric: tabular-nums;
 }
 
-/* Ticker point-in-time note: plain muted text, never a trend pill. */
-.ed-ticker-meta {
-  font-size: 10.5px;
+/* Rider leaderboard rows: name on top, rider ID as a quiet second line. */
+.ed-rider-name {
+  display: block;
   font-weight: 600;
-  color: #64748b;
-  white-space: nowrap;
+  color: #1a1a1a;
 }
-
-/* Quick links: normal secondary buttons in a wrapping row. */
-.ed-quick-links {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-/* Sample-preview banner: honest amber strip while placeholder rows render. */
-.ed-preview-banner {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  font-size: 11.5px;
-  font-weight: 500;
-  color: #92400e;
-  background: #fffbeb;
-  border: 1px solid #fde68a;
-  padding: 8px 12px;
-  border-radius: var(--yto-radius-lg, 12px);
-  margin-bottom: 12px;
-}
-.ed-preview-hide {
-  flex-shrink: 0;
-  padding: 5px 12px;
-  border-radius: var(--yto-radius-md, 8px);
+.ed-rider-id {
+  display: block;
+  margin-top: 2px;
   font-size: 11px;
-  font-weight: 700;
-  font-family: inherit;
-  cursor: pointer;
-  background: white;
-  border: 1px solid #f59e0b;
-  color: #92400e;
+  color: #8c7f9d;
+  font-variant-numeric: tabular-nums;
 }
-.ed-preview-hide:hover {
-  background: #fef3c7;
+
+/* Peak-traffic toast: opacity fade only, no slide or bounce. */
+.yto-peak-toast {
+  animation: ytoPeakFadeIn 0.18s ease-out;
+}
+@keyframes ytoPeakFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }

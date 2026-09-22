@@ -1,0 +1,16 @@
+{
+  "started": "2026-09-22T00:24:28.046Z",
+  "base": "http://localhost:3001",
+  "results": [
+    {
+      "index": 0,
+      "email": "staff@ytoexpress.com",
+      "role": "staff",
+      "status": null,
+      "ok": false,
+      "latencyMs": 7020,
+      "error": "TIMEOUT_AFTER_7S",
+      "body": null
+    }
+  ]
+}

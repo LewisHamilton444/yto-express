@@ -23,8 +23,8 @@ The skill's own philosophy: "a purple gradient is not bad because purple is bad;
 | Emoji/text glyphs as icons | Banned project-wide (AGENTS2.md icon rule); `lucide-react` SVGs only with `aria-label` on icon-only buttons. **Note:** a `lucide` import is listed as a tell in `references/ai-tells-catalog.md` — in this repo it is the mandated icon system, never a tell. |
 | Font defaults (Inter/Roboto/Arial) | Covered by `no-slop-ui/YTO_ADAPTATIONS.md` ESCALATE 1: `Segoe UI` is the app font; Arial survives only in generated print/export stylesheets. |
 | Radius drift | Covered by the border-radius convention in `no-slop-ui/YTO_ADAPTATIONS.md`: 12px cards/modals, 8px controls/chips; login card waived. |
-| Status colors inline | Status palettes are centralized in `src/components/ui/statusColors.js` (`PARCEL_STATUS_COLORS`, `SELLER_STATUS_COLORS`, `RIDER_STATUS_COLORS`, `ACCOUNT_CATEGORY_TONE`); new colors extend the map — never inline hex. |
-| Simulated data honesty | `SimulatedFeedBadge` on demo/simulated feeds; demo fixtures (`FALLBACK_PARCELS`, `MOCK_ACCOUNTS`, `mockRiders`/`mockSellers`) carry the `[DEMO MODE]` banner — do not "fix" them as fake-data tells; they are intentional labeled fixtures. |
+| Status colors inline | Status palettes are centralized in `src/components/ui/statusColors.js` — its actual exports are `PARCEL_STATUS_COLORS`, `SELLER_STATUS_COLORS`, `RIDER_STATUS_BADGE`, `STATUS_HINTS`. The `RIDER_STATUS_COLORS` and `ACCOUNT_CATEGORY_TONE` names cited by earlier revisions of this file are **not exported** (verified 2026-09-22); new colors extend the existing maps — never inline hex. |
+| Simulated data honesty | No simulated-feed badge component exists in this tree (`SimulatedFeedBadge` is not present — verified 2026-09-22), and the dashboard's sample-preview layer (`src/dashboardPreviewData.js`) was **removed permanently on 2026-09-22**: it contradicted the clean-empty-state rule in `AGENTS2.md` section 7. Do not add placeholder/sample rows or a "preview mode" to any surface. Genuinely labeled demo fixtures stay as they are. |
 
 ## Profile calibration
 

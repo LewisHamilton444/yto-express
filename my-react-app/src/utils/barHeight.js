@@ -10,6 +10,27 @@
  * A small floor is still applied to genuinely non-zero values, so a real figure
  * stays visible next to a much larger peak. Only zero stays at zero.
  */
+/**
+ * Axis ceiling rounded up to a round number, so the top grid line always
+ * carries the ceiling and the tallest mark reaches it. Steps are divisible by
+ * four so the quarter grid lines land on whole numbers.
+ *
+ * Shared by every chart that draws an axis (the dashboard's bar plot and the
+ * area trend) — a second copy of this in a component would let the two charts
+ * disagree about their scale.
+ */
+const AXIS_STEPS = [4, 8, 20, 40, 100, 200, 400, 1000];
+
+export function niceAxisMax(highest) {
+  const target = Math.max(1, Number.isFinite(highest) ? highest : 1);
+  return AXIS_STEPS.find((step) => target <= step) ?? Math.ceil(target / 1000) * 1000;
+}
+
+/** Five evenly spaced tick values from the ceiling down to zero. */
+export function axisTicks(max) {
+  return [max, (max * 3) / 4, max / 2, max / 4, 0];
+}
+
 export function barHeightPercent(value, max, minVisiblePercent = 4) {
   if (!Number.isFinite(value) || value <= 0) return 0;
 

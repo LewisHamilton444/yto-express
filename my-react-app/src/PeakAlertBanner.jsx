@@ -59,11 +59,11 @@ const PeakAlertBanner = () => {
         <>
             {/* Floating Alert Banner */}
             {showBanner && latestAlert && (
-                <div style={{
+                <div className="yto-peak-toast" style={{
                     position: 'fixed', top: 16, right: 16, zIndex: 10000,
                     background: '#dc2626',
                     color: 'white', padding: '14px 20px', borderRadius: 12,
-                    maxWidth: 380, animation: 'slideIn 0.3s ease',
+                    maxWidth: 380,
                 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
                         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
@@ -73,9 +73,9 @@ const PeakAlertBanner = () => {
                                 <line x1="12" y1="17" x2="12.01" y2="17"/>
                             </svg>
                             <div>
-                                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 2 }}>Peak Connection Alert</div>
+                                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 2 }}>Heavy dashboard traffic</div>
                                 <div style={{ fontSize: 11, opacity: 0.9, lineHeight: 1.4 }}>
-                                    {latestAlert.count} concurrent clients detected (threshold: {latestAlert.threshold})
+                                    {latestAlert.count} people were viewing the dashboard at the same time.
                                 </div>
                                 <div style={{ fontSize: 9, opacity: 0.6, marginTop: 4 }}>{formatTime(latestAlert.timestamp)}</div>
                             </div>
@@ -92,7 +92,7 @@ const PeakAlertBanner = () => {
             {alerts.length > 0 && !showBanner && (
                 <div style={{
                     background: 'rgba(220,38,38,0.05)', border: '1px solid rgba(220,38,38,0.15)',
-                    borderRadius: 8, padding: '8px 12px', marginBottom: 12,
+                    borderRadius: 8, padding: '8px 12px', marginTop: 12,
                     display: 'flex', alignItems: 'center', gap: 8,
                 }}>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2">
@@ -101,21 +101,13 @@ const PeakAlertBanner = () => {
                         <line x1="12" y1="17" x2="12.01" y2="17"/>
                     </svg>
                     <span style={{ fontSize: 11, color: '#991b1b', fontWeight: 600 }}>
-                        {alerts.length} peak alert{alerts.length !== 1 ? 's' : ''} recorded
+                        {alerts.length} busy period{alerts.length !== 1 ? 's' : ''} recorded today
                     </span>
                     <span style={{ fontSize: 10, color: '#dc2626', opacity: 0.7 }}>
-                        (threshold: {threshold} clients)
+                        more than {threshold} people viewing at once
                     </span>
                 </div>
             )}
-
-            {/* CSS Animation */}
-            <style>{`
-                @keyframes slideIn {
-                    from { transform: translateX(100%); opacity: 0; }
-                    to { transform: translateX(0); opacity: 1; }
-                }
-            `}</style>
         </>
     );
 };

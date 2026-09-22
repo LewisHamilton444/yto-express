@@ -20,6 +20,10 @@
 //        - interaction probe: clicks up to 3 safe content actions (Add / New /
 //          Export / Print / Download / Generate / Refresh / Register) on each
 //          page and re-asserts crash/overflow/errors after every click
+//        - populated-path assertion for the pages in CONTENT_CHECKS: the
+//          Dashboard must actually render its ranked rider leaderboard, its
+//          status breakdown and four KPI cards. Seed row-shape drift that
+//          silently emptied those blocks used to pass as "ok"
 //   5. Prints a pass/fail table and exits non-zero on any failure.
 //
 // This catches exactly the class of bug `vite build` cannot: pages that
@@ -46,6 +50,25 @@ const DEFAULT_WIDTHS = [1280, 1080, 960, 902];
 const VIEWPORT_H = 768;          // small-laptop height: the QA target
 const PAGE_SETTLE_MS = 900;      // wait after a nav click for data + layout
 const RESIZE_SETTLE_MS = 450;
+
+// ── per-page content assertions ─────────────────────────────────────────
+// A page can be crash-free, overflow-free and still be useless, because every
+// data-driven block quietly fell back to its empty state (the seeded rows no
+// longer match what the page queries for). These checks assert the POPULATED
+// path of the blocks that only exist when rows are present. Each entry returns
+// a problem string, or '' when healthy.
+const CONTENT_CHECKS = {
+  Dashboard: `(() => {
+    const problems = [];
+    const ranked = [...document.querySelectorAll('.ad-main table tbody tr')]
+      .filter((tr) => tr.querySelectorAll('td').length >= 6).length;
+    if (ranked < 1) problems.push('rider leaderboard is showing its empty state');
+    if (document.querySelectorAll('.ed-status-row').length < 1) problems.push('status breakdown empty');
+    if (document.querySelectorAll('.ed-donut circle').length < 2) problems.push('composition ring missing');
+    if (document.querySelectorAll('.ed-kpi-grid > *').length !== 4) problems.push('KPI row is not four cards');
+    return problems.join('; ');
+  })()`,
+};
 
 // ── tiny helpers ─────────────────────────────────────────────────────────
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -301,6 +324,11 @@ async function main() {
       })()`);
       const clipped = !!vfit && vfit.needsScroll && vfit.stuck.length > 0;
 
+      // Populated-path assertion (read-only, so it runs even with --no-int).
+      const contentGap = CONTENT_CHECKS[item.label]
+        ? String((await evalJs(CONTENT_CHECKS[item.label])) || '')
+        : '';
+
       // Interaction probe: click up to 3 safe content actions (Add / New /
       // Export / Print / Download / Generate / Refresh / Register) inside the
       // page area, then re-assert crash/overflow/errors after each click so
@@ -345,6 +373,7 @@ async function main() {
         overflow: Math.max(0, (m.se || 0) - (m.ce || 0)),
         crash: !!m.crash,
         clipped,
+        contentGap,
         intClicks: NO_INT ? 0 : Math.min(intCount, 3),
         intErrors,
         errs: cres === 'noleaf' ? ['LEAF NOT FOUND'] : errors.slice(pageMarker),
@@ -368,10 +397,12 @@ async function main() {
       if (r.overflow > 0) flags.push('OVERFLOW+' + r.overflow);
       if (r.crash) flags.push('CRASH');
       if (r.clipped) flags.push('CLIPPED');
+      if (r.contentGap) flags.push('CONTENT');
       if (r.errs && r.errs.length) flags.push('ERR');
       if (r.intErrors && r.intErrors.length) flags.push('INT-ERR');
       if (!flags.length) return pad('ok', 22);
       const detail = [];
+      if (r.contentGap) detail.push(r.contentGap);
       if (r.errs && r.errs.length) detail.push(r.errs.slice(0, 2).join(' | '));
       if (r.intErrors && r.intErrors.length) detail.push(r.intErrors.slice(0, 2).join('; '));
       failures.push(`${label} @ ${w}px: ${flags.join(', ')}${detail.length ? ' — ' + detail.join(' || ') : ''}`);
@@ -383,6 +414,7 @@ async function main() {
   const totalClicks = rows.reduce((n, r) => n + (r.intClicks || 0), 0);
   const clickPages = new Set(rows.filter((r) => (r.intClicks || 0) > 0).map((r) => r.label)).size;
   if (!NO_INT) log('  action clicks: ' + totalClicks + ' executed across ' + clickPages + '/' + distinctPages + ' pages (max 3 per page-width).');
+  log('  content assertions: ' + Object.keys(CONTENT_CHECKS).join(', '));
   if (!failures.length) log('\nAll ' + rows.length + ' page-width checks clean: zero overflow, zero crashes, zero clipped panes, zero console errors' + (NO_INT ? '.' : ' — and every action click stayed clean.'));
   else {
     log('\n' + failures.length + ' failure(s):');
