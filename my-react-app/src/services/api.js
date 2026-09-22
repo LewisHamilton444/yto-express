@@ -17,24 +17,30 @@
 export const API_ROOT = import.meta.env.VITE_API_URL || 'https://yto-express-backend.onrender.com';
 const API_BASE = `${API_ROOT}/api`;
 
-// ── Demo/UAT fallback (opt-in, build-time only, OFF unless explicitly set) ─
-// A plain `vite build` never activates this — VITE_DEMO_MODE must be set to
-// '1' in the environment that RUNS the build (e.g. a Render static-site
-// build step for a pre-launch UAT deployment), which bakes the flag in at
-// build time. When on, a GET to a known collection route whose real
-// response comes back empty (no mobile-app data synced yet) is transparently
-// swapped for the same realistic, linked fixture set scripts/qa/seedServer.mjs
-// uses locally — never for mutations, and never overriding a real non-empty
-// response. Pairs with the "Demo Data" banner in AnalyticsDashboard.jsx so
-// fabricated rows are never mistaken for real ones. See AGENTS2.md §7 — the
-// Web app is REAL-only outside this explicit, reversible opt-in.
+// ── Demo/UAT fallback (build-time, ON BY DEFAULT while pre-launch) ─────────
+// A GET to a known collection route whose real response comes back empty
+// (no mobile-app data synced yet) is transparently swapped for the same
+// realistic, linked fixture set scripts/qa/seedServer.mjs uses locally —
+// never for mutations, and NEVER overriding a real non-empty response: the
+// instant a real customer/parcel/rider/etc. exists, that endpoint's real
+// data wins automatically and permanently, with no redeploy needed. Pairs
+// with the "Demo Data" banner in AnalyticsDashboard.jsx so fabricated rows
+// are never mistaken for real ones.
+//
+// Defaults ON for this pre-launch phase (no mobile app connected, every
+// endpoint is currently empty either way) so the deployed site is populated
+// without any Render dashboard step. Set VITE_DEMO_MODE=0 at build time to
+// force it off — do this once the mobile app is connected and this should
+// go fully REAL-only (AGENTS2.md §7); it stops being needed anyway the
+// moment every one of these endpoints has real rows, since the fallback
+// only ever fires on an empty response.
 import {
   DEMO_RIDERS, DEMO_SELLERS, DEMO_CUSTOMERS, DEMO_PARCELS, DEMO_ISSUES,
   DEMO_ACCOUNTS, DEMO_PARCEL_LOCATIONS, DEMO_ACTIVITY_LOG, DEMO_NOTIFICATIONS,
   DEMO_DASHBOARD_STATS, filterByStatus,
 } from './demoFixtures';
 
-export const isDemoMode = import.meta.env.VITE_DEMO_MODE === '1';
+export const isDemoMode = import.meta.env.VITE_DEMO_MODE !== '0';
 
 const DEMO_ROUTES = {
   '/customers': () => DEMO_CUSTOMERS,
