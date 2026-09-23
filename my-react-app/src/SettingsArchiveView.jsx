@@ -514,7 +514,7 @@ export default function SettingsArchiveView({
               value={datePreset}
               onChange={e => setDatePreset(e.target.value)}
             >
-              <option value="all">All Time</option>
+              <option value="all">All</option>
               <option value="30d">Last 30 Days</option>
               <option value="90d">Last 90 Days</option>
               <option value="year">Past Year</option>

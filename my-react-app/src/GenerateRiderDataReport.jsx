@@ -308,7 +308,7 @@ export default function GenerateRiderDataReport() {
                 value={filters.vehicleType}
                 onChange={(e) => handleFilterChange('vehicleType', e.target.value)}
               >
-                <option value="all" className="font-medium text-slate-700 bg-white">All Vehicles</option>
+                <option value="all" className="font-medium text-slate-700 bg-white">All</option>
                 <option value="Motorcycle" className="font-medium text-slate-700 bg-white">Motorcycle</option>
                 <option value="Van" className="font-medium text-slate-700 bg-white">Van</option>
                 <option value="Bicycle" className="font-medium text-slate-700 bg-white">Bicycle</option>
@@ -318,7 +318,7 @@ export default function GenerateRiderDataReport() {
                 value={filters.duty}
                 onChange={(e) => handleFilterChange('duty', e.target.value)}
               >
-                <option value="all" className="font-medium text-slate-700 bg-white">All Duty States</option>
+                <option value="all" className="font-medium text-slate-700 bg-white">All</option>
                 <option value="online" className="font-medium text-slate-700 bg-white">On Duty</option>
                 <option value="on-delivery" className="font-medium text-slate-700 bg-white">On Delivery</option>
                 <option value="offline" className="font-medium text-slate-700 bg-white">Off Duty</option>
@@ -328,7 +328,7 @@ export default function GenerateRiderDataReport() {
                 value={filters.status}
                 onChange={(e) => handleFilterChange('status', e.target.value)}
               >
-                <option value="all" className="font-medium text-slate-700 bg-white">All Statuses</option>
+                <option value="all" className="font-medium text-slate-700 bg-white">All</option>
                 <option value={RIDER_STATUS.ACTIVE} className="font-medium text-slate-700 bg-white">Active</option>
                 <option value={RIDER_STATUS.PENDING_VERIFICATION} className="font-medium text-slate-700 bg-white">Pending Verification</option>
               </FilterBar.Select>

@@ -490,6 +490,8 @@ html, body, #root {
   flex-direction: column;
   gap: var(--ed-gap);
   box-sizing: border-box;
+  min-height: 0;
+  overflow: hidden;
 }
 
 /* StatCard.Grid ships a built-in 24px bottom margin for page-level stacks. This
@@ -530,27 +532,59 @@ html, body, #root {
    it must actually scope the chart windows (buildLast7Days/buildLastNWeeks)
    before any markup is added — the removed dateRange control changed nothing. */
 
-/* Operational canvas (2.2fr) + compact data rail (1fr). */
-.ed-canvas-grid {
+/* Top row: Parcel Volume | Rider Performance | Parcel Operations, three
+   equal columns, fixed order. Each card stretches to the row's full height
+   (align-items: stretch) and scrolls its own body internally rather than
+   growing the page — see .ed-top-card-body and .ad-main--no-scroll below,
+   which together keep the whole Dashboard view within the viewport. */
+.ed-top-row {
   display: grid;
-  grid-template-columns: 2.2fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr;
   gap: var(--ed-gap);
-  align-items: start;
+  align-items: stretch;
+  flex: 1 1 auto;
+  min-height: 0;
 }
-/* Every panel on this page is a SectionCard from the shared UI kit, so no
-   card chrome is declared here. These grids only arrange them. */
-.ed-rail {
+.ed-top-card {
   display: flex;
   flex-direction: column;
-  gap: var(--ed-gap);
   min-width: 0;
+  min-height: 0;
+}
+.ed-top-card-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  /* Rider Performance's table has more columns than a 1/3-width card can
+     show at once — scroll them within the card instead of clipping them. */
+  overflow-x: auto;
+}
+/* Parcel Volume is the deliberately smaller card of the three — shorter
+   chart, tighter axis gutter — while still sharing the row's equal columns. */
+.ed-top-card--volume {
+  --ed-plot-axis-gap: 8px;
+}
+.ed-top-card--volume .ed-plot {
+  --plot-h: 140px;
+  padding-top: 12px;
 }
 
-/* Grid children must be allowed to shrink — a wide table inside a card would
-   otherwise force its whole row wider than the viewport. */
-.ed-canvas-grid > *,
-.ed-people-row > * {
-  min-width: 0;
+/* When the Dashboard is the active page, .ad-main (normally the page-level
+   scroll container) becomes a fixed-height flex column instead: the header
+   and demo banner keep their natural size, and .enhanced-dashboard-root is
+   the one child that stretches to fill and manage what's left. Every other
+   page keeps the original scrolling .ad-main untouched. */
+.ad-main--no-scroll {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.ad-main--no-scroll > * {
+  flex-shrink: 0;
+}
+.ad-main--no-scroll > .enhanced-dashboard-root {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 /* ── Bar plot ───────────────────────────────────────────────────────────
@@ -922,19 +956,13 @@ html, body, #root {
   .ad-wrapper.ad-sidebar--collapsed .ad-main { margin-left: 72px; }
 }
 
+/* Below this width, three equal columns is too cramped to read — stack to
+   one column and let .ad-main scroll normally again (the no-scroll layout
+   is a desktop-viewport guarantee, not a mobile one). */
 @media (max-width: 1080px) {
-  .ed-canvas-grid,
-  .ed-people-row { grid-template-columns: 1fr; }
-}
-
-/* People analytics (sellers + customers + support) in one row. auto-fit so
-   the three cards sit on one line when there is width for them and wrap to
-   two or one on smaller screens, without a breakpoint to keep in sync. */
-.ed-people-row {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: var(--ed-gap);
-  align-items: start;
+  .ed-top-row { grid-template-columns: 1fr; }
+  .ad-main--no-scroll { overflow-y: auto; display: block; }
+  .ad-main--no-scroll > .enhanced-dashboard-root { overflow: visible; }
 }
 
 /* Section-link buttons: text action, 8px hit area, no pill, no lift. */
@@ -953,49 +981,6 @@ html, body, #root {
 .ed-link-btn:hover {
   background: #f4effa;
   text-decoration: underline;
-}
-
-/* Seller pipeline funnel: label + track + count rows. */
-.ed-funnel {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin: 4px 0 14px;
-}
-.ed-funnel-row {
-  display: grid;
-  grid-template-columns: minmax(120px, 150px) 1fr 44px;
-  align-items: center;
-  gap: 10px;
-}
-.ed-funnel-label {
-  font-size: 11px;
-  font-weight: 600;
-  color: #475569;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.ed-funnel-track {
-  height: 10px;
-  background: #f1f5f9;
-  border-radius: var(--yto-radius-xs, 4px);
-  overflow: hidden;
-}
-.ed-funnel-fill {
-  height: 100%;
-  border-radius: var(--yto-radius-xs, 4px);
-  transition: width 0.2s ease;
-}
-.ed-funnel-fill.purple { background: #390955; }
-.ed-funnel-fill.amber  { background: #f37021; }
-.ed-funnel-fill.green  { background: #16a34a; }
-.ed-funnel-count {
-  font-size: 14px;
-  font-weight: 800;
-  color: #1e293b;
-  text-align: right;
-  font-variant-numeric: tabular-nums;
 }
 
 /* Rider leaderboard rows: name on top, rider ID as a quiet second line. */

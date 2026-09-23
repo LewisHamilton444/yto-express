@@ -16,6 +16,7 @@ export default function SectionCard({
   footer,
   noPadding = false,
   className = '',
+  bodyClassName = '',
   style = {},
   onClick,
 }) {
@@ -48,7 +49,7 @@ export default function SectionCard({
         )
       )}
 
-      <div className={noPadding ? '' : 'p-6'}>
+      <div className={`${noPadding ? '' : 'p-6'} ${bodyClassName}`.trim()}>
         {children}
       </div>
 

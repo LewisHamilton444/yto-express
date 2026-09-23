@@ -945,7 +945,7 @@ export default function ManageParcels() {
               value={statusFilter}
               onChange={e => { setStatusFilter(e.target.value); setCurrentPage(1); }}
             >
-              <option value="All">All Statuses</option>
+              <option value="All">All</option>
               {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
             </FilterBar.Select>
             <FilterBar.Count count={filtered.length} label="results" />

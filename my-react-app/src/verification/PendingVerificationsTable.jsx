@@ -149,7 +149,7 @@ const PendingVerificationsTable = ({ type, items = [], onReview }) => {
               setCurrentPage(1);
             }}
           >
-            <option value="All" className="font-medium text-slate-700 bg-white">All Time</option>
+            <option value="All" className="font-medium text-slate-700 bg-white">All</option>
             <option value="today" className="font-medium text-slate-700 bg-white">Today</option>
             <option value="week" className="font-medium text-slate-700 bg-white">Past 7 Days</option>
             <option value="month" className="font-medium text-slate-700 bg-white">Past 30 Days</option>
@@ -164,7 +164,7 @@ const PendingVerificationsTable = ({ type, items = [], onReview }) => {
               setCurrentPage(1);
             }}
           >
-            <option value="All" className="font-medium text-slate-700 bg-white">All Submissions</option>
+            <option value="All" className="font-medium text-slate-700 bg-white">All</option>
             {type === 'seller' ? (
               <>
                 <option value="with_store" className="font-medium text-slate-700 bg-white">With Store Name</option>

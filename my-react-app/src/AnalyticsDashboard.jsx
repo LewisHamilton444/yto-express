@@ -4,7 +4,7 @@ import {
   ClipboardList, Download, Share2,
   Users, PackageSearch, AlertTriangle,
 } from 'lucide-react';
-import { apiFetch, parcelsApi, ridersApi, sellersApi, customersApi, isDemoMode } from './services/api';
+import { apiFetch, parcelsApi, ridersApi, isDemoMode } from './services/api';
 import { exportToCSV } from './exportUtils';
 import { barHeightPercent, niceAxisMax, axisTicks } from './utils/barHeight';
 import useSSE from './services/useSSE';
@@ -529,9 +529,6 @@ export default function AnalyticsDashboard({
   // ── Real data from the backend — no more hardcoded numbers ────────────────
   const [parcels, setParcels]         = useState([]);
   const [riders, setRiders]           = useState([]);
-  const [sellers, setSellers]         = useState([]);
-  const [customers, setCustomers]     = useState([]);
-  const [issues, setIssues]           = useState([]);
   const [dashboardLoading, setDashboardLoading] = useState(true);
   const [isRefreshing, setIsRefreshing]         = useState(false);
   // Top KPI row is bound to the real GET /api/dashboard/stats aggregate
@@ -547,26 +544,15 @@ export default function AnalyticsDashboard({
     if (isManual) setIsRefreshing(true);
     else setDashboardLoading(true);
 
-    // Hub receivers have no People/Support sections — skip those collections
-    // so their browser never pulls seller/customer rows it cannot open.
-    const isHubReceiver = currentUser?.role === 'hub_receiver';
-    const okJson = (res) => (res && res.ok ? res.json().catch(() => []) : []);
-
     try {
-      const [parcelsData, ridersData, statsRes, sellersData, customersData, issuesData] = await Promise.all([
+      const [parcelsData, ridersData, statsRes] = await Promise.all([
         parcelsApi.list().catch(() => []),
         ridersApi.list().catch(() => []),
         apiFetch('/dashboard/stats').catch(() => null),
-        isHubReceiver ? Promise.resolve([]) : sellersApi.list().catch(() => []),
-        isHubReceiver ? Promise.resolve([]) : customersApi.list().catch(() => []),
-        isHubReceiver ? Promise.resolve([]) : apiFetch('/issues').then(okJson).catch(() => []),
       ]);
 
       setParcels(Array.isArray(parcelsData) ? parcelsData : []);
       setRiders(Array.isArray(ridersData) ? ridersData : []);
-      setSellers(Array.isArray(sellersData) ? sellersData : []);
-      setCustomers(Array.isArray(customersData) ? customersData : []);
-      setIssues(Array.isArray(issuesData) ? issuesData : []);
 
       if (statsRes && statsRes.ok) {
         const data = await statsRes.json();
@@ -581,7 +567,7 @@ export default function AnalyticsDashboard({
       setDashboardLoading(false);
       if (isManual) setIsRefreshing(false);
     }
-  }, [currentUser?.role]);
+  }, []);
 
   useEffect(() => {
     fetchDashboardData();
@@ -683,34 +669,6 @@ export default function AnalyticsDashboard({
   // when no fee data has synced yet (honest empty state, not a zero lie).
   const completedFeeParcels = parcels.filter(p => isDeliveredStatus(p.status) && typeof p.deliveryFee === 'number' && p.deliveryFee > 0);
   const collectedFees = completedFeeParcels.reduce((sum, p) => sum + p.deliveryFee, 0);
-
-  // ── People analytics (sellers + customers) ──────────────────────────────
-  // Status matching is case-insensitive: the seller refresh asks for
-  // PENDING_VERIFICATION while the rider refresh asks for Pending.
-  const isPendingSeller = (s) => /pending|verif/i.test(s.status || '');
-  const activeSellers = sellers.filter(s => !isPendingSeller(s));
-  const pendingSellerItems = sellers.filter(isPendingSeller);
-  const newSellers7d = sellers.filter(s => s.createdAt && new Date(s.createdAt) >= startThisWeek).length;
-
-  const newCustomers7d = customers.filter(c => c.createdAt && new Date(c.createdAt) >= startThisWeek).length;
-  const last14Days = useMemo(() => {
-    const days = [];
-    for (let i = 13; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      const dayKey = d.toISOString().slice(0, 10);
-      days.push({
-        label: d.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' }),
-        value: customers.filter(c => toDayKey(c.createdAt) === dayKey).length,
-      });
-    }
-    return days;
-  }, [customers]);
-
-  // ── Support snapshot ────────────────────────────────────────────────────
-  const openIssues = issues.filter(t => (t.status || '').toLowerCase() === 'open');
-  const investigatingIssues = issues.filter(t => /investigat|progress/i.test(t.status || ''));
-  const closedIssues = issues.filter(t => /resolv|clos/i.test(t.status || ''));
 
   // ── The KPI row ───────────────────────────────────────────────────────
   // Exactly four headline figures. Everything else this page used to repeat
@@ -981,7 +939,7 @@ export default function AnalyticsDashboard({
         </nav>
       </aside>
 
-      <main className="ad-main">
+      <main className={`ad-main${activeMenuItem === 'dashboard' ? ' ad-main--no-scroll' : ''}`}>
         <GlobalHeader
           currentUser={currentUser}
           riders={riders}
@@ -1060,8 +1018,14 @@ export default function AnalyticsDashboard({
                     />
                   ))}
                 </StatCard.Grid>
-                <div className="ed-canvas-grid">
+                {/* Top row: Parcel Volume (compact) | Rider Performance | Parcel
+                    Operations, in that fixed order — each card fills the row's
+                    height and scrolls its own body internally (.ed-top-card-body)
+                    so an overlong list never grows the page itself. */}
+                <div className="ed-top-row">
                   <SectionCard
+                    className="ed-top-card ed-top-card--volume"
+                    bodyClassName="ed-top-card-body"
                     title="Parcel Volume"
                     subtitle={volumeView === 'daily' ? 'Parcels booked per day, last 7 days' : volumeView === 'weekly' ? 'Parcels booked per week, last 6 weeks' : 'Parcels booked per hour, last 14 hours'}
                     actions={(
@@ -1102,7 +1066,7 @@ export default function AnalyticsDashboard({
                       <TrendArea
                         points={hourly.map((h) => ({ label: h.label, value: h.booked }))}
                         reference={{ value: hourlyAvg, label: `Average ${hourlyAvg}` }}
-                        height={200}
+                        height={140}
                         ariaLabel={`Parcels booked per hour over the last 14 hours, ${hourlyBooked} in total.`}
                       />
                     ) : (
@@ -1140,184 +1104,101 @@ export default function AnalyticsDashboard({
                     )}
                   </SectionCard>
 
-                  <div className="ed-rail">
-                    <SectionCard
-                      title="Parcel Operations"
-                      subtitle="Where every parcel stands"
-                      footer={(
-                        <div className="ed-card-actions">
-                          <button type="button" className="ed-action-btn primary" onClick={() => handleMenuClick('manage-parcels')}>
-                            <ClipboardList size={15} aria-hidden="true" /> View parcels
-                          </button>
-                          <button type="button" className="ed-action-btn secondary" disabled={parcels.length === 0} onClick={() => dashboardExportPDF(parcels)}>
-                            <Download size={15} aria-hidden="true" /> Download PDF
-                          </button>
-                          <button type="button" className="ed-action-btn secondary" disabled={parcels.length === 0} onClick={() => dashboardExportCSV(parcels)}>
-                            <Share2 size={15} aria-hidden="true" /> Export CSV
-                          </button>
-                        </div>
-                      )}
-                    >
-                      {statusBreakdown.length === 0 ? (
-                        <EmptyState icon={PackageSearch} title="No parcels yet" description="The status breakdown appears once parcels are booked." />
-                      ) : (
-                        <>
-                          <div className="ed-donut-row">
-                            <StatusDonut rows={statusBreakdown} total={parcels.length} />
-                            <div className="ed-status-legend">
-                              {statusBreakdown.map((row) => (
-                                <div className="ed-status-row" key={row.status}>
-                                  <i className="ed-status-swatch" style={{ background: row.color }} aria-hidden="true" />
-                                  <span className="ed-status-name">{row.status}</span>
-                                  <strong className="ed-status-count">{row.count}</strong>
-                                  <span className="ed-status-share">{statusShares.get(row.status)}%</span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                          {collectedFees > 0 && (
-                            <p className="ed-caption">
-                              Delivery fees collected: <strong>₱{collectedFees.toFixed(2)}</strong> from {completedFeeParcels.length} completed {completedFeeParcels.length === 1 ? 'delivery' : 'deliveries'}.
-                            </p>
-                          )}
-                        </>
-                      )}
-                    </SectionCard>
-                  </div>
-                </div>
-
-                {/* Rider performance — the only per-rider block on the page. The
-                    "Rider Activity" chart that used to sit beside it drew the same
-                    per-rider counts a second time, so they are now a column here,
-                    and hour granularity moved into the volume card. */}
-                <SectionCard
-                  title="Rider Performance"
-                  subtitle="Ranked by success rate on the parcels each rider was given"
-                  actions={<button type="button" className="ed-link-btn" onClick={() => handleMenuClick('monitor-rider')}>Duty monitor</button>}
-                  footer={topRiders.length === 0 ? null : (
-                    <CardFooter
-                      resultsLabel={`${activeRidersCount} of ${riders.length} riders on duty`}
-                      pills={[
-                        { label: 'Top performer', value: peakRider, tone: 'green' },
-                        { label: 'Average rating', value: `${avgRating} / 5`, tone: 'purple' },
-                        { label: 'Deliveries', value: totalRides.toLocaleString(), tone: 'slate' },
-                      ]}
-                    />
-                  )}
-                >
-                  {topRiders.length === 0 ? (
-                    <EmptyState icon={Users} title={riders.length === 0 ? 'No riders registered yet' : 'No deliveries assigned yet'} description={riders.length === 0 ? 'Riders approved through the app will appear here.' : 'Rankings appear once riders start completing assigned parcels.'} />
-                  ) : (
-                    <DataTable>
-                      <DataTable.Head>
-                        <tr>
-                          <DataTable.Th>Rider</DataTable.Th>
-                          <DataTable.Th>Duty</DataTable.Th>
-                          <DataTable.Th align="right">Parcels</DataTable.Th>
-                          <DataTable.Th align="right">Delivered</DataTable.Th>
-                          <DataTable.Th align="right">Success</DataTable.Th>
-                          <DataTable.Th align="right">Rating</DataTable.Th>
-                        </tr>
-                      </DataTable.Head>
-                      <tbody>
-                        {topRiders.map((r) => (
-                          <DataTable.Row key={r.registrationId || String(r._id) || r.riderName}>
-                            <DataTable.Cell>
-                              <span className="ed-rider-name">{r.riderName || 'Unnamed rider'}</span>
-                              <span className="ed-rider-id">{r.registrationId || 'No rider ID yet'}</span>
-                            </DataTable.Cell>
-                            <DataTable.Cell>{r.isOnDuty ? 'On duty' : 'Off duty'}</DataTable.Cell>
-                            <DataTable.Cell align="right" tabularNums>{(r.totalAssigned || 0).toLocaleString()}</DataTable.Cell>
-                            <DataTable.Cell align="right" tabularNums>{(r.deliveries || 0).toLocaleString()}</DataTable.Cell>
-                            <DataTable.Cell align="right" tabularNums>{r.successRate}%</DataTable.Cell>
-                            <DataTable.Cell align="right" tabularNums>{r.rating ? Number(r.rating).toFixed(1) : 'Not rated'}</DataTable.Cell>
-                          </DataTable.Row>
-                        ))}
-                      </tbody>
-                    </DataTable>
-                  )}
-                </SectionCard>
-
-                {/* People analytics — sellers + customers + support, aggregate
-                    only. No personal rows here; every block links out to its
-                    ledger. Hidden for hub receivers, who have no People section. */}
-                {currentUser?.role !== 'hub_receiver' && (
-                <div className="ed-people-row">
                   <SectionCard
-                    title="Seller Pipeline"
-                    subtitle="Where every seller stands"
-                    actions={<button type="button" className="ed-link-btn" onClick={() => handleMenuClick('process-seller')}>Review queue</button>}
+                    className="ed-top-card"
+                    bodyClassName="ed-top-card-body"
+                    title="Rider Performance"
+                    subtitle="Ranked by success rate on the parcels each rider was given"
+                    actions={<button type="button" className="ed-link-btn" onClick={() => handleMenuClick('monitor-rider')}>Duty monitor</button>}
+                    footer={topRiders.length === 0 ? null : (
+                      <CardFooter
+                        resultsLabel={`${activeRidersCount} of ${riders.length} riders on duty`}
+                        pills={[
+                          { label: 'Top performer', value: peakRider, tone: 'green' },
+                          { label: 'Average rating', value: `${avgRating} / 5`, tone: 'purple' },
+                          { label: 'Deliveries', value: totalRides.toLocaleString(), tone: 'slate' },
+                        ]}
+                      />
+                    )}
                   >
-                    {sellers.length === 0 ? (
-                      <EmptyState icon={Users} title="No sellers yet" description="The approval pipeline will appear here once sellers register through the app." />
+                    {topRiders.length === 0 ? (
+                      <EmptyState icon={Users} title={riders.length === 0 ? 'No riders registered yet' : 'No deliveries assigned yet'} description={riders.length === 0 ? 'Riders approved through the app will appear here.' : 'Rankings appear once riders start completing assigned parcels.'} />
                     ) : (
-                      <>
-                        <div className="ed-funnel">
-                          {[
-                            { label: 'Waiting for review', count: pendingSellerItems.length, bar: 'amber' },
-                            { label: 'Active sellers', count: activeSellers.length, bar: 'purple' },
-                            { label: 'Joined this week', count: newSellers7d, bar: 'green' },
-                          ].map(stage => (
-                            <div className="ed-funnel-row" key={stage.label}>
-                              <span className="ed-funnel-label">{stage.label}</span>
-                              <div className="ed-funnel-track">
-                                <div
-                                  className={`ed-funnel-fill ${stage.bar}`}
-                                  style={{ width: `${sellers.length ? Math.max(stage.count > 0 ? 8 : 0, Math.round((stage.count / sellers.length) * 100)) : 0}%` }}
-                                />
-                              </div>
-                              <strong className="ed-funnel-count">{stage.count}</strong>
-                            </div>
+                      <DataTable>
+                        <DataTable.Head>
+                          <tr>
+                            <DataTable.Th>Rider</DataTable.Th>
+                            <DataTable.Th>Duty</DataTable.Th>
+                            <DataTable.Th align="right">Parcels</DataTable.Th>
+                            <DataTable.Th align="right">Delivered</DataTable.Th>
+                            <DataTable.Th align="right">Success</DataTable.Th>
+                            <DataTable.Th align="right">Rating</DataTable.Th>
+                          </tr>
+                        </DataTable.Head>
+                        <tbody>
+                          {topRiders.map((r) => (
+                            <DataTable.Row key={r.registrationId || String(r._id) || r.riderName}>
+                              <DataTable.Cell>
+                                <span className="ed-rider-name">{r.riderName || 'Unnamed rider'}</span>
+                                <span className="ed-rider-id">{r.registrationId || 'No rider ID yet'}</span>
+                              </DataTable.Cell>
+                              <DataTable.Cell>{r.isOnDuty ? 'On duty' : 'Off duty'}</DataTable.Cell>
+                              <DataTable.Cell align="right" tabularNums>{(r.totalAssigned || 0).toLocaleString()}</DataTable.Cell>
+                              <DataTable.Cell align="right" tabularNums>{(r.deliveries || 0).toLocaleString()}</DataTable.Cell>
+                              <DataTable.Cell align="right" tabularNums>{r.successRate}%</DataTable.Cell>
+                              <DataTable.Cell align="right" tabularNums>{r.rating ? Number(r.rating).toFixed(1) : 'Not rated'}</DataTable.Cell>
+                            </DataTable.Row>
                           ))}
-                        </div>
-                        <div className="ed-rail-stats">
-                          <div className="ed-rail-stat"><label>Total sellers</label><strong>{sellers.length}</strong></div>
-                          <div className="ed-rail-stat"><label>Approval backlog</label><strong>{pendingSellerItems.length}</strong></div>
-                        </div>
-                      </>
+                        </tbody>
+                      </DataTable>
                     )}
                   </SectionCard>
 
                   <SectionCard
-                    title="Customer Growth"
-                    subtitle="New sign-ups over the last 14 days"
-                    actions={<button type="button" className="ed-link-btn" onClick={() => handleMenuClick('customer-list')}>View customers</button>}
-                  >
-                    {customers.length === 0 ? (
-                      <EmptyState icon={Users} title="No customers yet" description="Registration activity will appear here once customers sign up through the app." />
-                    ) : (
-                      <>
-                        <TrendArea
-                          points={last14Days}
-                          color="#390955"
-                          height={120}
-                          ariaLabel={`New customers per day over the last 14 days. ${newCustomers7d} joined this week.`}
-                        />
-                        <div className="ed-rail-stats">
-                          <div className="ed-rail-stat"><label>Registered customers</label><strong>{customers.length}</strong></div>
-                          <div className="ed-rail-stat"><label>Joined this week</label><strong>{newCustomers7d}</strong></div>
-                        </div>
-                      </>
-                    )}
-                  </SectionCard>
-
-                  <SectionCard
-                    title="Support Snapshot"
-                    subtitle="Customer and rider reports"
-                    actions={<button type="button" className="ed-link-btn" onClick={() => handleMenuClick('manage-issues')}>Open issues</button>}
-                  >
-                    {issues.length === 0 ? (
-                      <EmptyState icon={ClipboardList} title="No support tickets" description="Customer and rider reports will be counted here once tickets arrive." />
-                    ) : (
-                      <div className="ed-rail-stats">
-                        <div className="ed-rail-stat"><label>Open tickets</label><strong>{openIssues.length}</strong></div>
-                        <div className="ed-rail-stat"><label>Being investigated</label><strong>{investigatingIssues.length}</strong></div>
-                        <div className="ed-rail-stat"><label>Resolved or closed</label><strong>{closedIssues.length}</strong></div>
+                    className="ed-top-card"
+                    bodyClassName="ed-top-card-body"
+                    title="Parcel Operations"
+                    subtitle="Where every parcel stands"
+                    footer={(
+                      <div className="ed-card-actions">
+                        <button type="button" className="ed-action-btn primary" onClick={() => handleMenuClick('manage-parcels')}>
+                          <ClipboardList size={15} aria-hidden="true" /> View parcels
+                        </button>
+                        <button type="button" className="ed-action-btn secondary" disabled={parcels.length === 0} onClick={() => dashboardExportPDF(parcels)}>
+                          <Download size={15} aria-hidden="true" /> Download PDF
+                        </button>
+                        <button type="button" className="ed-action-btn secondary" disabled={parcels.length === 0} onClick={() => dashboardExportCSV(parcels)}>
+                          <Share2 size={15} aria-hidden="true" /> Export CSV
+                        </button>
                       </div>
                     )}
+                  >
+                    {statusBreakdown.length === 0 ? (
+                      <EmptyState icon={PackageSearch} title="No parcels yet" description="The status breakdown appears once parcels are booked." />
+                    ) : (
+                      <>
+                        <div className="ed-donut-row">
+                          <StatusDonut rows={statusBreakdown} total={parcels.length} />
+                          <div className="ed-status-legend">
+                            {statusBreakdown.map((row) => (
+                              <div className="ed-status-row" key={row.status}>
+                                <i className="ed-status-swatch" style={{ background: row.color }} aria-hidden="true" />
+                                <span className="ed-status-name">{row.status}</span>
+                                <strong className="ed-status-count">{row.count}</strong>
+                                <span className="ed-status-share">{statusShares.get(row.status)}%</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                        {collectedFees > 0 && (
+                          <p className="ed-caption">
+                            Delivery fees collected: <strong>₱{collectedFees.toFixed(2)}</strong> from {completedFeeParcels.length} completed {completedFeeParcels.length === 1 ? 'delivery' : 'deliveries'}.
+                          </p>
+                        )}
+                      </>
+                    )}
                   </SectionCard>
                 </div>
-                )}
 
                 {/* Admin-side diagnostics. Deliberately the last card on the page
                     and the only place connection health is reported, so it stays

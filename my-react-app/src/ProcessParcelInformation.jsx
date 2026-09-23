@@ -528,7 +528,7 @@ export default function ProcessParcelInformation() {
                   onChange={e => setRetrieveSearch(e.target.value)} />
               </div>
               <select className="ppi-filter-select" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
-                <option value="all">All Statuses</option>
+                <option value="all">All</option>
                 <option value="pending">Pending</option>
                 <option value="in-transit">In Transit</option>
                 <option value="delivered">Delivered</option>

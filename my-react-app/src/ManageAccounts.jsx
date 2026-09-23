@@ -338,7 +338,7 @@ export default function ManageAccounts() {
               value={roleFilter}
               onChange={e => setRoleFilter(e.target.value)}
             >
-              <option value="All">All Roles</option>
+              <option value="All">All</option>
               <option value="super_admin">Super Admin</option>
               <option value="staff">Staff</option>
               <option value="hub_receiver">Hub Receiver</option>
@@ -348,7 +348,7 @@ export default function ManageAccounts() {
               value={statusFilter}
               onChange={e => setStatusFilter(e.target.value)}
             >
-              <option value="All">All Statuses</option>
+              <option value="All">All</option>
               <option value="Active">Active</option>
               <option value="Deactivated">Deactivated</option>
             </FilterBar.Select>

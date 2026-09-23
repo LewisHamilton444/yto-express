@@ -251,7 +251,7 @@ export default function AppNotifications() {
   };
 
   const segmentTabs = [
-    { id: 'all', label: 'All Events', count: notifications.length },
+    { id: 'all', label: 'All', count: notifications.length },
     { id: 'unread', label: 'Unread Alerts', count: unreadCount },
     { id: 'read', label: 'Acknowledged', count: Math.max(0, notifications.length - unreadCount) },
     { id: 'orders', label: 'Orders & Deliveries', count: orderEventsCount },
@@ -397,7 +397,7 @@ export default function AppNotifications() {
               value={roleFilter}
               onChange={e => { setRoleFilter(e.target.value); setCurrentPage(1); }}
             >
-              <option value="all">All Roles</option>
+              <option value="all">All</option>
               <option value="customer">Customer</option>
               <option value="seller">Seller</option>
               <option value="rider">Rider</option>
@@ -419,7 +419,7 @@ export default function AppNotifications() {
               value={dateFilter}
               onChange={e => { setDateFilter(e.target.value); setCurrentPage(1); }}
             >
-              <option value="all">All Time</option>
+              <option value="all">All</option>
               <option value="today">Today</option>
               <option value="week">Past 7 Days</option>
               <option value="month">Past 30 Days</option>

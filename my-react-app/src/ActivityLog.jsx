@@ -365,7 +365,7 @@ export default function ActivityLog() {
         {/* ── CATEGORY DOMAIN TABS ── */}
         <div className="flex items-center gap-2 px-6 pt-5 pb-3 border-b border-[#e4d8f2] bg-gradient-to-r from-[#faf8fc] to-white overflow-x-auto">
           {[
-            { key: 'all', label: 'All Activities', icon: History, count: stats.total },
+            { key: 'all', label: 'All', icon: History, count: stats.total },
             { key: 'delivery', label: 'Riders & Logistics', icon: Bike, count: stats.deliveries },
             { key: 'order', label: 'Shipment Bookings', icon: Package, count: stats.orders },
             { key: 'customer', label: 'Customer Actions', icon: Users, count: stats.customers },
@@ -425,7 +425,7 @@ export default function ActivityLog() {
               value={datePreset}
               onChange={e => setDatePreset(e.target.value)}
             >
-              <option value="all">All Time</option>
+              <option value="all">All</option>
               <option value="today">Today</option>
               <option value="7d">Last 7 Days</option>
               <option value="30d">Last 30 Days</option>

@@ -288,7 +288,7 @@ export default function MonitorRiderStatus() {
               value={dutyFilter}
               onChange={(e) => setDutyFilter(e.target.value)}
             >
-              <option value="all" className="font-medium text-slate-700 bg-white">All Duty States</option>
+              <option value="all" className="font-medium text-slate-700 bg-white">All</option>
               <option value="online" className="font-medium text-slate-700 bg-white">On Duty</option>
               <option value="offline" className="font-medium text-slate-700 bg-white">Off Duty</option>
             </FilterBar.Select>
@@ -297,7 +297,7 @@ export default function MonitorRiderStatus() {
               value={vehicleFilter}
               onChange={(e) => setVehicleFilter(e.target.value)}
             >
-              <option value="all" className="font-medium text-slate-700 bg-white">All Vehicles</option>
+              <option value="all" className="font-medium text-slate-700 bg-white">All</option>
               <option value="Motorcycle" className="font-medium text-slate-700 bg-white">Motorcycle</option>
               <option value="Van" className="font-medium text-slate-700 bg-white">Van</option>
               <option value="Bicycle" className="font-medium text-slate-700 bg-white">Bicycle</option>

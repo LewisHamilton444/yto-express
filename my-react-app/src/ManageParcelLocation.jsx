@@ -615,7 +615,7 @@ export default function ProcessParcelLocation() {
                   value={boundaryFilter}
                   onChange={e => { setBoundaryFilter(e.target.value); setCurrentPage(1); }}
                 >
-                  <option value="all">All Boundaries</option>
+                  <option value="all">All</option>
                   <option value="Inside">Inside Boundary</option>
                   <option value="Outside">Outside Boundary</option>
                 </FilterBar.Select>
@@ -624,7 +624,7 @@ export default function ProcessParcelLocation() {
                   value={typeFilter}
                   onChange={e => { setTypeFilter(e.target.value); setCurrentPage(1); }}
                 >
-                  <option value="all">All Hub Types</option>
+                  <option value="all">All</option>
                   <option value="warehouse">Warehouse</option>
                   <option value="distribution">Distribution</option>
                   <option value="branch">Branch</option>

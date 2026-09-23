@@ -262,14 +262,14 @@ export default function ManageIssues() {
               value={categoryFilter}
               onChange={e => setCategoryFilter(e.target.value)}
             >
-              {CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+              {CATEGORIES.map(cat => <option key={cat} value={cat}>{cat === 'All Categories' ? 'All' : cat}</option>)}
             </FilterBar.Select>
             <FilterBar.Select
               aria-label="Filter by status"
               value={statusFilter}
               onChange={e => setStatusFilter(e.target.value)}
             >
-              {STATUS_OPTIONS.map(st => <option key={st} value={st}>{st === 'All' ? 'All Statuses' : st}</option>)}
+              {STATUS_OPTIONS.map(st => <option key={st} value={st}>{st}</option>)}
             </FilterBar.Select>
             <FilterBar.Count count={filteredIssues.length} label="results" />
           </FilterBar.Group>

@@ -259,7 +259,7 @@ const GenerateSellerReport = () => {
               value={statusFilter}
               onChange={handleStatusFilterChange}
             >
-              <option value="All" className="font-medium text-slate-700 bg-white">All Statuses</option>
+              <option value="All" className="font-medium text-slate-700 bg-white">All</option>
               <option value={SELLER_STATUS.ACTIVE} className="font-medium text-slate-700 bg-white">Active</option>
               <option value="INACTIVE" className="font-medium text-slate-700 bg-white">Inactive</option>
             </FilterBar.Select>

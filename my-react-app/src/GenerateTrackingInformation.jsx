@@ -559,7 +559,7 @@ export default function GenerateTrackingInformation({ reports: externalReports, 
               value={reportFormatFilter}
               onChange={(e) => { setReportFormatFilter(e.target.value); setReportCurrentPage(1); }}
             >
-              <option value="All" className="font-medium text-slate-700 bg-white">All Formats</option>
+              <option value="All" className="font-medium text-slate-700 bg-white">All</option>
               <option value="PDF" className="font-medium text-slate-700 bg-white">PDF</option>
               <option value="Excel" className="font-medium text-slate-700 bg-white">Excel</option>
               <option value="CSV" className="font-medium text-slate-700 bg-white">CSV</option>

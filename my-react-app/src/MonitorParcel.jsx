@@ -337,7 +337,7 @@ export default function MonitorGeofenceBoundary() {
   };
 
   const segmentTabs = [
-    { id: 'all', label: 'All Riders', count: riders.length },
+    { id: 'all', label: 'All', count: riders.length },
     { id: 'inside', label: 'Inside Geofence', count: insideHubCount },
     { id: 'outside', label: 'In Transit', count: outsideHubCount },
     { id: 'with-parcels', label: 'Carrying Shipments', count: withShipmentsCount },
@@ -467,7 +467,7 @@ export default function MonitorGeofenceBoundary() {
                 value={vehicleFilter}
                 onChange={e => { setVehicleFilter(e.target.value); setCurrentPage(1); }}
               >
-                <option value="all">All Vehicles</option>
+                <option value="all">All</option>
                 {vehicleTypes.map(v => (
                   <option key={v} value={v}>{v}</option>
                 ))}
@@ -489,7 +489,7 @@ export default function MonitorGeofenceBoundary() {
                   value={locationFilter}
                   onChange={e => { setLocationFilter(e.target.value); setCurrentPage(1); }}
                 >
-                  <option value="all">All Locations</option>
+                  <option value="all">All</option>
                   {availableCities.map(c => (
                     <option key={c} value={c}>{c}</option>
                   ))}

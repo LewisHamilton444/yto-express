@@ -18,7 +18,7 @@ import EmptyState from './components/ui/EmptyState';
 import {
   Users, Search, X,
   Hash, User, Mail, Phone, Activity, Globe, Calendar,
-  PackageSearch, History, Info, Shield, Eye,
+  PackageSearch, History, Info, Eye,
 } from 'lucide-react';
 
 const CUSTOMER_EXPORT_COLUMNS = [
@@ -29,7 +29,6 @@ const CUSTOMER_EXPORT_COLUMNS = [
   { key: 'address', label: 'Primary Address' },
   { key: 'city', label: 'City' },
   { key: 'deliveryInstructions', label: 'Delivery Instructions' },
-  { key: 'role', label: 'Role' },
   { key: 'status', label: 'Status' },
   { key: 'source', label: 'Source' },
 ];
@@ -76,7 +75,6 @@ const TABLE_HEADERS = [
   { label: 'Full Name', icon: User },
   { label: 'Email Address', icon: Mail },
   { label: 'Phone Number', icon: Phone },
-  { label: 'Role', icon: Shield },
   { label: 'Status', icon: Activity },
   { label: 'Source', icon: Globe },
   { label: 'Joined', icon: Calendar },
@@ -242,7 +240,6 @@ const CustomerList = () => {
     const exportData = filtered.map(c => ({
       ...c,
       city: resolveCustomerCity(c) || '-',
-      role: c.role || 'Customer',
     }));
     if (format === 'excel') {
       exportToExcel(exportData, CUSTOMER_EXPORT_COLUMNS, 'yto_customers');
@@ -325,7 +322,7 @@ const CustomerList = () => {
               value={statusFilter}
               onChange={e => { setStatusFilter(e.target.value); setCurrentPage(1); }}
             >
-              <option value="All" className="font-medium text-slate-700 bg-white">All Statuses</option>
+              <option value="All" className="font-medium text-slate-700 bg-white">All</option>
               <option value="Active" className="font-medium text-slate-700 bg-white">Active</option>
               <option value="Inactive" className="font-medium text-slate-700 bg-white">Inactive</option>
             </FilterBar.Select>
@@ -387,9 +384,6 @@ const CustomerList = () => {
                   <DataTable.Cell className="text-sm font-semibold text-gray-900 whitespace-nowrap">{c.fullName || '-'}</DataTable.Cell>
                   <DataTable.Cell className="text-xs text-gray-500 whitespace-nowrap">{c.email || '-'}</DataTable.Cell>
                   <DataTable.Cell className="text-xs text-gray-500 whitespace-nowrap">{c.phone || '-'}</DataTable.Cell>
-                  <DataTable.Cell className="whitespace-nowrap">
-                    <Badge tone="purple">{c.role || 'Customer'}</Badge>
-                  </DataTable.Cell>
                   <DataTable.Cell className="whitespace-nowrap"><Badge tone={STATUS_TONE[c.status] || 'green'}>{c.status || 'Active'}</Badge></DataTable.Cell>
                   <DataTable.Cell className="text-xs text-gray-500 whitespace-nowrap">{c.source || 'mobile-app'}</DataTable.Cell>
                   <DataTable.Cell tabularNums className="text-xs text-gray-500 whitespace-nowrap">{formatDate(c.createdAt)}</DataTable.Cell>
