@@ -266,7 +266,7 @@ router.post('/sync-user', async (req, res) => {
     });
   } catch (err) {
     logBridgeError('sync-user', err, body);
-    return res.status(statusForError(err)).json({ success: false, error: 'Failed to sync user record.', details: err.message });
+    return res.status(statusForError(err)).json({ success: false, error: 'Failed to sync user record.' });
   }
 });
 
@@ -577,7 +577,7 @@ router.post('/sync-parcel', async (req, res) => {
     });
   } catch (err) {
     logBridgeError('sync-parcel', err, body);
-    return res.status(statusForError(err)).json({ success: false, error: 'Failed to sync parcel record.', details: err.message });
+    return res.status(statusForError(err)).json({ success: false, error: 'Failed to sync parcel record.' });
   }
 });
 
@@ -649,7 +649,7 @@ router.post('/sync-duty-status', async (req, res) => {
     });
   } catch (err) {
     logBridgeError('sync-duty-status', err, body);
-    return res.status(statusForError(err)).json({ success: false, error: 'Failed to sync duty status.', details: err.message });
+    return res.status(statusForError(err)).json({ success: false, error: 'Failed to sync duty status.' });
   }
 });// ══════════════════════════════════════════════════════════════════════
 // POST /api/bridge/sync-notification
@@ -713,7 +713,7 @@ router.post('/sync-notification', async (req, res) => {
     });
   } catch (err) {
     logBridgeError('sync-notification', err, body);
-    return res.status(statusForError(err)).json({ success: false, error: 'Failed to sync notification.', details: err.message });
+    return res.status(statusForError(err)).json({ success: false, error: 'Failed to sync notification.' });
   }
 });
 
@@ -781,7 +781,7 @@ router.post('/sync-issue', async (req, res) => {
     });
   } catch (err) {
     logBridgeError('sync-issue', err, body);
-    return res.status(statusForError(err)).json({ success: false, error: 'Failed to sync issue record.', details: err.message });
+    return res.status(statusForError(err)).json({ success: false, error: 'Failed to sync issue record.' });
   }
 });
 
@@ -835,7 +835,7 @@ router.post('/sync-location', async (req, res) => {
     });
   } catch (err) {
     logBridgeError('sync-location', err, body);
-    return res.status(statusForError(err)).json({ success: false, error: 'Failed to sync location telemetry.', details: err.message });
+    return res.status(statusForError(err)).json({ success: false, error: 'Failed to sync location telemetry.' });
   }
 });
 
@@ -907,7 +907,7 @@ router.post('/receive-status', async (req, res) => {
     });
   } catch (err) {
     logBridgeError('receive-status', err, req.body);
-    return res.status(500).json({ success: false, error: 'Failed to receive status update.', details: err.message });
+    return res.status(500).json({ success: false, error: 'Failed to receive status update.' });
   }
 });
 
@@ -947,7 +947,7 @@ router.post('/receive-issue-status', async (req, res) => {
     });
   } catch (err) {
     logBridgeError('receive-issue-status', err, req.body);
-    return res.status(500).json({ success: false, error: 'Failed to receive issue status update.', details: err.message });
+    return res.status(500).json({ success: false, error: 'Failed to receive issue status update.' });
   }
 });
 
@@ -988,7 +988,7 @@ router.get('/poll-changes', async (req, res) => {
     });
   } catch (err) {
     logBridgeError('poll-changes', err, req.query);
-    return res.status(statusForError(err)).json({ success: false, error: 'Failed to poll changes.', details: err.message });
+    return res.status(statusForError(err)).json({ success: false, error: 'Failed to poll changes.' });
   }
 });
 

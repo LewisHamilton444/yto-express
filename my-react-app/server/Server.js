@@ -80,7 +80,11 @@ app.use(cors({
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
 }));
-app.use(express.json());
+app.use(express.json({ limit: '1mb' }));
+app.use((req, res, next) => {
+    if (req.body && typeof req.body === 'object') stripMongoOperators(req.body);
+    next();
+});
 
 // ── EDITABLE-FIELD ALLOWLISTS ───────────────────────────────────────────────
 // Every admin PUT below assigns its fields straight into $set, so each request body
@@ -234,6 +238,47 @@ function requireRole(...allowedRoles) {
     };
 }
 
+// 2026-09-29 RBAC pass: role groups mirror the admin panel's page access
+// (AnalyticsDashboard getMenuSections/canOpenPage). The panel hides pages a
+// role cannot open, but a hidden page is not a protected one — these checks
+// are what actually stop a staff or hub account calling the API directly.
+//   ANY_ROLE    — every signed-in role (the hub dashboard reads these)
+//   OFFICE      — super_admin + staff (people, parcels admin, issues, logs)
+//   SUPER_ONLY  — super_admin (deletes, map/geofence edits, settings)
+const ANY_ROLE = ['super_admin', 'staff', 'hub_receiver'];
+const OFFICE = ['super_admin', 'staff'];
+const SUPER_ONLY = ['super_admin'];
+
+// 2026-09-29 secure error handling: never send raw exception text (database
+// error codes, duplicate-key index names, validation internals, stack
+// traces, file paths) to the client. The full error is logged server-side
+// with a short reference id; the client gets a generic message plus that id,
+// so support can find the log line without the response revealing anything.
+function sendServerError(res, error, context = 'request') {
+    const ref = Math.random().toString(36).slice(2, 10);
+    console.error(`[Server Error ${ref}] ${context}:`, error && error.stack ? error.stack : error);
+    if (error && (error.name === 'ValidationError' || error.name === 'CastError')) {
+        return res.status(400).json({ error: 'Some of the submitted information is invalid. Please check it and try again.', ref });
+    }
+    if (error && error.code === 11000) {
+        return res.status(409).json({ error: 'A record with these details already exists.', ref });
+    }
+    return res.status(500).json({ error: 'Something went wrong on our side. Please try again.', ref });
+}
+
+// Strips MongoDB operator keys ($gt, $where, $ne, ...) from request bodies,
+// so a JSON body can never smuggle a query operator into a findOne/update
+// (NoSQL injection). Plain field names are untouched.
+function stripMongoOperators(value, depth = 0) {
+    if (depth > 20 || value === null || typeof value !== 'object') return value;
+    if (Array.isArray(value)) return value.map(v => stripMongoOperators(v, depth + 1));
+    for (const key of Object.keys(value)) {
+        if (key.startsWith('$')) delete value[key];
+        else value[key] = stripMongoOperators(value[key], depth + 1);
+    }
+    return value;
+}
+
 // Rate limiting (2026 audit H1/M4): brute-force guard on sign-in and the
 // messaging endpoints that burn money (SMS) or can be abused for spoofing.
 const loginLimiter = rateLimit({
@@ -358,7 +403,7 @@ app.get('/api/events/alerts', authenticateToken, (req, res) => {
 });
 
 // ── SSE THRESHOLD CONFIG ───────────────────────────────────────────────
-app.put('/api/events/threshold', authenticateToken, (req, res) => {
+app.put('/api/events/threshold', authenticateToken, requireRole(...SUPER_ONLY), (req, res) => {
     const { threshold } = req.body;
     if (typeof threshold !== 'number' || threshold < 1) {
         return res.status(400).json({ error: 'threshold must be a positive number' });
@@ -371,7 +416,7 @@ app.put('/api/events/threshold', authenticateToken, (req, res) => {
 app.use('/api/bridge', require('./bridgeRoutes'));
 
 // ── SELLER ROUTES ──
-app.post('/api/sellers', authenticateToken, async (req, res) => {
+app.post('/api/sellers', authenticateToken, requireRole(...OFFICE), async (req, res) => {
     try {
         const sellerEmail = String(req.body.email || '').toLowerCase().trim();
         if (sellerEmail) {
@@ -414,11 +459,11 @@ app.get('/api/sellers', authenticateToken, async (req, res) => {
         const sellers = await Seller.find(filter).sort({ createdAt: -1 });
         res.json(sellers);
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        sendServerError(res, error, `${req.method} ${req.path}`);
     }
 });
 
-app.put('/api/sellers/:id', authenticateToken, async (req, res) => {
+app.put('/api/sellers/:id', authenticateToken, requireRole(...OFFICE), async (req, res) => {
     try {
         const updates = pickEditable(req.body, SELLER_EDITABLE_FIELDS);
         if (Object.keys(updates).length === 0) {
@@ -454,11 +499,11 @@ app.put('/api/sellers/:id', authenticateToken, async (req, res) => {
 
         res.json(updated);
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        sendServerError(res, error, `${req.method} ${req.path}`);
     }
 });
 
-app.delete('/api/sellers/:id', authenticateToken, async (req, res) => {
+app.delete('/api/sellers/:id', authenticateToken, requireRole(...SUPER_ONLY), async (req, res) => {
     try {
         const deletedSeller = await Seller.findByIdAndDelete(req.params.id);
         if (!deletedSeller) {
@@ -466,12 +511,12 @@ app.delete('/api/sellers/:id', authenticateToken, async (req, res) => {
         }
         res.json({ message: "Seller deleted!" });
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        sendServerError(res, error, `${req.method} ${req.path}`);
     }
 });
 
 // ── RIDER ROUTES ──
-app.post('/api/riders', authenticateToken, async (req, res) => {
+app.post('/api/riders', authenticateToken, requireRole(...OFFICE), async (req, res) => {
     try {
         const riderEmail = String(req.body.email || '').toLowerCase().trim();
         if (riderEmail) {
@@ -513,11 +558,11 @@ app.get('/api/riders', authenticateToken, async (req, res) => {
         const riders = await Rider.find(filter).sort({ createdAt: -1 });
         res.json(riders);
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        sendServerError(res, error, `${req.method} ${req.path}`);
     }
 });
 
-app.put('/api/riders/:id', authenticateToken, async (req, res) => {
+app.put('/api/riders/:id', authenticateToken, requireRole(...OFFICE), async (req, res) => {
     try {
         const updates = pickEditable(req.body, RIDER_EDITABLE_FIELDS);
         if (Object.keys(updates).length === 0) {
@@ -553,11 +598,11 @@ app.put('/api/riders/:id', authenticateToken, async (req, res) => {
 
         res.json(updated);
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        sendServerError(res, error, `${req.method} ${req.path}`);
     }
 });
 
-app.delete('/api/riders/:id', authenticateToken, async (req, res) => {
+app.delete('/api/riders/:id', authenticateToken, requireRole(...SUPER_ONLY), async (req, res) => {
     try {
         const deletedRider = await Rider.findByIdAndDelete(req.params.id);
         if (!deletedRider) {
@@ -565,21 +610,21 @@ app.delete('/api/riders/:id', authenticateToken, async (req, res) => {
         }
         res.json({ message: "Rider deleted!" });
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        sendServerError(res, error, `${req.method} ${req.path}`);
     }
 });
 
 // ── CUSTOMER ROUTES ──
-app.get('/api/customers', authenticateToken, async (req, res) => {
+app.get('/api/customers', authenticateToken, requireRole(...OFFICE), async (req, res) => {
     try {
         const customers = await Customer.find({}).sort({ createdAt: -1 });
         res.json(customers);
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        sendServerError(res, error, `${req.method} ${req.path}`);
     }
 });
 
-app.put('/api/customers/:id', authenticateToken, async (req, res) => {
+app.put('/api/customers/:id', authenticateToken, requireRole(...OFFICE), async (req, res) => {
     try {
         const query = mongoose.isValidObjectId(req.params.id)
             ? { _id: req.params.id }
@@ -613,11 +658,11 @@ app.put('/api/customers/:id', authenticateToken, async (req, res) => {
 
         res.json(updated);
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        sendServerError(res, error, `${req.method} ${req.path}`);
     }
 });
 
-app.delete('/api/customers/:id', authenticateToken, async (req, res) => {
+app.delete('/api/customers/:id', authenticateToken, requireRole(...SUPER_ONLY), async (req, res) => {
     try {
         const query = mongoose.isValidObjectId(req.params.id)
             ? { _id: req.params.id }
@@ -625,20 +670,20 @@ app.delete('/api/customers/:id', authenticateToken, async (req, res) => {
         await Customer.findOneAndDelete(query);
         res.json({ message: "Customer record deleted!" });
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        sendServerError(res, error, `${req.method} ${req.path}`);
     }
 });
 
-app.get('/api/customers/stats', authenticateToken, async (req, res) => {
+app.get('/api/customers/stats', authenticateToken, requireRole(...OFFICE), async (req, res) => {
     try {
         const total = await Customer.countDocuments();
         res.json({ total });
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        sendServerError(res, error, `${req.method} ${req.path}`);
     }
 });
 
-app.get('/api/customers/:id/orders', authenticateToken, async (req, res) => {
+app.get('/api/customers/:id/orders', authenticateToken, requireRole(...OFFICE), async (req, res) => {
     try {
         const query = mongoose.isValidObjectId(req.params.id)
             ? { $or: [{ customerId: req.params.id }, { _id: req.params.id }] }
@@ -664,13 +709,13 @@ app.get('/api/customers/:id/orders', authenticateToken, async (req, res) => {
         const orders = await Parcel.find({ $or: matchConditions }).sort({ createdAt: -1 });
         res.json(orders);
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        sendServerError(res, error, `${req.method} ${req.path}`);
     }
 });
 
 // ── ACTIVITY LOG ROUTE ──
 // ── ACTIVITY LOG ROUTE ──
-app.get('/api/activity-log', authenticateToken, async (req, res) => {
+app.get('/api/activity-log', authenticateToken, requireRole(...OFFICE), async (req, res) => {
     try {
         const limit = Math.min(parseInt(req.query.limit) || 100, 300);
         const roleFilter = req.query.role;
@@ -884,7 +929,7 @@ app.get('/api/activity-log', authenticateToken, async (req, res) => {
         events.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
         res.json(events.slice(0, limit));
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        sendServerError(res, error, `${req.method} ${req.path}`);
     }
 });
 
@@ -901,7 +946,7 @@ function titleCaseStatus(s) {
     return typeof s === 'string' && s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : s;
 }
 
-app.post('/api/parcels', authenticateToken, async (req, res) => {
+app.post('/api/parcels', authenticateToken, requireRole(...OFFICE), async (req, res) => {
     try {
         const newParcel = new Parcel({ ...req.body });
         await newParcel.save();
@@ -989,11 +1034,11 @@ app.get('/api/parcels', authenticateToken, async (req, res) => {
         const parcels = await Parcel.find({}).sort({ createdAt: -1 });
         res.json(parcels);
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        sendServerError(res, error, `${req.method} ${req.path}`);
     }
 });
 
-app.put('/api/parcels/:id', authenticateToken, async (req, res) => {
+app.put('/api/parcels/:id', authenticateToken, requireRole(...ANY_ROLE), async (req, res) => {
     try {
         const updates = pickEditable(req.body, PARCEL_EDITABLE_FIELDS);
         if (Object.keys(updates).length === 0) {
@@ -1028,7 +1073,7 @@ app.put('/api/parcels/:id', authenticateToken, async (req, res) => {
     }
 });
 
-app.delete('/api/parcels/:id', authenticateToken, async (req, res) => {
+app.delete('/api/parcels/:id', authenticateToken, requireRole(...SUPER_ONLY), async (req, res) => {
     try {
         const deletedParcel = await Parcel.findByIdAndDelete(req.params.id);
         if (!deletedParcel) {
@@ -1039,31 +1084,31 @@ app.delete('/api/parcels/:id', authenticateToken, async (req, res) => {
         await ParcelLocation.deleteOne({ parcelId: deletedParcel.trackingNumber });
         res.json({ message: "Parcel deleted!" });
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        sendServerError(res, error, `${req.method} ${req.path}`);
     }
 });
 
 // ── PARCEL LOCATION ROUTES ──
-app.post('/api/parcel-locations', authenticateToken, async (req, res) => {
+app.post('/api/parcel-locations', authenticateToken, requireRole(...SUPER_ONLY), async (req, res) => {
     try {
         const newLocation = new ParcelLocation(req.body);
         await newLocation.save();
         res.status(201).json({ message: "Parcel location saved!", location: newLocation });
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        sendServerError(res, error, `${req.method} ${req.path}`);
     }
 });
 
-app.get('/api/parcel-locations', authenticateToken, async (req, res) => {
+app.get('/api/parcel-locations', authenticateToken, requireRole(...OFFICE), async (req, res) => {
     try {
         const locations = await ParcelLocation.find();
         res.json(locations);
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        sendServerError(res, error, `${req.method} ${req.path}`);
     }
 });
 
-app.put('/api/parcel-locations/:id', authenticateToken, async (req, res) => {
+app.put('/api/parcel-locations/:id', authenticateToken, requireRole(...SUPER_ONLY), async (req, res) => {
     try {
         const updates = pickEditable(req.body, PARCEL_LOCATION_EDITABLE_FIELDS);
         if (Object.keys(updates).length === 0) {
@@ -1077,11 +1122,11 @@ app.put('/api/parcel-locations/:id', authenticateToken, async (req, res) => {
         );
         res.json(updated);
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        sendServerError(res, error, `${req.method} ${req.path}`);
     }
 });
 
-app.delete('/api/parcel-locations/:id', authenticateToken, async (req, res) => {
+app.delete('/api/parcel-locations/:id', authenticateToken, requireRole(...SUPER_ONLY), async (req, res) => {
     try {
         const deletedLocation = await ParcelLocation.findByIdAndDelete(req.params.id);
         if (!deletedLocation) {
@@ -1089,7 +1134,7 @@ app.delete('/api/parcel-locations/:id', authenticateToken, async (req, res) => {
         }
         res.json({ message: "Location deleted!" });
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        sendServerError(res, error, `${req.method} ${req.path}`);
     }
 });
 
@@ -1124,7 +1169,7 @@ app.get('/api/dashboard/stats', authenticateToken, async (req, res) => {
             totalSellers,
         });
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        sendServerError(res, error, `${req.method} ${req.path}`);
     }
 });
 
@@ -1134,7 +1179,7 @@ app.get('/api/accounts', authenticateToken, requireRole('super_admin'), async (r
         const accounts = await Account.find({}).select('-password');
         res.json(accounts);
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        sendServerError(res, error, `${req.method} ${req.path}`);
     }
 });
 
@@ -1180,7 +1225,7 @@ app.post('/api/accounts', authenticateToken, requireRole('super_admin'), async (
         delete result.password;
         res.status(201).json(result);
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        sendServerError(res, error, `${req.method} ${req.path}`);
     }
 });
 
@@ -1230,7 +1275,7 @@ app.put('/api/accounts/:id', authenticateToken, requireRole('super_admin'), asyn
         delete result.password;
         res.json(result);
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        sendServerError(res, error, `${req.method} ${req.path}`);
     }
 });
 
@@ -1254,7 +1299,7 @@ app.patch('/api/accounts/:id/status', authenticateToken, requireRole('super_admi
         delete result.password;
         res.json(result);
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        sendServerError(res, error, `${req.method} ${req.path}`);
     }
 });
 
@@ -1287,7 +1332,7 @@ app.post('/api/accounts/login', loginLimiter, async (req, res) => {
         );
         res.json({ ...result, token, loginRole: 'admin' });
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        sendServerError(res, error, `${req.method} ${req.path}`);
     }
 });
 
@@ -1304,7 +1349,7 @@ app.get('/api/notifications', authenticateToken, async (req, res) => {
         const notifications = await AdminNotification.find(filter).sort({ createdAt: -1 }).limit(limit);
         res.json(notifications);
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        sendServerError(res, error, `${req.method} ${req.path}`);
     }
 });
 
@@ -1322,12 +1367,12 @@ app.patch('/api/notifications/:id/read', authenticateToken, async (req, res) => 
         }
         res.json({ success: true, id: notification._id });
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        sendServerError(res, error, `${req.method} ${req.path}`);
     }
 });
 
 // ── SUPPORT TICKET / ISSUE ROUTES ──
-app.get('/api/issues', authenticateToken, async (req, res) => {
+app.get('/api/issues', authenticateToken, requireRole(...OFFICE), async (req, res) => {
     try {
         const limit = Math.min(parseInt(req.query.limit) || 200, 500);
         const issues = await Issue.find({}).sort({ createdAt: -1 }).limit(limit).lean();
@@ -1370,11 +1415,11 @@ app.get('/api/issues', authenticateToken, async (req, res) => {
         });
         res.json(enriched);
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        sendServerError(res, error, `${req.method} ${req.path}`);
     }
 });
 
-app.put('/api/issues/:id/status', authenticateToken, async (req, res) => {
+app.put('/api/issues/:id/status', authenticateToken, requireRole(...OFFICE), async (req, res) => {
     try {
         const { status, adminNotes } = req.body;
         const issue = await Issue.findById(req.params.id);
@@ -1402,7 +1447,7 @@ app.put('/api/issues/:id/status', authenticateToken, async (req, res) => {
 
         res.json(issue);
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        sendServerError(res, error, `${req.method} ${req.path}`);
     }
 });
 
@@ -1485,7 +1530,8 @@ app.post('/api/sms/send', authenticateToken, requireRole('super_admin', 'staff')
         console.log(`[SMS SIMULATED] To: ${number} | Message: ${message}`);
         return res.json({ success: true, provider: 'simulated', result: { number, message } });
     } catch (error) {
-        res.status(502).json({ error: error.message, details: error.details, moreInfo: error.moreInfo });
+        console.error('[SMS] delivery failed:', error.message, error.details || '', error.moreInfo || '');
+        res.status(502).json({ error: 'The SMS could not be sent right now. Please try again later.' });
     }
 });
 
@@ -1559,7 +1605,7 @@ app.post('/api/email/send', authenticateToken, requireRole('super_admin', 'staff
 });
 
 // ── ADMIN: DATABASE RESET ──
-app.delete('/api/admin/reset-database', authenticateToken, async (req, res) => {
+app.delete('/api/admin/reset-database', authenticateToken, requireRole(...SUPER_ONLY), async (req, res) => {
     if (req.user?.role !== 'super_admin') {
         return res.status(403).json({ error: 'Access denied. Only Super Admin can reset the database.' });
     }
@@ -1580,7 +1626,7 @@ app.delete('/api/admin/reset-database', authenticateToken, async (req, res) => {
             },
         });
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        sendServerError(res, error, `${req.method} ${req.path}`);
     }
 });
 
@@ -1697,11 +1743,16 @@ mongoose.connect(MONGO_URI, { serverSelectionTimeoutMS: 15000 })
 
 // ── GLOBAL ERROR HANDLER ──
 app.use((err, req, res, next) => {
-  console.error('[Server Error]', err.message);
+  // Malformed JSON bodies (express.json) and oversized payloads are client
+  // errors, reported without echoing the parser's message.
+  if (err && (err.type === 'entity.parse.failed' || err instanceof SyntaxError)) {
+    return res.status(400).json({ error: 'The request could not be read. Please try again.' });
+  }
+  if (err && err.type === 'entity.too.large') {
+    return res.status(413).json({ error: 'The request is too large.' });
+  }
   const statusCode = err.statusCode || err.status || 500;
-  res.status(statusCode).json({
-    success: false,
-    message: err.message || 'Internal server error',
-    error: process.env.NODE_ENV === 'development' ? err.stack : undefined,
-  });
+  if (statusCode >= 500) return sendServerError(res, err, `${req.method} ${req.path}`);
+  // Never echo internals; http-errors marks client-safe messages with expose.
+  return res.status(statusCode).json({ error: err.expose ? err.message : 'The request could not be completed.' });
 });
