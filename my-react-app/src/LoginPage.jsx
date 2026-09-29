@@ -160,6 +160,12 @@ const LoginPage = ({ onLogin }) => {
         <div className={cardClasses}>
           <div className="login-glass-inner">
             <div className="login-card-header anim-fade-up anim-d1">
+              <span className="login-eyebrow">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                </svg>
+                Admin Portal
+              </span>
               <h2 className="login-card-title">Welcome back</h2>
               <p className="login-card-subtitle">Sign in to your admin account</p>
             </div>
@@ -309,6 +315,17 @@ const LoginPage = ({ onLogin }) => {
                 )}
               </button>
             </form>
+
+            <div className="login-card-footer anim-fade-up anim-d5">
+              <span className="login-card-footer-note">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                </svg>
+                Authorized personnel only
+              </span>
+              <span>© {new Date().getFullYear()} YTO Express</span>
+            </div>
           </div>
         </div>
       </div>
