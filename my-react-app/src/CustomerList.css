@@ -1,0 +1,366 @@
+/* ============================================================
+   CUSTOMER LIST — one-screen layout (2026-09-29)
+   The page fits the desktop viewport: compact header on top, the table
+   card takes the rest. Only the table body scrolls (header row pinned) and
+   pagination is docked in the card footer. The shell switches .ad-main to
+   its no-scroll frame for this page (NO_SCROLL_PAGES in AnalyticsDashboard).
+   Plain (unlayered) CSS, so these rules beat Tailwind's utility classes on
+   the shared primitives without editing them.
+   ============================================================ */
+
+.cl-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  padding: 20px 24px;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+.ad-main--no-scroll > .cl-page {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* ── Page header (shared PageHeader, compacted) ── */
+.cl-header {
+  flex-shrink: 0;
+  margin-bottom: 0;
+  padding: 16px 22px;
+  border-color: #ebe3f4;
+  border-radius: 16px;
+  box-shadow: 0 1px 2px rgba(57, 9, 85, 0.04), 0 10px 28px -20px rgba(57, 9, 85, 0.22);
+}
+.cl-header h1 {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: #1a1030;
+}
+.cl-header h1 + p {
+  margin-top: 2px;
+}
+.cl-header nav {
+  margin-top: 8px;
+}
+
+/* ── Table card ── */
+.cl-card {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  border-color: #ebe3f4;
+  border-radius: 16px;
+  box-shadow: 0 1px 2px rgba(57, 9, 85, 0.04), 0 10px 28px -18px rgba(57, 9, 85, 0.22);
+}
+.cl-card-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* ── Search / filter / export bar ── */
+.cl-toolbar {
+  flex-shrink: 0;
+  padding: 14px 20px;
+  gap: 12px;
+}
+.cl-toolbar input[type='text'] {
+  height: 40px;
+  border-radius: 10px;
+  border-color: #e2d9ee;
+  background: #fbfafd;
+  font-size: 13.5px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+.cl-toolbar input[type='text']:hover {
+  border-color: #cfc2e2;
+}
+.cl-toolbar input[type='text']:focus {
+  background: #ffffff;
+  border-color: #390955;
+  box-shadow: 0 0 0 4px rgba(57, 9, 85, 0.10);
+}
+.cl-toolbar select {
+  height: 40px;
+  min-width: 112px;
+  padding: 0 34px 0 14px;
+  border-radius: 10px;
+  border-color: #e2d9ee;
+  background-color: #fbfafd;
+  font-size: 13px;
+  -webkit-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23390955' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+}
+.cl-toolbar select:hover {
+  border-color: #cfc2e2;
+}
+.cl-toolbar select:focus {
+  border-color: #390955;
+  box-shadow: 0 0 0 4px rgba(57, 9, 85, 0.10);
+}
+.cl-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #7b6d8d;
+  white-space: nowrap;
+}
+.cl-count strong {
+  font-weight: 800;
+  color: #390955;
+}
+.cl-count-active {
+  padding: 3px 9px;
+  border-radius: 9999px;
+  background: #ecfdf3;
+  border: 1px solid #c7f0d8;
+  color: #047857;
+  font-size: 11px;
+  font-weight: 700;
+}
+.cl-export > button {
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 10px;
+  font-size: 12.5px;
+  background: linear-gradient(135deg, #ff8a3d 0%, #f37021 55%, #e25e10 100%);
+  border: 1px solid rgba(226, 94, 16, 0.55);
+  box-shadow: 0 6px 16px -8px rgba(243, 112, 33, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  transition: box-shadow 0.18s ease, transform 0.18s ease, filter 0.18s ease;
+}
+.cl-export > button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  filter: none;
+  box-shadow: 0 10px 22px -10px rgba(243, 112, 33, 0.85), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+.cl-export > button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px #ffffff, 0 0 0 5px #f37021;
+}
+
+/* ── Table ── */
+.cl-table-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+.cl-table {
+  /* Fits the card at laptop widths (no sideways scroll, so the pinned ID
+     column never covers the names); scrolls sideways only below this. */
+  min-width: 940px;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+.cl-table thead {
+  border-bottom: none;
+}
+.cl-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  padding: 11px 16px;
+  background: #faf8fd;
+  border-bottom: 1px solid #ebe3f4;
+  font-size: 10.5px;
+  letter-spacing: 0.07em;
+  color: #6b5b84;
+}
+.cl-table thead th:first-child {
+  z-index: 4;
+  padding-left: 20px;
+  border-right: none;
+  box-shadow: none;
+}
+.cl-table thead th:last-child {
+  padding-right: 20px;
+}
+.cl-th-icon {
+  color: #b3a6c6;
+}
+.cl-table tbody td {
+  padding: 13px 16px;
+  border-bottom: 1px solid #f3eff8;
+  font-size: 13px;
+}
+.cl-table tbody td:first-child {
+  padding-left: 20px;
+  border-right: none;
+  box-shadow: none;
+}
+.cl-table tbody td:last-child {
+  padding-right: 20px;
+}
+.cl-table tbody tr:last-child td {
+  border-bottom: none;
+}
+.cl-table tbody tr:hover td {
+  background: #fbf8fe;
+}
+.cl-id {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #390955;
+}
+.cl-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.cl-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #f4ecfb 0%, #e9dcf6 100%);
+  border: 1px solid #e2d4f1;
+  color: #390955;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+.cl-name-text {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #1a1030;
+}
+.cl-muted {
+  color: #5f5670;
+}
+.cl-email {
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Status pill: soft tinted fill, crisp text, glowing dot. */
+.cl-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 11px 4px 9px;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+.cl-status.is-on {
+  background: #ecfdf3;
+  border: 1px solid #c7f0d8;
+  color: #047857;
+  box-shadow: 0 0 14px -4px rgba(16, 185, 129, 0.40);
+}
+.cl-status.is-off {
+  background: #fef2f2;
+  border: 1px solid #fbd5d5;
+  color: #b42318;
+  box-shadow: 0 0 14px -4px rgba(239, 68, 68, 0.35);
+}
+.cl-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.cl-status.is-on .cl-status-dot {
+  background: #22c55e;
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.20);
+}
+.cl-status.is-off .cl-status-dot {
+  background: #ef4444;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.18);
+}
+
+.cl-view-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 9px;
+  border: 1px solid #e2d9ee;
+  background: #ffffff;
+  color: #390955;
+  font-size: 12px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.cl-view-btn:hover {
+  background: #f7f1fc;
+  border-color: #cdb8e6;
+  box-shadow: 0 4px 12px -6px rgba(57, 9, 85, 0.30);
+}
+.cl-view-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(57, 9, 85, 0.18);
+  border-color: #390955;
+}
+
+/* ── Docked pagination footer ── */
+.cl-footer {
+  padding: 10px 20px;
+  background: #fcfbfe;
+}
+/* PaginationControls carries inline spacing meant for a bar below a card. */
+.cl-footer > div {
+  margin-top: 0 !important;
+  padding-top: 0 !important;
+}
+
+/* Laptop widths: tighter cells so all eight columns fit without sideways
+   scrolling at 1280–1440px. */
+@media (max-width: 1440px) {
+  .cl-page { padding-left: 18px; padding-right: 18px; }
+  .cl-table thead th,
+  .cl-table tbody td { padding-left: 10px; padding-right: 10px; }
+  .cl-table thead th:first-child,
+  .cl-table tbody td:first-child { padding-left: 16px; }
+  .cl-table thead th:last-child,
+  .cl-table tbody td:last-child { padding-right: 16px; }
+  .cl-avatar { width: 26px; height: 26px; font-size: 10px; }
+  .cl-name { gap: 8px; }
+  .cl-email { max-width: 200px; }
+  .cl-view-btn { padding: 0 10px; }
+}
+
+@media (max-width: 1320px) {
+  .cl-avatar { display: none; }
+  .cl-email { max-width: 180px; }
+}
+
+/* Short screens: trim chrome so the table keeps room for rows. */
+@media (max-height: 740px) and (min-width: 1201px) {
+  .cl-page { gap: 12px; padding-top: 14px; padding-bottom: 14px; }
+  .cl-header { padding: 12px 20px; }
+  .cl-header h1 { font-size: 20px; }
+  .cl-header nav { margin-top: 6px; }
+  .cl-toolbar { padding-top: 10px; padding-bottom: 10px; }
+  .cl-table tbody td { padding-top: 10px; padding-bottom: 10px; }
+}
+
+/* Below the desktop breakpoint the shell scrolls normally again, so the page
+   and table grow to their natural height. */
+@media (max-width: 1200px) {
+  .cl-page { height: auto; overflow: visible; padding: 16px; }
+  .cl-card,
+  .cl-card-body { flex: none; }
+  .cl-table-scroll { overflow-x: auto; overflow-y: visible; }
+}

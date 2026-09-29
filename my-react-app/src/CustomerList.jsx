@@ -8,13 +8,12 @@ import RefreshButton from './components/ui/RefreshButton';
 import Modal from './components/ui/Modal';
 import Badge from './components/ui/Badge';
 import PageHeader from './components/ui/PageHeader';
-import CardSectionHeader from './components/ui/CardSectionHeader';
-import CardFooter from './components/ui/CardFooter';
 import SectionCard from './components/ui/SectionCard';
 import DataTable from './components/ui/DataTable';
 import FilterBar from './components/ui/FilterBar';
 import TableSkeleton from './components/ui/TableSkeleton';
 import EmptyState from './components/ui/EmptyState';
+import './CustomerList.css';
 import {
   Users, Search, X,
   Hash, User, Mail, Phone, Activity, Globe, Calendar,
@@ -275,10 +274,12 @@ const CustomerList = () => {
     return formatDate(dateStr);
   };
 
+  const activeCount = customers.filter(c => c.status !== 'Deactivated').length;
+
   return (
-    <div className="p-6 md:p-8 w-full">
-      <div className="space-y-6">
+    <div className="cl-page">
       <PageHeader
+        className="cl-header"
         title="Customer List"
         subtitle="Customers registered through the mobile app"
         breadcrumb={['Dashboard', 'People', 'Customer List']}
@@ -291,29 +292,30 @@ const CustomerList = () => {
         )}
       />
 
-      {/* Main table card */}
+      {/* Main table card — fills the rest of the screen. Only the table body
+          scrolls (header row pinned); pagination is docked in the footer. */}
       <SectionCard
         noPadding
-        footer={(
-          <CardFooter
-            resultsLabel={`Showing ${filtered.length} of ${customers.length} results`}
-            pills={[
-              { label: 'Active', value: customers.filter(c => c.status !== 'Deactivated').length, tone: 'green' },
-            ]}
-          />
-        )}
+        className="cl-card"
+        bodyClassName="cl-card-body"
+        footer={!loading && filtered.length > 0 ? (
+          <div className="cl-footer">
+            <PaginationControls
+              currentPage={safePage}
+              totalRecords={filtered.length}
+              rowsPerPage={recordsPerPage}
+              onPageChange={setCurrentPage}
+              onRowsPerPageChange={(n) => { setRecordsPerPage(n); setCurrentPage(1); }}
+            />
+          </div>
+        ) : null}
       >
-        <CardSectionHeader
-          icon={Users}
-          title="Customer List"
-          subtitle={`${filtered.length} of ${customers.length} records — mobile-registered accounts and status`}
-        />
-
         {/* Control bar */}
-        <FilterBar>
+        <FilterBar className="cl-toolbar">
           <FilterBar.Group>
             <FilterBar.Search
               placeholder="Search by name, email, or ID..."
+              aria-label="Search customers"
               value={searchTerm}
               onChange={e => { setSearchTerm(e.target.value); setCurrentPage(1); }}
             />
@@ -326,103 +328,97 @@ const CustomerList = () => {
               <option value="Active" className="font-medium text-slate-700 bg-white">Active</option>
               <option value="Inactive" className="font-medium text-slate-700 bg-white">Inactive</option>
             </FilterBar.Select>
-            <FilterBar.Count count={filtered.length} label="results" />
+            <span className="cl-count">
+              <strong>{filtered.length}</strong> of {customers.length} customers
+              <span className="cl-count-active">{activeCount} active</span>
+            </span>
           </FilterBar.Group>
           <FilterBar.Actions>
-            <ExportDropdown onExport={handleExport} disabled={filtered.length === 0} />
+            <ExportDropdown onExport={handleExport} disabled={filtered.length === 0} className="cl-export" />
           </FilterBar.Actions>
         </FilterBar>
 
         {/* Table */}
-        <div style={{ padding: '8px 24px 24px' }}>
-          <DataTable className="min-w-[1160px]" containerClassName="border border-[#e4d8f2] rounded-xl">
-            <DataTable.Head>
-              <tr>
-                {TABLE_HEADERS.map((h, idx) => (
-                  <DataTable.Th
-                    key={h.label}
-                    className="whitespace-nowrap"
-                    stickyLeft={idx === 0}
-                    align={idx === TABLE_HEADERS.length - 1 ? 'right' : 'left'}
-                  >
-                    {h.label === 'Actions' ? (
-                      <span>{h.label}</span>
-                    ) : (
-                      <span className="flex items-center gap-1.5"><h.icon size={12} className="text-slate-400" />{h.label}</span>
-                    )}
-                  </DataTable.Th>
-                ))}
-              </tr>
-            </DataTable.Head>
-            <tbody>
-              {loading ? (
-                <TableSkeleton rows={6} columns={TABLE_HEADERS.length} />
-              ) : currentRecords.length === 0 ? (
-                <tr>
-                  <td colSpan={TABLE_HEADERS.length} style={{ padding: '32px 16px' }}>
-                    {customers.length === 0 ? (
-                      <EmptyState
-                        icon={Users}
-                        title="No customer records yet"
-                        description="Customer accounts appear here as they sign up or sync from the mobile app."
-                      />
-                    ) : (
-                      <EmptyState
-                        icon={Search}
-                        title="No customer records match your search"
-                        description="Try a different name, email, or ID, then clear the status filter if needed."
-                      />
-                    )}
-                  </td>
-                </tr>
-              ) : currentRecords.map((c, i) => (
-                <DataTable.Row
-                  key={c._id || i}
-                  onClick={() => { setDetailCustomer(c); setDetailTab('details'); setOrders([]); setTimelineEvents([]); }}
+        <DataTable className="cl-table" containerClassName="cl-table-scroll">
+          <DataTable.Head>
+            <tr>
+              {TABLE_HEADERS.map((h, idx) => (
+                <DataTable.Th
+                  key={h.label}
+                  className="whitespace-nowrap"
+                  stickyLeft={idx === 0}
+                  align={idx === TABLE_HEADERS.length - 1 ? 'right' : 'left'}
                 >
-                  <DataTable.Cell stickyLeft className="font-mono text-xs font-bold text-brand-purple whitespace-nowrap">{c.customerId || '-'}</DataTable.Cell>
-                  <DataTable.Cell className="text-sm font-semibold text-gray-900 whitespace-nowrap">{c.fullName || '-'}</DataTable.Cell>
-                  <DataTable.Cell className="text-xs text-gray-500 whitespace-nowrap">{c.email || '-'}</DataTable.Cell>
-                  <DataTable.Cell className="text-xs text-gray-500 whitespace-nowrap">{c.phone || '-'}</DataTable.Cell>
-                  <DataTable.Cell className="whitespace-nowrap"><Badge tone={STATUS_TONE[c.status] || 'green'}>{c.status || 'Active'}</Badge></DataTable.Cell>
-                  <DataTable.Cell className="text-xs text-gray-500 whitespace-nowrap">{c.source || 'mobile-app'}</DataTable.Cell>
-                  <DataTable.Cell tabularNums className="text-xs text-gray-500 whitespace-nowrap">{formatDate(c.createdAt)}</DataTable.Cell>
-                  <DataTable.Cell align="right" className="whitespace-nowrap" onClick={e => e.stopPropagation()}>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDetailCustomer(c);
-                        setDetailTab('details');
-                        setOrders([]);
-                        setTimelineEvents([]);
-                      }}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-purple-200 text-brand-purple text-xs font-bold hover:bg-purple-50 transition opacity-80 group-hover:opacity-100 group-focus-within:opacity-100 whitespace-nowrap"
-                    >
-                      <Eye size={12} /> View Details
-                    </button>
-                  </DataTable.Cell>
-                </DataTable.Row>
+                  {h.label === 'Actions' ? (
+                    <span>{h.label}</span>
+                  ) : (
+                    <span className="flex items-center gap-1.5"><h.icon size={12} className="cl-th-icon" aria-hidden="true" />{h.label}</span>
+                  )}
+                </DataTable.Th>
               ))}
-            </tbody>
-          </DataTable>
-        </div>
+            </tr>
+          </DataTable.Head>
+          <tbody>
+            {loading ? (
+              <TableSkeleton rows={6} columns={TABLE_HEADERS.length} />
+            ) : currentRecords.length === 0 ? (
+              <tr>
+                <td colSpan={TABLE_HEADERS.length} style={{ padding: '32px 16px' }}>
+                  {customers.length === 0 ? (
+                    <EmptyState
+                      icon={Users}
+                      title="No customer records yet"
+                      description="Customer accounts appear here as they sign up or sync from the mobile app."
+                    />
+                  ) : (
+                    <EmptyState
+                      icon={Search}
+                      title="No customer records match your search"
+                      description="Try a different name, email, or ID, then clear the status filter if needed."
+                    />
+                  )}
+                </td>
+              </tr>
+            ) : currentRecords.map((c, i) => (
+              <DataTable.Row
+                key={c._id || i}
+                onClick={() => { setDetailCustomer(c); setDetailTab('details'); setOrders([]); setTimelineEvents([]); }}
+              >
+                <DataTable.Cell stickyLeft className="cl-id whitespace-nowrap">{c.customerId || '-'}</DataTable.Cell>
+                <DataTable.Cell className="whitespace-nowrap">
+                  <span className="cl-name">
+                    <span className="cl-avatar" aria-hidden="true">{initialsOf(c.fullName)}</span>
+                    <span className="cl-name-text">{c.fullName || '-'}</span>
+                  </span>
+                </DataTable.Cell>
+                <DataTable.Cell className="cl-muted cl-email whitespace-nowrap" title={c.email || undefined}>{c.email || '-'}</DataTable.Cell>
+                <DataTable.Cell tabularNums className="cl-muted whitespace-nowrap">{c.phone || '-'}</DataTable.Cell>
+                <DataTable.Cell className="whitespace-nowrap"><StatusPill status={c.status || 'Active'} /></DataTable.Cell>
+                <DataTable.Cell className="cl-muted whitespace-nowrap">{formatSource(c.source)}</DataTable.Cell>
+                <DataTable.Cell tabularNums className="cl-muted whitespace-nowrap">{formatDate(c.createdAt)}</DataTable.Cell>
+                <DataTable.Cell align="right" className="whitespace-nowrap" onClick={e => e.stopPropagation()}>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDetailCustomer(c);
+                      setDetailTab('details');
+                      setOrders([]);
+                      setTimelineEvents([]);
+                    }}
+                    className="cl-view-btn"
+                  >
+                    <Eye size={13} aria-hidden="true" /> View Details
+                  </button>
+                </DataTable.Cell>
+              </DataTable.Row>
+            ))}
+          </tbody>
+        </DataTable>
       </SectionCard>
 
-      {/* Pagination */}
-      {!loading && filtered.length > 0 && (
-        <PaginationControls
-          currentPage={safePage}
-          totalRecords={filtered.length}
-          rowsPerPage={recordsPerPage}
-          onPageChange={setCurrentPage}
-          onRowsPerPageChange={(n) => { setRecordsPerPage(n); setCurrentPage(1); }}
-        />
-      )}
-    </div>
-
-      {/* Detail Modal — outside the space-y-6 flow group: it's a fixed,
-          inset-0 overlay, and space-y's sibling margin-top would otherwise
-          push it down away from the viewport edge. */}
+      {/* Detail Modal — a fixed, inset-0 overlay, so it sits outside the
+          page's flex layout and is unaffected by the no-scroll frame. */}
       {detailCustomer && (
         <Modal tint="rgba(26,6,40,0.5)" blur={false} maxWidth={520} padding={0} onBackdropClick={() => setDetailCustomer(null)} cardStyle={{ borderRadius: 12, overflow: 'hidden', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)' }}>
           {/* Header */}
@@ -559,6 +555,32 @@ function ListSkeletonInline({ rows }) {
         <div key={i} className="h-16 animate-pulse rounded-lg bg-brand-purple-50" style={{ animationDelay: `${i * 60}ms` }} />
       ))}
     </div>
+  );
+}
+
+// "mobile-app" → "Mobile app": the stored source key, in plain language.
+function formatSource(source) {
+  const raw = (source || 'mobile-app').replace(/[-_]+/g, ' ').trim();
+  return raw.charAt(0).toUpperCase() + raw.slice(1);
+}
+
+function initialsOf(name) {
+  const parts = (name || '').trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  const first = parts[0][0] || '';
+  const last = parts.length > 1 ? parts[parts.length - 1][0] : '';
+  return (first + last).toUpperCase();
+}
+
+// Soft status pill with a glowing dot — table rows only; the detail modal
+// keeps the shared Badge.
+function StatusPill({ status }) {
+  const tone = STATUS_TONE[status] === 'red' ? 'is-off' : 'is-on';
+  return (
+    <span className={`cl-status ${tone}`}>
+      <i className="cl-status-dot" aria-hidden="true" />
+      {status}
+    </span>
   );
 }
 

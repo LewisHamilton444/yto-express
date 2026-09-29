@@ -9,9 +9,9 @@ import React, { Fragment } from 'react';
  * `breadcrumb` is a plain array of labels, e.g. ['Dashboard', 'Customer
  * Management', 'Customer List'].
  */
-export default function PageHeader({ title, subtitle, breadcrumb = [], actions, children }) {
+export default function PageHeader({ title, subtitle, breadcrumb = [], actions, children, className = '' }) {
   return (
-    <div className="bg-white rounded-xl p-6 border border-slate-100 mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div className={`bg-white rounded-xl p-6 border border-slate-100 mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 ${className}`.trim()}>
       <div>
         <h1 className="text-2xl font-bold text-slate-900">{title}</h1>
         {subtitle && <p className="text-sm text-slate-500 mt-1">{subtitle}</p>}

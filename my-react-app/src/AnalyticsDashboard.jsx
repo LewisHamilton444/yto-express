@@ -390,6 +390,9 @@ const buildLastNWeeks = (parcels, n = 6) => {
   return weeks;
 };
 
+// Pages laid out to fit one desktop viewport (no page-level scroll ≥1201px).
+const NO_SCROLL_PAGES = new Set(['dashboard', 'customer-list']);
+
 export default function AnalyticsDashboard({
   onLogout,
   currentUser,
@@ -982,7 +985,9 @@ export default function AnalyticsDashboard({
         </nav>
       </aside>
 
-      <main className={`ad-main${activeMenuItem === 'dashboard' ? ' ad-main--no-scroll' : ''}`}>
+      {/* One-screen pages: the shell stops scrolling and the page manages its
+          own height (see .ad-main--no-scroll). */}
+      <main className={`ad-main${NO_SCROLL_PAGES.has(activeMenuItem) ? ' ad-main--no-scroll' : ''}`}>
         <GlobalHeader
           currentUser={currentUser}
           riders={riders}
