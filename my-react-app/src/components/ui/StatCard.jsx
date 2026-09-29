@@ -13,6 +13,7 @@ export default function StatCard({
   accent = false,
   tone = 'purple',
   className = '',
+  meter = null,
   onClick,
 }) {
   const toneClasses = {
@@ -21,6 +22,18 @@ export default function StatCard({
     emerald: 'text-[#16a34a] bg-[#f0fdf4] border-[#bbf7d0]',
     blue: 'text-[#2563eb] bg-[#eff6ff] border-[#bfdbfe]',
   };
+
+  // Optional 0-100 progress bar under the value. Decorative only: the value
+  // above it already states the figure, so screen readers skip it.
+  const meterClasses = {
+    purple: 'bg-[#390955]',
+    orange: 'bg-[#f37021]',
+    emerald: 'bg-[#16a34a]',
+    blue: 'bg-[#2563eb]',
+  };
+  const meterPct = typeof meter === 'number' && Number.isFinite(meter)
+    ? Math.min(100, Math.max(0, meter))
+    : null;
 
   const trendToneClasses = {
     positive: 'bg-emerald-50 text-emerald-700 border-emerald-200',
@@ -59,6 +72,15 @@ export default function StatCard({
           </span>
         )}
       </div>
+
+      {meterPct !== null && (
+        <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-[#f1ecf8]" aria-hidden="true">
+          <div
+            className={`h-full rounded-full ${meterClasses[tone] || meterClasses.purple}`}
+            style={{ width: `${meterPct}%` }}
+          />
+        </div>
+      )}
 
       {sub && (
         <p className="text-xs text-[#888888] font-medium mt-1 truncate">

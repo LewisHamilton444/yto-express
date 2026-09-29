@@ -734,16 +734,19 @@ export default function AnalyticsDashboard({
       sub: totalParcels > 0 ? `${deliveredCount} of ${totalParcels} parcels delivered` : 'No parcels booked yet',
       trendText: successTrendText,
       trendTone: successTrendPts !== null && successTrendPts < 0 ? 'negative' : 'positive',
+      meter: totalParcels > 0 ? Number(deliverySuccessPct) : null,
     },
     {
       key: 'in-transit', label: 'In Transit', icon: Truck, tone: 'orange',
       value: `${inTransitCount}`,
       sub: totalParcels > 0 ? `${inTransitPct}% of all parcels are on the road` : 'Nothing on the road yet',
+      meter: totalParcels > 0 ? inTransitPct : null,
     },
     {
       key: 'on-duty-riders', label: 'Riders On Duty', icon: Bike, tone: 'emerald',
       value: `${activeRidersCount}/${totalRidersCount}`,
       sub: totalRidersCount > 0 ? `${dutyRatePct}% of riders are on duty` : 'No riders registered yet',
+      meter: totalRidersCount > 0 ? dutyRatePct : null,
     },
     {
       key: 'awaiting-review', label: 'Waiting For Review', icon: UserCheck, tone: 'blue',
@@ -1057,6 +1060,8 @@ export default function AnalyticsDashboard({
                       trendTone={kpi.trendTone}
                       icon={kpi.icon}
                       tone={kpi.tone}
+                      meter={kpi.meter}
+                      className={`ed-kpi ed-kpi--${kpi.tone}`}
                     />
                   ))}
                 </StatCard.Grid>
@@ -1067,6 +1072,7 @@ export default function AnalyticsDashboard({
                 <div className="ed-top-row">
                   <SectionCard
                     className="ed-top-card ed-top-card--volume"
+                    headerClassName="ed-card-head"
                     bodyClassName="ed-top-card-body"
                     title="Parcel Volume"
                     subtitle={volumeView === 'daily' ? 'Parcels booked per day, last 7 days' : volumeView === 'weekly' ? 'Parcels booked per week, last 6 weeks' : 'Parcels booked per hour, last 14 hours'}
@@ -1087,6 +1093,7 @@ export default function AnalyticsDashboard({
                     )}
                     footer={!hasVolume ? null : (
                       <CardFooter
+                        className="ed-card-foot"
                         resultsLabel={isHourlyView
                           ? `${hourlyBooked} booked and ${hourlyDelivered} delivered in the last 14 hours`
                           : `${volumeVals.reduce((a, b) => a + b, 0)} parcels booked in this period`}
@@ -1103,7 +1110,7 @@ export default function AnalyticsDashboard({
                     )}
                   >
                     {!hasVolume ? (
-                      <EmptyState icon={PackageSearch} title="No parcel activity yet" description="Parcels booked through the app will show up here." />
+                      <EmptyState className="ed-empty-compact" icon={PackageSearch} title="No parcel activity yet" description="Parcels booked through the app will show up here." />
                     ) : isHourlyView ? (
                       <TrendArea
                         points={hourly.map((h) => ({ label: h.label, value: h.booked }))}
@@ -1147,13 +1154,15 @@ export default function AnalyticsDashboard({
                   </SectionCard>
 
                   <SectionCard
-                    className="ed-top-card"
+                    className="ed-top-card ed-top-card--riders"
+                    headerClassName="ed-card-head"
                     bodyClassName="ed-top-card-body"
                     title="Rider Performance"
                     subtitle="Ranked by success rate on the parcels each rider was given"
                     actions={<button type="button" className="ed-link-btn" onClick={() => handleMenuClick('monitor-rider')}>Duty monitor</button>}
                     footer={topRiders.length === 0 ? null : (
                       <CardFooter
+                        className="ed-card-foot"
                         resultsLabel={`${activeRidersCount} of ${riders.length} riders on duty`}
                         pills={[
                           { label: 'Top performer', value: peakRider, tone: 'green' },
@@ -1164,7 +1173,7 @@ export default function AnalyticsDashboard({
                     )}
                   >
                     {topRiders.length === 0 ? (
-                      <EmptyState icon={Users} title={riders.length === 0 ? 'No riders registered yet' : 'No deliveries assigned yet'} description={riders.length === 0 ? 'Riders approved through the app will appear here.' : 'Rankings appear once riders start completing assigned parcels.'} />
+                      <EmptyState className="ed-empty-compact" icon={Users} title={riders.length === 0 ? 'No riders registered yet' : 'No deliveries assigned yet'} description={riders.length === 0 ? 'Riders approved through the app will appear here.' : 'Rankings appear once riders start completing assigned parcels.'} />
                     ) : (
                       <DataTable>
                         <DataTable.Head>
@@ -1184,7 +1193,7 @@ export default function AnalyticsDashboard({
                                 <span className="ed-rider-name">{r.riderName || 'Unnamed rider'}</span>
                                 <span className="ed-rider-id">{r.registrationId || 'No rider ID yet'}</span>
                               </DataTable.Cell>
-                              <DataTable.Cell>{r.isOnDuty ? 'On duty' : 'Off duty'}</DataTable.Cell>
+                              <DataTable.Cell><span className={`ed-duty${r.isOnDuty ? ' is-on' : ''}`}>{r.isOnDuty ? 'On duty' : 'Off duty'}</span></DataTable.Cell>
                               <DataTable.Cell align="right" tabularNums>{(r.totalAssigned || 0).toLocaleString()}</DataTable.Cell>
                               <DataTable.Cell align="right" tabularNums>{(r.deliveries || 0).toLocaleString()}</DataTable.Cell>
                               <DataTable.Cell align="right" tabularNums>{r.successRate}%</DataTable.Cell>
@@ -1198,6 +1207,7 @@ export default function AnalyticsDashboard({
 
                   <SectionCard
                     className="ed-top-card"
+                    headerClassName="ed-card-head"
                     bodyClassName="ed-top-card-body"
                     title="Parcel Operations"
                     subtitle="Where every parcel stands"
@@ -1206,17 +1216,17 @@ export default function AnalyticsDashboard({
                         <button type="button" className="ed-action-btn primary" onClick={() => handleMenuClick('manage-parcels')}>
                           <ClipboardList size={15} aria-hidden="true" /> View parcels
                         </button>
-                        <button type="button" className="ed-action-btn secondary" disabled={parcels.length === 0} onClick={() => dashboardExportPDF(parcels)}>
-                          <Download size={15} aria-hidden="true" /> Download PDF
+                        <button type="button" className="ed-action-btn secondary" aria-label="Download parcels as PDF" title="Download parcels as PDF" disabled={parcels.length === 0} onClick={() => dashboardExportPDF(parcels)}>
+                          <Download size={15} aria-hidden="true" /> PDF
                         </button>
-                        <button type="button" className="ed-action-btn secondary" disabled={parcels.length === 0} onClick={() => dashboardExportCSV(parcels)}>
-                          <FileSpreadsheet size={15} aria-hidden="true" /> Export CSV
+                        <button type="button" className="ed-action-btn secondary" aria-label="Export parcels as CSV" title="Export parcels as CSV" disabled={parcels.length === 0} onClick={() => dashboardExportCSV(parcels)}>
+                          <FileSpreadsheet size={15} aria-hidden="true" /> CSV
                         </button>
                       </div>
                     )}
                   >
                     {statusBreakdown.length === 0 ? (
-                      <EmptyState icon={PackageSearch} title="No parcels yet" description="The status breakdown appears once parcels are booked." />
+                      <EmptyState className="ed-empty-compact" icon={PackageSearch} title="No parcels yet" description="The status breakdown appears once parcels are booked." />
                     ) : (
                       <>
                         <div className="ed-donut-row">
@@ -1245,16 +1255,27 @@ export default function AnalyticsDashboard({
                 {/* Admin-side diagnostics. Deliberately the last card on the page
                     and the only place connection health is reported, so it stays
                     out of the way until someone goes looking for it. */}
-                <SectionCard title="System Activity" subtitle="Dashboard connections and alerts">
-                  <div className="ed-rail-stats">
-                    <div className="ed-rail-stat">
-                      <label>Admin connections</label>
-                      <strong>{sseConnected ? sseClientCount : 0}</strong>
-                      <span>{sseConnected ? 'Live updates are flowing' : 'Live updates are paused'}</span>
+                <SectionCard
+                  className="ed-activity-card"
+                  noPadding
+                  header={(
+                    <div className="ed-activity-strip">
+                      <div className="ed-activity-titles">
+                        <h2>System Activity</h2>
+                        <p>Dashboard connections and alerts</p>
+                      </div>
+                      <div className="ed-activity-stat">
+                        <i className={`ed-activity-dot${sseConnected ? ' is-live' : ''}`} aria-hidden="true" />
+                        <span className="ed-activity-label">Admin connections</span>
+                        <strong>{sseConnected ? sseClientCount : 0}</strong>
+                        <span className="ed-activity-note">{sseConnected ? 'Live updates are flowing' : 'Live updates are paused'}</span>
+                      </div>
+                      <div className="ed-activity-alerts">
+                        <PeakAlertBanner />
+                      </div>
                     </div>
-                  </div>
-                  <PeakAlertBanner />
-                </SectionCard>
+                  )}
+                />
               </>
             )}
           </div>

@@ -16,6 +16,7 @@ export default function SectionCard({
   footer,
   noPadding = false,
   className = '',
+  headerClassName = '',
   bodyClassName = '',
   style = {},
   onClick,
@@ -32,7 +33,7 @@ export default function SectionCard({
         header ? (
           header
         ) : (
-          <div className="flex items-center justify-between gap-3 px-6 py-4 border-b border-[#f0eaf8]">
+          <div className={`flex items-center justify-between gap-3 px-6 py-4 border-b border-[#f0eaf8] ${headerClassName}`.trim()}>
             <div className="flex items-center gap-2.5 min-w-0">
               {Icon && (
                 <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#faf7fd] text-[#390955] shrink-0 border border-[#ede4f5]">

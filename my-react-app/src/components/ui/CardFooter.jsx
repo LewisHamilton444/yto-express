@@ -14,9 +14,9 @@ const TONE_CLASSES = {
   purple: 'bg-brand-purple-100 text-brand-purple',
 };
 
-export default function CardFooter({ resultsLabel, pills = [] }) {
+export default function CardFooter({ resultsLabel, pills = [], className = '' }) {
   return (
-    <div className="bg-slate-50/50 border-t border-slate-100 px-6 py-4 flex flex-wrap items-center justify-between gap-2 text-xs font-medium text-slate-500">
+    <div className={`bg-slate-50/50 border-t border-slate-100 px-6 py-4 flex flex-wrap items-center justify-between gap-2 text-xs font-medium text-slate-500 ${className}`.trim()}>
       <span>{resultsLabel}</span>
       {pills.length > 0 && (
         <div className="flex flex-wrap gap-1.5">

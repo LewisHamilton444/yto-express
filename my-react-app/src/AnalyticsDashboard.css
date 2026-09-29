@@ -89,6 +89,10 @@ html, body, #root {
 }
 
 .ad-sidebar .ad-sidebar-user {
+  /* Never squeezed by a long menu: the sidebar is a flex column, and without
+     this the user block shrank to one clipped line whenever the nav was
+     taller than the viewport. */
+  flex-shrink: 0;
   padding: 12px 16px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   max-height: 64px;
@@ -382,7 +386,7 @@ html, body, #root {
   .ad-wrapper.ad-sidebar--collapsed .ad-sidebar-collapse-btn { display: none; }
   .ad-wrapper.ad-sidebar--collapsed .ad-sidebar-nav-item,
   .ad-wrapper.ad-sidebar--collapsed .ad-sidebar-submenu-link { gap: 12px; }
-  .ad-wrapper.ad-sidebar--collapsed .ad-sidebar-header { padding: 20px 14px; }
+  .ad-wrapper.ad-sidebar--collapsed .ad-sidebar-header { padding: 12px 14px; }
   .ad-wrapper.ad-sidebar--collapsed .ad-sidebar-logo { gap: 12px; }
   .ad-wrapper.ad-sidebar--collapsed .ad-sidebar-nav-item[data-tooltip]::after { display: none; }
   .ad-rail-flyout { display: none; }
@@ -394,7 +398,11 @@ html, body, #root {
 
 .ad-sidebar-header {
   position: relative;
-  padding: 20px 14px;
+  flex-shrink: 0;
+  /* Same 68px height as the global top bar (GlobalHeader), so the two bottom
+     borders meet in one straight line across the shell. */
+  height: var(--ad-topbar-h, 68px);
+  padding: 12px 14px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.12);
   box-sizing: border-box;
 }
@@ -959,7 +967,7 @@ html, body, #root {
 /* Below this width, three equal columns is too cramped to read — stack to
    one column and let .ad-main scroll normally again (the no-scroll layout
    is a desktop-viewport guarantee, not a mobile one). */
-@media (max-width: 1080px) {
+@media (max-width: 1200px) {
   .ed-top-row { grid-template-columns: 1fr; }
   .ad-main--no-scroll { overflow-y: auto; display: block; }
   .ad-main--no-scroll > .enhanced-dashboard-root { overflow: visible; }
@@ -1004,4 +1012,293 @@ html, body, #root {
 @keyframes ytoPeakFadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
+}
+
+/* ============================================================
+   ONE-SCREEN DASHBOARD (2026-09-29)
+   The Dashboard fits a single desktop viewport with no page scroll:
+   toolbar → KPI row → the three-card row (which takes whatever height is
+   left) → a one-line System Activity strip. Card chrome is compacted here,
+   scoped to this page; the shared primitives only gained optional class
+   hooks (SectionCard headerClassName, CardFooter className, StatCard meter).
+   Plain (unlayered) CSS, so these rules beat Tailwind's utility classes.
+   ============================================================ */
+.enhanced-dashboard-root {
+  --ed-gap: 14px;
+  --ed-card-pad-x: 18px;
+  --ed-card-shadow: 0 1px 2px rgba(57, 9, 85, 0.04), 0 10px 28px -18px rgba(57, 9, 85, 0.22);
+  --ed-card-border: #ebe3f4;
+  padding: 18px 22px 18px;
+}
+.ed-toolbar {
+  padding: 0 0 12px;
+  border-bottom-color: #e6ddf1;
+}
+
+/* KPI cards: tone accent along the top, a quiet two-layer shadow, a 1px lift
+   on hover, and a thin meter under percentage figures. */
+.ed-kpi {
+  position: relative;
+  overflow: hidden;
+  padding: 16px 18px;
+  border-color: var(--ed-card-border);
+  box-shadow: var(--ed-card-shadow);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+.ed-kpi::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 3px;
+  background: var(--ed-kpi-accent, var(--yto-brand-purple));
+}
+.ed-kpi:hover {
+  transform: translateY(-1px);
+  border-color: #dcd0ea;
+  box-shadow: 0 1px 2px rgba(57, 9, 85, 0.05), 0 16px 32px -18px rgba(57, 9, 85, 0.30);
+}
+.ed-kpi--purple  { --ed-kpi-accent: #390955; }
+.ed-kpi--orange  { --ed-kpi-accent: #f37021; }
+.ed-kpi--emerald { --ed-kpi-accent: #16a34a; }
+.ed-kpi--blue    { --ed-kpi-accent: #2563eb; }
+.ed-kpi {
+  justify-content: flex-start;
+}
+/* Values line up across all four cards; the caption sits on the bottom
+   edge whether or not the card has a meter. */
+.ed-kpi > p:last-child {
+  margin-top: auto;
+  padding-top: 8px;
+}
+.ed-kpi .font-extrabold {
+  font-size: 28px;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+/* Three-card row: shared border/shadow, compact header/body/footer. */
+.ed-top-card {
+  border-color: var(--ed-card-border);
+  box-shadow: var(--ed-card-shadow);
+}
+.ed-card-head {
+  padding: 12px var(--ed-card-pad-x);
+  min-height: 58px;
+}
+.ed-top-card-body {
+  padding: 14px var(--ed-card-pad-x);
+}
+.ed-card-foot,
+.ed-top-card .ed-card-actions {
+  padding: 10px var(--ed-card-pad-x);
+}
+.ed-top-card .ed-card-actions {
+  flex-wrap: nowrap;
+}
+.ed-top-card .ed-action-btn {
+  padding: 7px 11px;
+  white-space: nowrap;
+}
+/* The rider table runs edge to edge; tighter cells keep all six columns
+   readable in a one-third-width card. */
+.ed-top-card--riders .ed-top-card-body {
+  padding: 0;
+}
+/* Rider Performance gets the widest column: it is the only card with six
+   columns of figures. */
+.ed-top-row {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr) minmax(0, 1fr);
+}
+.ed-top-card--riders th,
+.ed-top-card--riders td {
+  padding: 8px 10px;
+  white-space: nowrap;
+}
+.ed-top-card--riders th:first-child,
+.ed-top-card--riders td:first-child {
+  padding-left: var(--ed-card-pad-x);
+}
+.ed-top-card--riders td {
+  font-size: 12.5px;
+}
+.ed-duty {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #64748b;
+}
+.ed-duty::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #cbd5e1;
+}
+.ed-duty.is-on { color: #15803d; font-weight: 600; }
+.ed-duty.is-on::before { background: #22c55e; }
+.ed-top-card--riders thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #f8f6fc;
+}
+/* The chart fills whatever height the card body has, so it grows on a tall
+   screen and shrinks on a short laptop instead of being cut off. The y axis
+   and the plot area are siblings in one stretched flex row, so they are
+   always exactly the same height and the axis contract still holds. */
+.ed-top-card--volume .ed-top-card-body {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.ed-top-card--volume .ed-plot {
+  flex: 1 1 auto;
+  min-height: 72px;
+  padding-top: 14px;
+}
+.ed-top-card--volume .ed-plot-y,
+.ed-top-card--volume .ed-plot-area {
+  height: auto;
+}
+.ed-top-card--volume .ed-plot-x {
+  flex-shrink: 0;
+}
+.ed-top-card--volume .ed-area,
+.ed-top-card--volume .ed-area > div {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.ed-top-card--volume .ed-area-body {
+  flex: 1 1 auto;
+  min-height: 72px;
+}
+.ed-top-card--volume .ed-area-y,
+.ed-top-card--volume .ed-area-plot {
+  height: auto;
+}
+.ed-top-card .ed-donut {
+  width: 116px;
+  height: 116px;
+}
+.ed-top-card .ed-donut-row {
+  gap: 16px;
+}
+.ed-top-card .ed-status-row {
+  padding: 5px 0;
+}
+.ed-empty-compact {
+  padding: 20px 16px;
+}
+
+/* System Activity: a single row instead of a full card, so it never pushes
+   the page past the fold. */
+.ed-activity-card {
+  flex-shrink: 0;
+  border-color: var(--ed-card-border);
+  box-shadow: var(--ed-card-shadow);
+}
+.ed-activity-strip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 24px;
+  padding: 11px var(--ed-card-pad-x);
+}
+.ed-activity-titles {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+.ed-activity-titles h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: #1a1a1a;
+  white-space: nowrap;
+}
+.ed-activity-titles p {
+  margin: 0;
+  font-size: 12px;
+  color: #7b6d8d;
+  white-space: nowrap;
+}
+.ed-activity-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px;
+  border-radius: 9999px;
+  background: #faf7fd;
+  border: 1px solid #ede4f5;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.ed-activity-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #a698ba;
+}
+.ed-activity-dot.is-live {
+  background: #22c55e;
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.18);
+}
+.ed-activity-label {
+  font-weight: 700;
+  color: #7b6d8d;
+}
+.ed-activity-stat strong {
+  font-weight: 800;
+  color: var(--yto-brand-purple);
+  font-variant-numeric: tabular-nums;
+}
+.ed-activity-note {
+  color: #a698ba;
+  font-weight: 600;
+}
+.ed-activity-alerts {
+  margin-left: auto;
+  min-width: 0;
+}
+/* PeakAlertBanner's history line carries an inline top margin meant for a
+   stacked card; in the strip it sits on the same row. */
+.ed-activity-alerts > div {
+  margin-top: 0 !important;
+  padding: 5px 10px !important;
+}
+
+@media (max-width: 1440px) {
+  .enhanced-dashboard-root { padding: 14px 16px; }
+}
+@media (min-width: 2000px) {
+  .enhanced-dashboard-root { padding: 28px; }
+}
+@media (max-width: 1200px) {
+  .ed-top-row { grid-template-columns: 1fr; }
+  .ed-top-card--volume .ed-top-card-body { min-height: 240px; }
+  .ed-activity-alerts { margin-left: 0; }
+}
+
+/* Short screens (small laptops, a browser with toolbars open): trim vertical
+   chrome so the three-card row keeps enough height to be readable. */
+@media (max-height: 740px) and (min-width: 1201px) {
+  .enhanced-dashboard-root { --ed-gap: 10px; padding-top: 12px; padding-bottom: 12px; }
+  .ed-toolbar { padding-bottom: 8px; }
+  .ed-toolbar-titles h1 { font-size: 20px; }
+  .ed-kpi { padding: 11px 16px 12px; }
+  .ed-kpi > div:first-child { margin-bottom: 0; }
+  .ed-kpi .font-extrabold { font-size: 23px; }
+  .ed-kpi > p:last-child { padding-top: 4px; }
+  .ed-card-head { min-height: 48px; padding-top: 8px; padding-bottom: 8px; }
+  .ed-top-card-body { padding-top: 10px; padding-bottom: 10px; }
+  .ed-card-foot,
+  .ed-top-card .ed-card-actions { padding-top: 8px; padding-bottom: 8px; }
+  .ed-top-card--riders th,
+  .ed-top-card--riders td { padding-top: 6px; padding-bottom: 6px; }
+  .ed-top-card .ed-donut { width: 92px; height: 92px; }
+  .ed-top-card .ed-status-row { padding: 3px 0; }
+  .ed-activity-strip { padding-top: 8px; padding-bottom: 8px; }
 }

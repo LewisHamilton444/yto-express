@@ -6,7 +6,8 @@ import useSSE from './services/useSSE';
 import Tooltip from './components/ui/Tooltip';
 
 const s = {
-  bar: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '10px 24px', background: 'white', borderBottom: '1px solid rgba(57,9,85,0.08)', flexWrap: 'wrap' },
+  // minHeight matches the sidebar header (--ad-topbar-h, 68px) so both bottom borders line up.
+  bar: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '10px 24px', minHeight: 68, boxSizing: 'border-box', background: 'white', borderBottom: '1px solid rgba(57,9,85,0.08)', boxShadow: '0 1px 2px rgba(57,9,85,0.03)', flexWrap: 'wrap' },
   right: { display: 'flex', alignItems: 'center', gap: 14 },
 };
 
