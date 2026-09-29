@@ -29,12 +29,15 @@
   /* Photo fills the whole viewport. Scrim stack (bottom to top):
      1. soft white veil at the top for the glass to read as light frosted
      2. brand-violet gradient deepening toward the left (behind the panel)
-     3. the courier photo itself
-     Order in a single background layer: later layers sit on top. */
-  background:
+     3. the YTO truck photo itself
+     Earlier layers in the list are painted on top of later ones. */
+  background-image:
     linear-gradient(180deg, rgba(255, 255, 255, 0.10) 0%, rgba(255, 255, 255, 0.03) 34%, rgba(255, 255, 255, 0) 100%),
     linear-gradient(90deg, rgba(18, 2, 28, 0.88) 0, rgba(57, 9, 85, 0.66) 320px, rgba(57, 9, 85, 0.30) 560px, rgba(57, 9, 85, 0.10) 760px, rgba(57, 9, 85, 0.04) 950px, rgba(57, 9, 85, 0) 1100px),
-    url('/assets/WebLoginBg_hi.jpg') center / cover no-repeat;
+    url('/assets/background.jpeg');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
 }
 
 /* `background-attachment: fixed` is intentionally NOT used: it misbehaves
