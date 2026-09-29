@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { parcelsApi, ridersApi, sellersApi, accountsApi } from './services/api';
 import { Package, Bike, Store, ShieldCheck } from 'lucide-react';
+import { sendSearchHandoff } from './utils/searchHandoff';
 
 const s = {
   wrap:     { position: 'relative', width: 340 },
@@ -23,14 +24,42 @@ const s = {
 // good snapshot instead of silently blanking results.
 const SNAPSHOT_TTL_MS = 60_000;
 
-export default function GlobalSearch({ onNavigate }) {
+const EMPTY_RESULTS = { parcels: [], riders: [], sellers: [], admins: [] };
+const asArray = (v) => (Array.isArray(v) ? v : []);
+
+// One matcher for both the fresh and the stale-snapshot path, so a fix to what
+// a search matches can never land in only one of them.
+function matchCorpus(corpus, q) {
+  const has = (v) => (v || '').toLowerCase().includes(q);
+  return {
+    parcels: asArray(corpus.parcels).filter(p => has(p.trackingNumber)).slice(0, 5),
+    riders:  asArray(corpus.riders).filter(r => has(r.registrationId) || has(r.riderName)).slice(0, 5),
+    sellers: asArray(corpus.sellers).filter(sl => has(sl.fullName)).slice(0, 5),
+    admins:  asArray(corpus.admins).filter(ad => has(ad.name) || has(ad.email)).slice(0, 5),
+  };
+}
+
+const joinList = (items) => (
+  items.length <= 2 ? items.join(' or ') : `${items.slice(0, -1).join(', ')}, or ${items[items.length - 1]}`
+);
+
+// `canOpen(pageKey)` says whether the signed-in role can see a page. A group
+// is only searched (and shown) when its destination page is openable — a hub
+// receiver used to get rider, seller and admin hits that led to a blank page.
+export default function GlobalSearch({ onNavigate, canOpen = () => true }) {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
-  const [results, setResults] = useState({ parcels: [], riders: [], sellers: [], admins: [] });
+  const [results, setResults] = useState(EMPTY_RESULTS);
   const [loading, setLoading] = useState(false);
   const wrapRef = useRef(null);
   const debounceRef = useRef(null);
   const snapshotRef = useRef({ at: 0, data: null });
+
+  // Hub receivers work in Hub Receiving; everyone else opens All Parcels.
+  const parcelPage = ['manage-parcels', 'hub-parcels'].find(canOpen) || null;
+  const riderPage  = canOpen('rider-report') ? 'rider-report' : null;
+  const sellerPage = canOpen('seller-report') ? 'seller-report' : null;
+  const adminPage  = canOpen('manage-accounts') ? 'manage-accounts' : null;
 
   useEffect(() => {
     const onClickOutside = (e) => { if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false); };
@@ -41,7 +70,7 @@ export default function GlobalSearch({ onNavigate }) {
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     const q = query.trim().toLowerCase();
-    if (q.length < 2) { setResults({ parcels: [], riders: [], sellers: [], admins: [] }); return; }
+    if (q.length < 2) { setResults(EMPTY_RESULTS); return; }
 
     debounceRef.current = setTimeout(async () => {
       setLoading(true);
@@ -49,54 +78,42 @@ export default function GlobalSearch({ onNavigate }) {
         let corpus = snapshotRef.current.data;
         if (!corpus || Date.now() - snapshotRef.current.at > SNAPSHOT_TTL_MS) {
           const [pData, rData, sData, aData] = await Promise.all([
-            parcelsApi.list(), ridersApi.list(), sellersApi.list(), accountsApi.list(),
+            parcelPage ? parcelsApi.list() : [],
+            riderPage  ? ridersApi.list()  : [],
+            sellerPage ? sellersApi.list() : [],
+            adminPage  ? accountsApi.list() : [],
           ]);
           corpus = { parcels: pData, riders: rData, sellers: sData, admins: aData };
           snapshotRef.current = { at: Date.now(), data: corpus };
         }
-
-        const arr = (v) => (Array.isArray(v) ? v : []);
-        const parcels = arr(corpus.parcels)
-          .filter(p => (p.trackingNumber || '').toLowerCase().includes(q))
-          .slice(0, 5);
-        const riders = arr(corpus.riders)
-          .filter(r => (r.registrationId || '').toLowerCase().includes(q) || (r.riderName || '').toLowerCase().includes(q))
-          .slice(0, 5);
-        const sellers = arr(corpus.sellers)
-          .filter(sl => (sl.fullName || '').toLowerCase().includes(q))
-          .slice(0, 5);
-        const admins = arr(corpus.admins)
-          .filter(ad => (ad.name || '').toLowerCase().includes(q) || (ad.email || '').toLowerCase().includes(q))
-          .slice(0, 5);
-
-        setResults({ parcels, riders, sellers, admins });
+        setResults(matchCorpus(corpus, q));
       } catch (err) {
         console.error('Global search failed:', err);
         // Serve the last good snapshot (stale but useful) instead of blanking.
         const stale = snapshotRef.current.data;
-        if (stale) {
-          const arr = (v) => (Array.isArray(v) ? v : []);
-          const qq = q;
-          setResults({
-            parcels: arr(stale.parcels).filter(p => (p.trackingNumber || '').toLowerCase().includes(qq)).slice(0, 5),
-            riders:  arr(stale.riders).filter(r => (r.registrationId || '').toLowerCase().includes(qq) || (r.riderName || '').toLowerCase().includes(qq)).slice(0, 5),
-            sellers: arr(stale.sellers).filter(sl => (sl.fullName || '').toLowerCase().includes(qq)).slice(0, 5),
-            admins:  arr(stale.admins).filter(ad => (ad.name || '').toLowerCase().includes(qq) || (ad.email || '').toLowerCase().includes(qq)).slice(0, 5),
-          });
-        } else {
-          setResults({ parcels: [], riders: [], sellers: [], admins: [] });
-        }
+        setResults(stale ? matchCorpus(stale, q) : EMPTY_RESULTS);
       } finally {
         setLoading(false);
       }
     }, 300);
 
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [query]);
+  }, [query, parcelPage, riderPage, sellerPage, adminPage]);
 
   const totalResults = results.parcels.length + results.riders.length + results.sellers.length + results.admins.length;
 
-  const go = (pageKey) => { setOpen(false); setQuery(''); onNavigate?.(pageKey); };
+  // Open the destination page and hand it the record's identifier so its own
+  // search box lands on that record (see utils/searchHandoff.js).
+  const go = (pageKey, term) => {
+    setOpen(false);
+    setQuery('');
+    sendSearchHandoff(pageKey, term);
+    onNavigate?.(pageKey);
+  };
+
+  const placeholderTargets = [
+    parcelPage && 'tracking #', riderPage && 'Rider ID', sellerPage && 'Seller name', adminPage && 'Admin',
+  ].filter(Boolean);
 
   return (
     <div style={s.wrap} ref={wrapRef}>
@@ -104,7 +121,8 @@ export default function GlobalSearch({ onNavigate }) {
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#a890c0" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
         <input
           style={s.input}
-          placeholder="Search tracking #, Rider ID, Seller name, or Admin..."
+          placeholder={placeholderTargets.length ? `Search ${joinList(placeholderTargets)}...` : 'Search...'}
+          aria-label="Search the portal"
           value={query}
           onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
           onFocus={() => setOpen(true)}
@@ -119,44 +137,44 @@ export default function GlobalSearch({ onNavigate }) {
             <div style={s.empty}>No matches for "{query}"</div>
           ) : (
             <>
-              {results.parcels.length > 0 && (
+              {parcelPage && results.parcels.length > 0 && (
                 <>
                   <div style={s.groupLabel}>Parcels</div>
                   {results.parcels.map(p => (
-                    <div key={p._id} style={s.resultRow} onClick={() => go('manage-parcels')}>
+                    <div key={p._id} style={s.resultRow} onClick={() => go(parcelPage, p.trackingNumber)}>
                       <span style={s.resultTitle}><span style={s.resultTitleIcon}><Package size={14} aria-hidden="true" /></span> {p.trackingNumber}</span>
                       <span style={s.resultSub}>{p.status} · {p.destination || '—'}</span>
                     </div>
                   ))}
                 </>
               )}
-              {results.riders.length > 0 && (
+              {riderPage && results.riders.length > 0 && (
                 <>
                   <div style={s.groupLabel}>Riders</div>
                   {results.riders.map(r => (
-                    <div key={r._id} style={s.resultRow} onClick={() => go('rider-report')}>
+                    <div key={r._id} style={s.resultRow} onClick={() => go(riderPage, r.registrationId || r.riderName)}>
                       <span style={s.resultTitle}><span style={s.resultTitleIcon}><Bike size={14} aria-hidden="true" /></span> {r.riderName}</span>
                       <span style={s.resultSub}>{r.registrationId}</span>
                     </div>
                   ))}
                 </>
               )}
-              {results.sellers.length > 0 && (
+              {sellerPage && results.sellers.length > 0 && (
                 <>
                   <div style={s.groupLabel}>Sellers</div>
                   {results.sellers.map(sl => (
-                    <div key={sl._id} style={s.resultRow} onClick={() => go('seller-report')}>
+                    <div key={sl._id} style={s.resultRow} onClick={() => go(sellerPage, sl.registrationId || sl.fullName)}>
                       <span style={s.resultTitle}><span style={s.resultTitleIcon}><Store size={14} aria-hidden="true" /></span> {sl.fullName}</span>
                       <span style={s.resultSub}>{sl.registrationId}</span>
                     </div>
                   ))}
                 </>
               )}
-              {results.admins.length > 0 && (
+              {adminPage && results.admins.length > 0 && (
                 <>
                   <div style={s.groupLabel}>Admins</div>
                   {results.admins.map(ad => (
-                    <div key={ad._id} style={s.resultRow} onClick={() => go('manage-accounts')}>
+                    <div key={ad._id} style={s.resultRow} onClick={() => go(adminPage, ad.email || ad.name)}>
                       <span style={s.resultTitle}><span style={s.resultTitleIcon}><ShieldCheck size={14} aria-hidden="true" /></span> {ad.name}</span>
                       <span style={s.resultSub}>{ad.email} · {ad.role}</span>
                     </div>

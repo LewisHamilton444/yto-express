@@ -7,6 +7,7 @@ import PageHeader from './components/ui/PageHeader';
 import TableSkeleton from './components/ui/TableSkeleton';
 import EmptyState from './components/ui/EmptyState';
 import { PARCEL_STATUS_COLORS } from './components/ui/statusColors';
+import { takeSearchHandoff, onSearchHandoff } from './utils/searchHandoff';
 
 // Hub receiving adds two statuses on top of the shared parcel-status
 // vocabulary — this is the only screen that ever sets them.
@@ -19,9 +20,12 @@ const HUB_STATUS_COLORS = {
 export default function HubParcelReceiving() {
   const [parcels,    setParcels]    = useState([]);
   const [loading,    setLoading]    = useState(true);
-  const [search,     setSearch]     = useState('');
+  const [search,     setSearch]     = useState(() => takeSearchHandoff('hub-parcels'));
   const [updatingId, setUpdatingId] = useState(null);
   const [confirmReturn, setConfirmReturn] = useState(null);
+
+  // A parcel picked in the header search while this page is already open.
+  useEffect(() => onSearchHandoff('hub-parcels', setSearch), []);
 
   const toast = useToast();
   const flash = useCallback((msg, type = 'success') => toast(msg, type === 'error' ? 'error' : 'success'), [toast]);
@@ -89,6 +93,7 @@ export default function HubParcelReceiving() {
               <input
                 type="text"
                 placeholder="Search parcels..."
+                aria-label="Search parcels"
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 style={{ padding: '8px 12px', border: '1.5px solid #e0d5f0', borderRadius: '8px', fontSize: '12px', fontFamily: 'inherit', color: '#1a1a1a', outline: 'none', width: '220px', background: '#faf9ff' }}

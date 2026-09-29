@@ -18,6 +18,7 @@ import Badge from './components/ui/Badge';
 import SectionCard from './components/ui/SectionCard';
 import CardSectionHeader from './components/ui/CardSectionHeader';
 import FilterBar from './components/ui/FilterBar';
+import { takeSearchHandoff, onSearchHandoff } from './utils/searchHandoff';
 
 const SELLER_EXPORT_COLUMNS = [
   { key: 'sellerId', label: 'Seller ID' },
@@ -75,7 +76,7 @@ const GenerateSellerReport = () => {
     setSellers(next);
   };
 
-  const [searchTerm,    setSearchTerm]    = useState('');
+  const [searchTerm,    setSearchTerm]    = useState(() => takeSearchHandoff('seller-report'));
   const [statusFilter,  setStatusFilter]  = useState('All');
   const [editingSeller, setEditingSeller] = useState(null);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -86,6 +87,11 @@ const GenerateSellerReport = () => {
   const [currentPage,   setCurrentPage]   = useState(1);
   const [recordsPerPage,setRecordsPerPage]= useState(10);
   const toast = useToast();
+
+  // A seller picked in the header search while this page is already open.
+  useEffect(() => onSearchHandoff('seller-report', (term) => {
+    setSearchTerm(term); setStatusFilter('All'); setCurrentPage(1);
+  }), []);
 
   // Archived sellers live in Settings > Archived Records now, not here.
   const filteredSellers = sellers.filter(seller => {

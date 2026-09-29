@@ -17,7 +17,7 @@ const s = {
   empty:  { padding: '24px 16px', textAlign: 'center', color: '#bbb', fontSize: 12.5 },
 };
 
-export default function NotificationBell({ pendingCount = 0, onNavigate }) {
+export default function NotificationBell({ pendingSellerCount = 0, pendingRiderCount = 0, canOpen = () => true, onNavigate }) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef(null);
 
@@ -49,7 +49,18 @@ export default function NotificationBell({ pendingCount = 0, onNavigate }) {
     return () => document.removeEventListener('mousedown', onClickOutside);
   }, []);
 
-  const totalCount = appNotifications.filter(n => !n.read).length + (pendingCount > 0 ? 1 : 0);
+  // Each registration queue is its own page (sellers and riders are reviewed
+  // separately), so each gets its own row that opens its own queue. Rows the
+  // signed-in role cannot open are left out rather than linking to a blank page.
+  const reviewRows = [
+    { key: 'process-seller', count: pendingSellerCount, noun: 'seller' },
+    { key: 'process-rider',  count: pendingRiderCount,  noun: 'rider' },
+  ].filter(r => r.count > 0 && canOpen(r.key));
+  const pendingCount = reviewRows.reduce((sum, r) => sum + r.count, 0);
+  const showAppFeed = canOpen('app-notifications');
+  const visibleAppNotifications = showAppFeed ? appNotifications : [];
+
+  const totalCount = visibleAppNotifications.filter(n => !n.read).length + reviewRows.length;
 
   return (
     <div style={s.wrap} ref={wrapRef}>
@@ -66,23 +77,25 @@ export default function NotificationBell({ pendingCount = 0, onNavigate }) {
         <div style={s.dropdown}>
           <div style={s.header}>Notifications</div>
 
-          {pendingCount > 0 && (
+          {reviewRows.length > 0 && (
             <>
               <div style={s.groupLabel}>Pending Registrations</div>
-              <div style={{ ...s.row, cursor: 'pointer' }} onClick={() => { setOpen(false); onNavigate?.('process-seller'); }}>
-                <span style={s.dot('#f37021')} />
-                <div>
-                  <div style={s.rowTitle}>{pendingCount} application{pendingCount !== 1 ? 's' : ''} awaiting review</div>
-                  <div style={s.rowSub}>Sellers & riders submitted via mobile app</div>
+              {reviewRows.map(({ key, count, noun }) => (
+                <div key={key} style={{ ...s.row, cursor: 'pointer' }} onClick={() => { setOpen(false); onNavigate?.(key); }}>
+                  <span style={s.dot('#f37021')} />
+                  <div>
+                    <div style={s.rowTitle}>{count} {noun} application{count !== 1 ? 's' : ''} awaiting review</div>
+                    <div style={s.rowSub}>Submitted through the mobile app</div>
+                  </div>
                 </div>
-              </div>
+              ))}
             </>
           )}
 
-          {appNotifications.length > 0 && (
+          {visibleAppNotifications.length > 0 && (
             <>
               <div style={s.groupLabel}>From the Mobile App</div>
-              {appNotifications.map(n => (
+              {visibleAppNotifications.map(n => (
                 <div
                   key={n._id}
                   style={{ ...s.row, cursor: 'pointer' }}

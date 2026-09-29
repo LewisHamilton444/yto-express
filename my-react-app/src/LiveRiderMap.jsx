@@ -118,7 +118,7 @@ export default function LiveRiderMap({
   const [riders, setRiders]           = useState([]);
   const [parcels, setParcels]         = useState([]);
   const [loading, setLoading]         = useState(true);
-  const [lastUpdated, setLastUpdated] = useState('');
+  const [, setLastUpdated] = useState('');
   const [selectedHub, setSelectedHub]     = useState(null);
   const [selectedRider, setSelectedRider] = useState(null);
   const [riderFilter, setRiderFilter]     = useState('all');

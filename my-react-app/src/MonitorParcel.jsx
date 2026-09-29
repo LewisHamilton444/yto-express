@@ -184,20 +184,6 @@ export default function MonitorGeofenceBoundary() {
     return () => clearInterval(interval);
   }, [fetchData]);
 
-  const inTransitCount = useMemo(() => {
-    return parcels.filter(p => {
-      const s = (p.status || '').toLowerCase();
-      return s.includes('transit') || s.includes('delivery') || s.includes('picked');
-    }).length;
-  }, [parcels]);
-
-  const realGpsFixCount = useMemo(() => {
-    return parcels.filter(p => {
-      return (Number.isFinite(p.riderLat) && Number.isFinite(p.riderLng) && !(p.riderLat === 0 && p.riderLng === 0)) ||
-        (p.trackingGeofence?.center?.lat && p.trackingGeofence?.center?.lng);
-    }).length;
-  }, [parcels]);
-
   const vehicleTypes = useMemo(() => {
     const set = new Set(riders.map(r => r.vehicle).filter(Boolean));
     return Array.from(set);

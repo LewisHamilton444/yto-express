@@ -10,7 +10,7 @@ const s = {
   right: { display: 'flex', alignItems: 'center', gap: 14 },
 };
 
-export default function GlobalHeader({ currentUser, riders, pendingCount, onNavigate, onNavigateSettings, onLogoutClick }) {
+export default function GlobalHeader({ currentUser, riders, pendingSellerCount, pendingRiderCount, canOpen, onNavigate, onNavigateSettings, onLogoutClick }) {
   const { mode, retry } = useSSE();
 
   const modeConfig = {
@@ -22,7 +22,7 @@ export default function GlobalHeader({ currentUser, riders, pendingCount, onNavi
 
   return (
     <div style={s.bar}>
-      <GlobalSearch onNavigate={onNavigate} />
+      <GlobalSearch onNavigate={onNavigate} canOpen={canOpen} />
       <div style={s.right}>
         {/* SSE Real-time indicator */}
         <Tooltip content={mode === 'sse' ? 'Live realtime feed (SSE) — updates stream instantly' : mode === 'polling' ? 'Realtime feed degraded — polling for updates every few seconds' : 'Realtime feed disconnected — click Retry to reconnect'}>
@@ -44,7 +44,7 @@ export default function GlobalHeader({ currentUser, riders, pendingCount, onNavi
           )}
         </div>
         </Tooltip>
-        <NotificationBell riders={riders} pendingCount={pendingCount} onNavigate={onNavigate} />
+        <NotificationBell riders={riders} pendingSellerCount={pendingSellerCount} pendingRiderCount={pendingRiderCount} canOpen={canOpen} onNavigate={onNavigate} />
         <AdminProfileDropdown currentUser={currentUser} onNavigateSettings={onNavigateSettings} onLogout={onLogoutClick} />
       </div>
     </div>

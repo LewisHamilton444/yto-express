@@ -14,7 +14,10 @@ function App() {
       try {
         const payload = JSON.parse(atob(token.split('.')[1]));
         if (payload.exp * 1000 > Date.now()) {
-          return { token, email: payload.email, role: payload.role, loginRole: payload.role };
+          // The token carries no display name, so a refreshed session falls
+          // back to the login email rather than showing a blank name (the
+          // sidebar) or a generic "Admin" (the profile menu).
+          return { token, email: payload.email, role: payload.role, name: payload.name || payload.email, loginRole: payload.role };
         }
       } catch { /* malformed token payload: fall through to a clean logout */ }
       setAuthToken(null);

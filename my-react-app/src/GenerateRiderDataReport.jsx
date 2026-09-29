@@ -17,6 +17,7 @@ import StatusBadge from './components/ui/StatusBadge';
 import { ArrowLeft, ArrowRight, CheckCircle2, XCircle, Hash, User, Mail, Phone, Truck, Building2, Package, MapPin, Star, Zap, Activity, Calendar, RotateCcw } from 'lucide-react';
 import EmptyState from './components/ui/EmptyState';
 import TableSkeleton from './components/ui/TableSkeleton';
+import { takeSearchHandoff, onSearchHandoff } from './utils/searchHandoff';
 
 const RIDER_EXPORT_COLUMNS = [
   { key: 'riderId', label: 'Rider ID' },
@@ -90,7 +91,7 @@ const isArchivedDelivery = (parcel) => {
 };
 
 export default function GenerateRiderDataReport() {
-  const [searchTerm,   setSearchTerm]   = useState('');
+  const [searchTerm,   setSearchTerm]   = useState(() => takeSearchHandoff('rider-report'));
   const [filters,      setFilters]      = useState({ vehicleType: 'all', duty: 'all', status: 'all' });
   const [currentPage,  setCurrentPage]  = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(8);
@@ -104,6 +105,11 @@ export default function GenerateRiderDataReport() {
   const [saveErr,      setSaveErr]      = useState('');
   const [showArchivedDeliveries, setShowArchivedDeliveries] = useState(false);
   const [viewParcel,   setViewParcel]   = useState(null);
+
+  // A rider picked in the header search while this page is already open.
+  useEffect(() => onSearchHandoff('rider-report', (term) => {
+    setSearchTerm(term); setFilters({ vehicleType: 'all', duty: 'all', status: 'all' }); setCurrentPage(1);
+  }), []);
 
   const fetchRiders = async (isManual = false) => {
     try {

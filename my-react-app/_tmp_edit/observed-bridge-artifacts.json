@@ -1,0 +1,14 @@
+{
+  "trackingNumber": "YTOQA1790200500897",
+  "qrPayload": "YTOQR1|YTOQA1790200500897|YTOS20260001|YTOC20260001",
+  "sellerEnterpriseId": "YTOS20260001",
+  "customerEnterpriseId": "YTOC20260001",
+  "trackingGeofence": {
+    "kind": "POD_RING",
+    "center": {
+      "lat": 14.95,
+      "lng": 120.83
+    },
+    "radiusMeters": 100
+  }
+}

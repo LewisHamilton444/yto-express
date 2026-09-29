@@ -5,7 +5,6 @@
 import AnalyticsDashboard from './AnalyticsDashboard';
 import ProcessSellerInformation from './ProcessSellerInformation';
 import ViewSeller from './ViewSeller';
-import ProcessParcelInformation from './ProcessParcelInformation';
 import ManageParcels from './ManageParcels';
 import ProcessRiderInformation from './ProcessRiderInformation';
 import MonitorRiderStatus from './MonitorRiderStatus';
@@ -26,7 +25,6 @@ export const PAGE_MAP = {
   'dashboard':           AnalyticsDashboard,
   'process-seller':      ProcessSellerInformation,
   'seller-report':       ViewSeller,
-  'process-parcel':      ProcessParcelInformation,
   'manage-parcels':      ManageParcels,
   'process-rider':       ProcessRiderInformation,
   'monitor-rider':       MonitorRiderStatus,

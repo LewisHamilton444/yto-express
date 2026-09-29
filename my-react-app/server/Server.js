@@ -100,6 +100,35 @@ const pickEditable = (body, allowed) => {
     return updates;
 };
 
+// Maps a thrown error to an honest, non-technical client response.
+//   - Mongoose validation / cast failures are the caller's problem -> 400
+//   - a duplicate key is a conflict -> 409
+//   - everything else is logged in full server-side and answered generically
+// The raw driver text used to be sent straight to the admin UI
+// ("E11000 duplicate key error collection: test.parcels index:
+// trackingNumber_1", "Cannot read properties of null"), which leaked
+// collection and index names and read to an operator as a crash.
+function respondError(res, error, context = 'request') {
+    if (error && error.name === 'ValidationError') {
+        return res.status(400).json({ error: 'Some details are missing or not valid. Please check the form and try again.' });
+    }
+    if (error && error.name === 'CastError') {
+        return res.status(400).json({ error: 'That reference is not valid. Please pick the record again.' });
+    }
+    if (error && error.code === 11000) {
+        const field = Object.keys(error.keyPattern || {})[0] || '';
+        if (field === 'trackingNumber') {
+            return res.status(409).json({ error: 'A parcel with that tracking number already exists.' });
+        }
+        if (field === 'email') {
+            return res.status(409).json({ error: 'A record with that email already exists.' });
+        }
+        return res.status(409).json({ error: 'That record already exists.' });
+    }
+    console.error(`[API:${context}]`, error && error.message ? error.message : error);
+    return res.status(500).json({ error: 'Something went wrong on our side. Please try again.' });
+}
+
 const CUSTOMER_EDITABLE_FIELDS = [
     'fullName', 'email', 'phone', 'address', 'city', 'deliveryInstructions', 'status',
 ];
@@ -209,7 +238,10 @@ function requireRole(...allowedRoles) {
 // messaging endpoints that burn money (SMS) or can be abused for spoofing.
 const loginLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 10,
+    // Defaults to 10. A local QA run (repeated sign-in matrix from one IP)
+    // may raise it with LOGIN_MAX_ATTEMPTS so the tester is not locked out
+    // of their own window; production leaves the variable unset.
+    max: Number(process.env.LOGIN_MAX_ATTEMPTS || 10),
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: 'Too many sign-in attempts. Please try again in 15 minutes.' },
@@ -341,11 +373,32 @@ app.use('/api/bridge', require('./bridgeRoutes'));
 // ── SELLER ROUTES ──
 app.post('/api/sellers', authenticateToken, async (req, res) => {
     try {
-        const newSeller = new Seller({ ...req.body });
+        const sellerEmail = String(req.body.email || '').toLowerCase().trim();
+        if (sellerEmail) {
+            const existingSeller = await Seller.findOne({ email: sellerEmail });
+            if (existingSeller) {
+                return res.status(400).json({ error: 'A seller with this email already exists.' });
+            }
+        }
+        const newSeller = new Seller({ ...req.body, email: sellerEmail || req.body.email });
+        // Every new seller needs a registration entry: the activity log is
+        // built from statusHistory, so a web-created seller without one was
+        // invisible in the audit trail (mobile-synced rows always carried it).
+        newSeller.statusHistory = [{
+            status: newSeller.status || 'ACTIVE',
+            reason: `${newSeller.fullName || 'Seller'} registered as seller`,
+            changedAt: new Date(),
+        }];
         await newSeller.save();
-        res.status(201).json({ message: "Seller saved!" });
+
+        if (newSeller.email && (newSeller.status === 'ACTIVE' || newSeller.status === 'Active')) {
+            BridgeClient.sendApproval(newSeller.email, 'seller', newSeller.status, newSeller.registrationId)
+                .catch(e => console.warn('[Bridge→Android] sendApproval seller failed:', e.message));
+        }
+
+        res.status(201).json({ message: "Seller saved!", data: newSeller });
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        respondError(res, error, 'POST /api/sellers');
     }
 });
 
@@ -378,6 +431,10 @@ app.put('/api/sellers/:id', authenticateToken, async (req, res) => {
             { new: true, runValidators: true }
         );
 
+        if (!updated) {
+            return res.status(404).json({ error: 'That seller could not be found.' });
+        }
+
         if (req.body.status && updated.email) {
             BridgeClient.sendApproval(updated.email, 'seller', req.body.status, updated.registrationId)
                 .catch(e => console.warn('[Bridge→Android] sendApproval failed:', e.message));
@@ -403,7 +460,10 @@ app.put('/api/sellers/:id', authenticateToken, async (req, res) => {
 
 app.delete('/api/sellers/:id', authenticateToken, async (req, res) => {
     try {
-        await Seller.findByIdAndDelete(req.params.id);
+        const deletedSeller = await Seller.findByIdAndDelete(req.params.id);
+        if (!deletedSeller) {
+            return res.status(404).json({ error: 'That seller could not be found.' });
+        }
         res.json({ message: "Seller deleted!" });
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -413,11 +473,31 @@ app.delete('/api/sellers/:id', authenticateToken, async (req, res) => {
 // ── RIDER ROUTES ──
 app.post('/api/riders', authenticateToken, async (req, res) => {
     try {
-        const newRider = new Rider({ ...req.body });
+        const riderEmail = String(req.body.email || '').toLowerCase().trim();
+        if (riderEmail) {
+            const existingRider = await Rider.findOne({ email: riderEmail });
+            if (existingRider) {
+                return res.status(400).json({ error: 'A rider with this email already exists.' });
+            }
+        }
+        const newRider = new Rider({ ...req.body, email: riderEmail || req.body.email });
+        // Same audit-trail requirement as sellers: the activity log reads
+        // statusHistory, so a web-created rider must carry a registration row.
+        newRider.statusHistory = [{
+            status: newRider.status || 'Active',
+            reason: `${newRider.riderName || 'Rider'} registered as rider`,
+            changedAt: new Date(),
+        }];
         await newRider.save();
-        res.status(201).json({ message: "Rider saved!" });
+
+        if (newRider.email && (newRider.status === 'ACTIVE' || newRider.status === 'Active')) {
+            BridgeClient.sendApproval(newRider.email, 'rider', newRider.status, newRider.registrationId)
+                .catch(e => console.warn('[Bridge→Android] sendApproval rider failed:', e.message));
+        }
+
+        res.status(201).json({ message: "Rider saved!", data: newRider });
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        respondError(res, error, 'POST /api/riders');
     }
 });
 
@@ -450,6 +530,10 @@ app.put('/api/riders/:id', authenticateToken, async (req, res) => {
             { new: true, runValidators: true }
         );
 
+        if (!updated) {
+            return res.status(404).json({ error: 'That rider could not be found.' });
+        }
+
         if (req.body.status && updated.email) {
             BridgeClient.sendApproval(updated.email, 'rider', req.body.status, updated.registrationId)
                 .catch(e => console.warn('[Bridge→Android] sendApproval failed:', e.message));
@@ -475,7 +559,10 @@ app.put('/api/riders/:id', authenticateToken, async (req, res) => {
 
 app.delete('/api/riders/:id', authenticateToken, async (req, res) => {
     try {
-        await Rider.findByIdAndDelete(req.params.id);
+        const deletedRider = await Rider.findByIdAndDelete(req.params.id);
+        if (!deletedRider) {
+            return res.status(404).json({ error: 'That rider could not be found.' });
+        }
         res.json({ message: "Rider deleted!" });
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -893,7 +980,7 @@ app.post('/api/parcels', authenticateToken, async (req, res) => {
 
         res.status(201).json({ message: "Parcel saved!", parcel: newParcel });
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        respondError(res, error, 'POST /api/parcels');
     }
 });
 
@@ -919,6 +1006,10 @@ app.put('/api/parcels/:id', authenticateToken, async (req, res) => {
             { new: true, runValidators: true }
         );
 
+        if (!updated) {
+            return res.status(404).json({ error: 'That parcel could not be found.' });
+        }
+
         if (req.body.status && updated.trackingNumber) {
             BridgeClient.sendStatus(updated.trackingNumber, req.body.status)
                 .catch(e => console.warn('[Bridge→Android] sendStatus failed:', e.message));
@@ -933,13 +1024,19 @@ app.put('/api/parcels/:id', authenticateToken, async (req, res) => {
 
         res.json(updated);
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        respondError(res, error, 'PUT /api/parcels');
     }
 });
 
 app.delete('/api/parcels/:id', authenticateToken, async (req, res) => {
     try {
-        await Parcel.findByIdAndDelete(req.params.id);
+        const deletedParcel = await Parcel.findByIdAndDelete(req.params.id);
+        if (!deletedParcel) {
+            return res.status(404).json({ error: 'That parcel could not be found.' });
+        }
+        // A parcel's map row must not outlive the parcel itself, otherwise the
+        // parcel map keeps showing a marker for a shipment that no longer exists.
+        await ParcelLocation.deleteOne({ parcelId: deletedParcel.trackingNumber });
         res.json({ message: "Parcel deleted!" });
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -986,7 +1083,10 @@ app.put('/api/parcel-locations/:id', authenticateToken, async (req, res) => {
 
 app.delete('/api/parcel-locations/:id', authenticateToken, async (req, res) => {
     try {
-        await ParcelLocation.findByIdAndDelete(req.params.id);
+        const deletedLocation = await ParcelLocation.findByIdAndDelete(req.params.id);
+        if (!deletedLocation) {
+            return res.status(404).json({ error: 'That map entry could not be found.' });
+        }
         res.json({ message: "Location deleted!" });
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -1161,6 +1261,11 @@ app.patch('/api/accounts/:id/status', authenticateToken, requireRole('super_admi
 app.post('/api/accounts/login', loginLimiter, async (req, res) => {
     try {
         const { email, password } = req.body;
+        // A non-string identifier (e.g. a query-operator object) used to throw
+        // inside toLowerCase() and surface as a 500 instead of a clear 400.
+        if (typeof email !== 'string' || typeof password !== 'string') {
+            return res.status(400).json({ error: 'Please enter your email and password.' });
+        }
         const account = await Account.findOne({ email: email.toLowerCase().trim() });
         if (!account) {
             return res.status(401).json({ error: 'Invalid email or password.' });

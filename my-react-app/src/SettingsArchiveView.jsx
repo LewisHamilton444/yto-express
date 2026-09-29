@@ -316,7 +316,7 @@ export default function SettingsArchiveView({
                    : 'customers';
     const statusVal = activeTab === 'customers' ? 'Active' : 'ACTIVE';
     try {
-      await Promise.all(
+      const responses = await Promise.all(
         Array.from(selectedIds).map(id =>
           apiFetch(`/${endpoint}/${id}`, {
             method: 'PUT',
@@ -325,6 +325,7 @@ export default function SettingsArchiveView({
           })
         )
       );
+      if (responses.some(r => !r.ok)) throw new Error('One or more records could not be restored.');
       showNotice(`${selectedIds.size} records restored successfully.`);
       setSelectedIds(new Set());
       fetchAll();
@@ -340,7 +341,7 @@ export default function SettingsArchiveView({
                    : 'customers';
     const statusVal = activeTab === 'customers' ? 'Archived' : 'ARCHIVED';
     try {
-      await Promise.all(
+      const responses = await Promise.all(
         Array.from(selectedIds).map(id =>
           apiFetch(`/${endpoint}/${id}`, {
             method: 'PUT',
@@ -349,6 +350,7 @@ export default function SettingsArchiveView({
           })
         )
       );
+      if (responses.some(r => !r.ok)) throw new Error('One or more records could not be archived.');
       showNotice(`${selectedIds.size} records moved to archives.`);
       setSelectedIds(new Set());
       fetchAll();
@@ -363,11 +365,12 @@ export default function SettingsArchiveView({
                    : activeTab === 'riders' ? 'riders'
                    : 'customers';
     try {
-      await Promise.all(
+      const responses = await Promise.all(
         Array.from(selectedIds).map(id =>
           apiFetch(`/${endpoint}/${id}`, { method: 'DELETE' })
         )
       );
+      if (responses.some(r => !r.ok)) throw new Error('One or more records could not be deleted.');
       showNotice(`${selectedIds.size} records permanently deleted.`);
       setSelectedIds(new Set());
       setConfirmBulkDelete(false);

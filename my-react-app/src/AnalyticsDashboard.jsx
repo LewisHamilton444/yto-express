@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   PackageCheck, Bike, Truck, UserCheck,
-  ClipboardList, Download, Share2,
+  ClipboardList, Download, FileSpreadsheet,
   Users, PackageSearch, AlertTriangle,
 } from 'lucide-react';
 import { apiFetch, parcelsApi, ridersApi, isDemoMode } from './services/api';
@@ -30,6 +30,7 @@ import { initialPendingSellers, initialPendingRiders } from "./verification/regi
 import { isDeliveredStatus, isReturnFamilyStatus, isInTransitFamilyStatus, normalizeParcelStatus } from "./utils/parcelStatus";
 import { PARCEL_STATUS_COLORS } from "./components/ui/statusColors";
 import TrendArea from "./components/ui/TrendArea";
+import { useToast } from "./components/ui/useToast";
 
 function mapSellerToPendingItem(seller) {
   return {
@@ -472,6 +473,7 @@ export default function AnalyticsDashboard({
     }
   }, []);
 
+  const toast = useToast();
   const [trackingReports, setTrackingReports] = useState([]);
 
   // Real-time SSE connection — auto-refreshes data when bridge events arrive
@@ -483,14 +485,47 @@ export default function AnalyticsDashboard({
   useEffect(() => {
     fetchPendingRegistrations();
     if (onSSE) {
-      const unsubUser = onSSE('user-synced', () => fetchPendingRegistrations());
-      const unsubApproval = onSSE('approval-updated', () => fetchPendingRegistrations());
+      const unsubUser = onSSE('user-synced', (data) => {
+        fetchPendingRegistrations();
+        if (data && data.name) {
+          toast(`${data.name} registered as a ${data.role || 'user'}.`, 'info');
+        }
+      });
+      const unsubApproval = onSSE('approval-updated', (data) => {
+        fetchPendingRegistrations();
+        if (data && data.email) {
+          toast(`Account status updated for ${data.email}.`, 'success');
+        }
+      });
+      const unsubParcel = onSSE('parcel-synced', (data) => {
+        if (data && data.trackingNumber) {
+          const isDelivered = String(data.status || '').toLowerCase() === 'delivered';
+          if (isDelivered) {
+            toast(`Shipment #${data.trackingNumber} marked as Delivered.`, 'success');
+          } else {
+            toast(`New shipment #${data.trackingNumber} received.`, 'info');
+          }
+        }
+      });
+      const unsubIssue = onSSE('issue-synced', (data) => {
+        if (data && data.ticketId) {
+          toast(`Issue ticket #${data.ticketId} filed for tracking #${data.trackingNumber}.`, 'error');
+        }
+      });
+      const unsubDuty = onSSE('duty-status-synced', (data) => {
+        if (data && data.email) {
+          toast(`Courier ${data.riderName || data.email} is now ${data.isOnDuty ? 'On Duty' : 'Off Duty'}.`, 'info');
+        }
+      });
       return () => {
         if (typeof unsubUser === 'function') unsubUser();
         if (typeof unsubApproval === 'function') unsubApproval();
+        if (typeof unsubParcel === 'function') unsubParcel();
+        if (typeof unsubIssue === 'function') unsubIssue();
+        if (typeof unsubDuty === 'function') unsubDuty();
       };
     }
-  }, [fetchPendingRegistrations, onSSE]);
+  }, [fetchPendingRegistrations, onSSE, toast]);
 
   useEffect(() => {
     const fetchSSEStats = async () => {
@@ -518,6 +553,14 @@ export default function AnalyticsDashboard({
 
   const visibleSections = useMemo(() => getMenuSections(currentUser?.role), [currentUser?.role]);
   const visibleMenuItems = useMemo(() => visibleSections.flatMap(section => section.items), [visibleSections]);
+
+  // The one rule for "can this role open that page": the router uses it to
+  // render (or refuse) a page, and the header search and notification bell use
+  // it so they never offer a link that lands on a blank screen. Logout is
+  // reachable from the header rather than the sidebar, hence exempt.
+  const canOpenPage = (key) => key === 'logout' || currentUser?.role === 'super_admin' || visibleMenuItems.some(
+    (item) => item.key === key || item.children?.some((c) => c.key === key),
+  );
 
   // Keep the sidebar's open section in sync when the active page route changes (e.g. deep link or menu click)
   useEffect(() => {
@@ -828,10 +871,7 @@ export default function AnalyticsDashboard({
   const renderPage = () => {
     const key = activeMenuItem;
     if (key === 'dashboard' || !PAGE_MAP[key]) return null;
-    const visible = key === 'logout' || currentUser?.role === 'super_admin' || visibleMenuItems.some(
-      (item) => item.key === key || item.children?.some((c) => c.key === key),
-    );
-    if (!visible) return null;
+    if (!canOpenPage(key)) return null;
     const PageComponent = PAGE_MAP[key];
     return <PageComponent currentUser={currentUser} {...pagePropsFor(key)} />;
   };
@@ -943,7 +983,9 @@ export default function AnalyticsDashboard({
         <GlobalHeader
           currentUser={currentUser}
           riders={riders}
-          pendingCount={pendingVerificationsCount}
+          pendingSellerCount={pendingSellers.length}
+          pendingRiderCount={pendingRiders.length}
+          canOpen={canOpenPage}
           onNavigate={handleMenuClick}
           onNavigateSettings={goToSettings}
           onLogoutClick={() => handleMenuClick('logout')}
@@ -1168,7 +1210,7 @@ export default function AnalyticsDashboard({
                           <Download size={15} aria-hidden="true" /> Download PDF
                         </button>
                         <button type="button" className="ed-action-btn secondary" disabled={parcels.length === 0} onClick={() => dashboardExportCSV(parcels)}>
-                          <Share2 size={15} aria-hidden="true" /> Export CSV
+                          <FileSpreadsheet size={15} aria-hidden="true" /> Export CSV
                         </button>
                       </div>
                     )}

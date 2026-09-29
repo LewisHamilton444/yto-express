@@ -183,7 +183,21 @@ function buildParcelQrPayload(trackingNumber, sellerEntId, customerEntId) {
 const POD_GEOFENCE_RADIUS_METERS = 100;
 
 function buildTrackingGeofence(body) {
-  const delivery = body.deliveryCoordinates || body.recipient?.location?.coordinates;
+  let delivery = null;
+  if (Array.isArray(body.deliveryCoordinates)) {
+    delivery = body.deliveryCoordinates;
+  } else if (body.deliveryCoordinates && Array.isArray(body.deliveryCoordinates.coordinates)) {
+    delivery = body.deliveryCoordinates.coordinates;
+  } else if (body.recipient && body.recipient.location && Array.isArray(body.recipient.location.coordinates)) {
+    delivery = body.recipient.location.coordinates;
+  } else if (body.deliveryCoordinates && typeof body.deliveryCoordinates.lat === 'number' && typeof body.deliveryCoordinates.lng === 'number') {
+    return {
+      kind: 'POD_RING',
+      center: { lat: body.deliveryCoordinates.lat, lng: body.deliveryCoordinates.lng },
+      radiusMeters: POD_GEOFENCE_RADIUS_METERS,
+    };
+  }
+
   const isUsablePair = Array.isArray(delivery)
     && delivery.length === 2
     && delivery.every((n) => typeof n === 'number' && Number.isFinite(n))

@@ -28,6 +28,16 @@ const STATUS_TONE = {
   'Closed': 'slate',
 };
 
+// Keyed by the real ticket statuses (the same four as STATUS_TONE). The hints
+// were previously keyed 'Investigating', which no ticket ever has, so the
+// tooltip never appeared for tickets under investigation.
+const STATUS_HINT = {
+  'Open': 'Reported — awaiting first action',
+  'Under Investigation': 'Being investigated by operations staff',
+  'Resolved': 'Closed after a resolution was confirmed',
+  'Closed': 'Ticket closed — no further action needed',
+};
+
 const CATEGORIES = [
   'All Categories',
   'Damaged Package',
@@ -359,7 +369,7 @@ export default function ManageIssues() {
                       <div className="text-[11px] text-gray-500">{issue.reporterEmail || issue.reporterPhone || 'Mobile App'}</div>
                     </DataTable.Cell>
                     <DataTable.Cell className="whitespace-nowrap">
-                      <Badge tone={STATUS_TONE[issue.status] || 'red'} hint={{ Open: 'Reported — awaiting first action', Investigating: 'Being investigated by operations staff', Resolved: 'Closed after a resolution was confirmed' }[issue.status]}>
+                      <Badge tone={STATUS_TONE[issue.status] || 'red'} hint={STATUS_HINT[issue.status]}>
                         {issue.status}
                       </Badge>
                     </DataTable.Cell>

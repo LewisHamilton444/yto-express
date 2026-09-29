@@ -192,7 +192,7 @@ export default function useSSE() {
                     } catch { /* non-JSON frame: ignore */ }
                 });
                 throw new Error('stream closed by server');
-            } catch (err) {
+            } catch {
                 if (!mountedRef.current || controller.signal.aborted) return;
                 esError();
             }

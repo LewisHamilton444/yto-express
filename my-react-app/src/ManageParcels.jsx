@@ -20,6 +20,7 @@ import {
   Hash, User, Users, Store, MapPin, Weight, Truck, Activity,
 } from 'lucide-react';
 import { normalizeParcelStatus } from './utils/parcelStatus';
+import { takeSearchHandoff, onSearchHandoff } from './utils/searchHandoff';
 import { resolveCityCoords } from './luzonCityCoords';
 
 /**
@@ -231,19 +232,6 @@ const PARCEL_EXPORT_COLUMNS = [
 
 function rowValues(p) {
   return [p.id, p.sender.name, p.receiver.name, p.pickupAddress, p.deliveryAddress || p.address, p.weight, p.service, p.assignedRider || 'Unassigned', fmtDate(p.registeredDate), p.status];
-}
-
-function exportCSV(rows) {
-  const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-  const lines = [EXPORT_COLUMNS.map(esc).join(',')];
-  rows.forEach((p) => lines.push(rowValues(p).map(esc).join(',')));
-  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `manage-parcels-${new Date().toISOString().slice(0, 10)}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
 }
 
 // DB-derived values are interpolated into printable HTML — escape them so a
@@ -759,11 +747,16 @@ export default function ManageParcels() {
   const [loading, setLoading]           = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [actionError, setActionError]   = useState('');
-  const [search, setSearch]             = useState('');
+  const [search, setSearch]             = useState(() => takeSearchHandoff('manage-parcels'));
   const [statusFilter, setStatusFilter] = useState('All');
   const [viewParcel, setViewParcel]     = useState(null);
   const [currentPage, setCurrentPage]   = useState(1);
   const [rowsPerPage, setRowsPerPage]   = useState(10);
+
+  // A parcel picked in the header search while this page is already open.
+  useEffect(() => onSearchHandoff('manage-parcels', (term) => {
+    setSearch(term); setStatusFilter('All'); setCurrentPage(1);
+  }), []);
 
   const flashActionError = useCallback((msg) => { setActionError(msg); setTimeout(() => setActionError(''), 4000); }, []);
 

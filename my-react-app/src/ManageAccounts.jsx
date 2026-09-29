@@ -14,6 +14,7 @@ import FilterBar from './components/ui/FilterBar';
 import PaginationControls from './PaginationControls';
 import RefreshButton from './components/ui/RefreshButton';
 import ExportDropdown from './components/ui/ExportDropdown';
+import { takeSearchHandoff, onSearchHandoff } from './utils/searchHandoff';
 import { exportToCSV, exportToExcel, exportToWord, exportToPDF } from './exportUtils';
 import { Hash, User, Mail, Shield, ShieldCheck, Activity, Calendar, X, Users, ClipboardList, Package } from 'lucide-react';
 
@@ -54,7 +55,7 @@ const ACCOUNT_EXPORT_COLUMNS = [
 export default function ManageAccounts() {
   const [accounts,     setAccounts]     = useState([]);
   const [loading,      setLoading]      = useState(true);
-  const [searchTerm,   setSearchTerm]   = useState('');
+  const [searchTerm,   setSearchTerm]   = useState(() => takeSearchHandoff('manage-accounts'));
   const [roleFilter,   setRoleFilter]   = useState('All');
   const [statusFilter, setStatusFilter] = useState('All');
   const [currentPage,   setCurrentPage]  = useState(1);
@@ -64,6 +65,11 @@ export default function ManageAccounts() {
   const [showDeactivateConfirm, setShowDeactivateConfirm] = useState(null);
   const [showFormPass, setShowFormPass] = useState(false);
   const toast = useToast();
+
+  // An account picked in the header search while this page is already open.
+  useEffect(() => onSearchHandoff('manage-accounts', (term) => {
+    setSearchTerm(term); setRoleFilter('All'); setStatusFilter('All'); setCurrentPage(1);
+  }), []);
 
   const blankForm = { name: '', email: '', role: 'staff', password: '' };
   const [formData, setFormData] = useState(blankForm);
