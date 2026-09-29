@@ -3,6 +3,7 @@ import { setAuthToken, getAuthToken } from './services/api';
 import { ToastProvider } from './components/ui/ToastContext';
 import ErrorBoundary from './components/ui/ErrorBoundary';
 import { PAGE_MAP } from './pageMap';
+import { readSessionFromToken } from './utils/security';
 
 import LoginPage from './LoginPage';
 import AnalyticsDashboard from "./AnalyticsDashboard"
@@ -11,15 +12,16 @@ function App() {
   const [currentUser, setCurrentUser] = useState(() => {
     const token = getAuthToken();
     if (token) {
-      try {
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        if (payload.exp * 1000 > Date.now()) {
-          // The token carries no display name, so a refreshed session falls
-          // back to the login email rather than showing a blank name (the
-          // sidebar) or a generic "Admin" (the profile menu).
-          return { token, email: payload.email, role: payload.role, name: payload.name || payload.email, loginRole: payload.role };
-        }
-      } catch { /* malformed token payload: fall through to a clean logout */ }
+      // Malformed, expired, or unknown-role tokens are cleared rather than
+      // trusted. The role read here only shapes the menu; the server verifies
+      // the token's signature and role on every API call.
+      const payload = readSessionFromToken(token);
+      if (payload) {
+        // The token carries no display name, so a refreshed session falls
+        // back to the login email rather than showing a blank name (the
+        // sidebar) or a generic "Admin" (the profile menu).
+        return { token, email: payload.email, role: payload.role, name: payload.name || payload.email, loginRole: payload.role };
+      }
       setAuthToken(null);
     }
     return null;

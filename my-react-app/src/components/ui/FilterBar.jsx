@@ -1,5 +1,6 @@
 import React from 'react';
 import { Search } from 'lucide-react';
+import { LIMITS, sanitizeSearchInput } from '../../utils/security';
 
 /**
  * Standardized Filter & Search Bar
@@ -41,7 +42,15 @@ FilterBar.Search = function FilterBarSearch({
       <input
         type="text"
         value={value}
-        onChange={onChange}
+        maxLength={LIMITS.search}
+        onChange={(e) => {
+          // Every list page's search box is cleaned here in one place:
+          // control characters and markup/operator characters are dropped
+          // before the page's own handler sees the value.
+          const clean = sanitizeSearchInput(e.target.value);
+          if (clean !== e.target.value) e.target.value = clean;
+          if (onChange) onChange(e);
+        }}
         placeholder={placeholder}
         className="w-full h-[38px] pl-9 pr-4 py-2 border border-[#cbd5e1] rounded-lg text-sm bg-white text-[#1a1a1a] placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#f37021]/20 focus:border-[#f37021] transition-all"
         {...props}

@@ -108,13 +108,17 @@ export async function apiFetch(path, options = {}) {
     return res;
   } catch (err) {
     if (err && err.name === 'AbortError') {
-      throw new Error('Taking too long to respond. The system may be starting up — please try again.');
+      const timeoutErr = new Error('Taking too long to respond. The system may be starting up — please try again.');
+      timeoutErr.kind = 'timeout';
+      throw timeoutErr;
     }
     if (err instanceof TypeError) {
       // Browser-native fetch failures (DNS, refusal, offline) arrive as a bare
       // TypeError whose message leaks internals like "Failed to fetch". Surface
       // plain language instead — the login screen prints this verbatim.
-      throw new Error('Cannot reach the server right now. Check that it is running, then try again.');
+      const networkErr = new Error('Cannot reach the server right now. Check that it is running, then try again.');
+      networkErr.kind = 'network';
+      throw networkErr;
     }
     throw err;
   } finally {
@@ -187,9 +191,17 @@ export async function adminLogin(email, password, remember = false) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password }),
   });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'Login failed');
-  if (data.token) setAuthToken(data.token, remember);
+  // The server's error text is never passed through: the caller maps the
+  // status to a fixed message (utils/security.js toSafeLoginError), so a
+  // wrong email and a wrong password are indistinguishable in the UI.
+  let data = null;
+  try { data = await res.json(); } catch { data = null; }
+  if (!res.ok || !data || !data.token) {
+    const loginErr = new Error('Login failed');
+    loginErr.status = res.ok ? 500 : res.status;
+    throw loginErr;
+  }
+  setAuthToken(data.token, remember);
   return { ...data, loginRole: 'admin' };
 }
 

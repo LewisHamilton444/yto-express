@@ -420,59 +420,93 @@ const CustomerList = () => {
       {/* Detail Modal — a fixed, inset-0 overlay, so it sits outside the
           page's flex layout and is unaffected by the no-scroll frame. */}
       {detailCustomer && (
-        <Modal tint="rgba(26,6,40,0.5)" blur={false} maxWidth={520} padding={0} onBackdropClick={() => setDetailCustomer(null)} cardStyle={{ borderRadius: 12, overflow: 'hidden', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)' }}>
-          {/* Header */}
-          <div className="flex items-start justify-between bg-gradient-to-br from-brand-purple to-[#5a1f80] px-6 py-5">
-            <div>
-              <h3 className="text-[15px] font-bold text-white">{detailCustomer.fullName || 'Customer'}</h3>
-              <p className="mt-0.5 text-xs text-white/60">{detailCustomer.customerId}</p>
+        <Modal tint="rgba(26,6,40,0.55)" blur={false} maxWidth={560} padding={0} onBackdropClick={() => setDetailCustomer(null)} cardStyle={{ borderRadius: 18, overflow: 'hidden', boxShadow: '0 30px 60px -20px rgba(26,6,40,0.55), 0 0 0 1px rgba(57,9,85,0.08)' }}>
+          {/* Header — identity at a glance: initials, name, ID, status */}
+          <div className="cl-modal-head">
+            <span className="cl-modal-avatar" aria-hidden="true">{initialsOf(detailCustomer.fullName)}</span>
+            <div className="cl-modal-identity">
+              <h3 id="cl-modal-title">{detailCustomer.fullName || 'Customer'}</h3>
+              <div className="cl-modal-meta">
+                <span className="cl-modal-id">{detailCustomer.customerId || 'No ID yet'}</span>
+                <StatusPill status={detailCustomer.status || 'Active'} />
+              </div>
             </div>
-            <button onClick={() => setDetailCustomer(null)} className="text-white/80 transition hover:text-white">
-              <X size={20} />
+            <button
+              type="button"
+              onClick={() => setDetailCustomer(null)}
+              className="cl-modal-close"
+              aria-label="Close customer details"
+            >
+              <X size={18} aria-hidden="true" />
             </button>
           </div>
 
-          {/* Tabs */}
-          <div className="flex border-b-2 border-brand-purple-100">
+          {/* Tabs — segmented control */}
+          <div className="cl-modal-tabs" role="tablist" aria-label="Customer details sections">
             {DETAIL_TABS.map(tab => (
               <button
                 key={tab.key}
+                type="button"
+                role="tab"
+                aria-selected={detailTab === tab.key}
                 onClick={() => setDetailTab(tab.key)}
-                className={`-mb-0.5 flex flex-1 items-center justify-center gap-1.5 border-b-2 py-3 text-[13px] font-semibold transition ${
-                  detailTab === tab.key
-                    ? 'border-brand-purple bg-brand-purple-50 text-brand-purple'
-                    : 'border-transparent text-brand-muted hover:bg-brand-purple-50/60'
-                }`}
+                className={`cl-modal-tab${detailTab === tab.key ? ' is-active' : ''}`}
               >
-                <tab.icon size={14} /> {tab.label}
+                <tab.icon size={14} aria-hidden="true" /> {tab.label}
               </button>
             ))}
           </div>
 
           {/* Tab Content */}
-          <div className="max-h-[420px] overflow-y-auto p-6">
-            {/* ── Details Tab ── */}
+          <div className="cl-modal-body" role="tabpanel">
+            {/* ── Details Tab ── grouped into Contact / Address / Account */}
             {detailTab === 'details' && (
-              <>
+              <div className="cl-detail-groups">
                 {[
-                  { label: 'Full Name', value: detailCustomer.fullName },
-                  { label: 'Role', value: detailCustomer.role || 'Customer', badge: true, tone: 'purple' },
-                  { label: 'Email Address', value: detailCustomer.email },
-                  { label: 'Phone Number', value: detailCustomer.phone || '---' },
-                  { label: 'Primary Address', value: detailCustomer.address || '—' },
-                  { label: 'City', value: resolveCustomerCity(detailCustomer) || '—' },
-                  { label: 'Delivery Instructions', value: detailCustomer.deliveryInstructions || '—' },
-                  { label: 'Status', value: detailCustomer.status || 'Active', badge: true, tone: STATUS_TONE[detailCustomer.status] || 'green' },
-                  { label: 'Source', value: detailCustomer.source || 'mobile-app' },
-                  { label: 'Joined', value: formatDateTime(detailCustomer.createdAt) },
-                  { label: 'Last Updated', value: formatDateTime(detailCustomer.updatedAt) },
-                ].map(row => (
-                  <div key={row.label} className="flex items-center justify-between border-b border-brand-purple-100 py-2.5">
-                    <span className="text-xs font-semibold text-brand-muted">{row.label}</span>
-                    {row.badge ? <Badge tone={row.tone}>{row.value}</Badge> : <span className="text-sm font-medium text-gray-900">{row.value}</span>}
-                  </div>
+                  {
+                    title: 'Contact',
+                    rows: [
+                      { label: 'Email Address', value: detailCustomer.email, wrap: true },
+                      { label: 'Phone Number', value: detailCustomer.phone },
+                    ],
+                  },
+                  {
+                    title: 'Address',
+                    rows: [
+                      { label: 'Primary Address', value: detailCustomer.address, wrap: true },
+                      { label: 'City', value: resolveCustomerCity(detailCustomer) },
+                      { label: 'Delivery Instructions', value: detailCustomer.deliveryInstructions, wrap: true },
+                    ],
+                  },
+                  {
+                    title: 'Account',
+                    rows: [
+                      { label: 'Role', node: <Badge tone="purple" uppercase={false}>{formatSource(detailCustomer.role || 'customer')}</Badge> },
+                      { label: 'Status', node: <StatusPill status={detailCustomer.status || 'Active'} /> },
+                      { label: 'Source', value: formatSource(detailCustomer.source) },
+                      { label: 'Joined', value: detailCustomer.createdAt ? formatDateTime(detailCustomer.createdAt) : '' },
+                      { label: 'Last Updated', value: detailCustomer.updatedAt ? formatDateTime(detailCustomer.updatedAt) : '' },
+                    ],
+                  },
+                ].map(group => (
+                  <section key={group.title} className="cl-detail-group" aria-label={group.title}>
+                    <h4>{group.title}</h4>
+                    <dl>
+                      {group.rows.map(row => {
+                        const empty = !row.node && !(row.value && String(row.value).trim());
+                        return (
+                          <div key={row.label} className="cl-detail-row">
+                            <dt>{row.label}</dt>
+                            <dd className={`${row.wrap ? 'is-wrap' : ''}${empty ? ' is-empty' : ''}`}>
+                              {row.node || (empty ? 'Not provided' : row.value)}
+                            </dd>
+                          </div>
+                        );
+                      })}
+                    </dl>
+                  </section>
                 ))}
-              </>
+              </div>
             )}
 
             {/* ── Orders Tab ── */}

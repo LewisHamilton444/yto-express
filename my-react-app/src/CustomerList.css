@@ -364,3 +364,198 @@
   .cl-card-body { flex: none; }
   .cl-table-scroll { overflow-x: auto; overflow-y: visible; }
 }
+
+/* ── Customer details modal ── */
+.cl-modal-head {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 20px 22px;
+  background:
+    radial-gradient(120% 140% at 100% 0%, rgba(243, 112, 33, 0.22) 0%, rgba(243, 112, 33, 0) 45%),
+    linear-gradient(135deg, #2a0640 0%, #390955 45%, #5a1f80 100%);
+  color: #ffffff;
+}
+.cl-modal-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+.cl-modal-identity {
+  min-width: 0;
+  flex: 1;
+}
+.cl-modal-identity h3 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: #ffffff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cl-modal-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+.cl-modal-id {
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+}
+.cl-modal-meta .cl-status {
+  padding: 2px 9px 2px 8px;
+  font-size: 11px;
+}
+.cl-modal-close {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+.cl-modal-close:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.35);
+}
+.cl-modal-close:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.45);
+}
+
+.cl-modal-tabs {
+  display: flex;
+  gap: 4px;
+  margin: 14px 20px 0;
+  padding: 4px;
+  border-radius: 12px;
+  background: #f4f0f9;
+  border: 1px solid #ebe3f4;
+}
+.cl-modal-tab {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 36px;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: #7b6d8d;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+.cl-modal-tab:hover {
+  color: #390955;
+}
+.cl-modal-tab.is-active {
+  background: #ffffff;
+  color: #390955;
+  font-weight: 700;
+  box-shadow: 0 1px 2px rgba(57, 9, 85, 0.08), 0 4px 12px -6px rgba(57, 9, 85, 0.25);
+}
+.cl-modal-tab:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(57, 9, 85, 0.2);
+}
+
+.cl-modal-body {
+  max-height: min(60vh, 480px);
+  overflow-y: auto;
+  padding: 16px 20px 20px;
+}
+.cl-detail-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.cl-detail-group h4 {
+  margin: 0 0 6px 2px;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #9a8cb0;
+}
+.cl-detail-group dl {
+  margin: 0;
+  border: 1px solid #ebe3f4;
+  border-radius: 12px;
+  overflow: hidden;
+}
+.cl-detail-row {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid #f3eff8;
+}
+.cl-detail-row:last-child {
+  border-bottom: none;
+}
+.cl-detail-row:nth-child(even) {
+  background: #fcfbfe;
+}
+.cl-detail-row dt {
+  font-size: 12px;
+  font-weight: 600;
+  color: #7b6d8d;
+}
+.cl-detail-row dd {
+  margin: 0;
+  justify-self: end;
+  text-align: right;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #1a1030;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cl-detail-row dd.is-wrap {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.cl-detail-row dd.is-empty {
+  font-weight: 500;
+  font-style: italic;
+  color: #b3a6c6;
+}
+
+@media (max-width: 560px) {
+  .cl-detail-row { grid-template-columns: 1fr; gap: 2px; }
+  .cl-detail-row dd { justify-self: start; text-align: left; }
+}

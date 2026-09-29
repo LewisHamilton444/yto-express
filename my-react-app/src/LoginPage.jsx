@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { adminLogin, API_ROOT } from './services/api';
+import { LIMITS, normalizeEmail, validateLoginInput, toSafeLoginError } from './utils/security';
 import './LoginPage.css';
 
 const LoginPage = ({ onLogin }) => {
@@ -83,9 +84,16 @@ const LoginPage = ({ onLogin }) => {
     e.preventDefault();
     if (loading || success) return;
     setError('');
+    // Reject empty or malformed input before anything leaves the browser.
+    const invalid = validateLoginInput(email, password);
+    if (invalid) {
+      setError(invalid);
+      setShaking(true);
+      return;
+    }
     setLoading(true);
     try {
-      const data = await adminLogin(email.trim().toLowerCase(), password, rememberMe);
+      const data = await adminLogin(normalizeEmail(email), password, rememberMe);
       setLoading(false);
       setSuccess(true);
       // Pause on the success check, then play the page exit (fade + slide up)
@@ -95,7 +103,8 @@ const LoginPage = ({ onLogin }) => {
         if (onLogin) onLogin(data);
       }, 720);
     } catch (err) {
-      setError(err.message || 'Cannot connect to server.');
+      // Fixed wording only — never the server's text, a status code or a stack.
+      setError(toSafeLoginError(err));
       setLoading(false);
       setShaking(true);
     }
@@ -199,6 +208,11 @@ const LoginPage = ({ onLogin }) => {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
+                    maxLength={LIMITS.email}
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    inputMode="email"
                     autoComplete="email"
                     aria-required="true"
                   />
@@ -224,6 +238,7 @@ const LoginPage = ({ onLogin }) => {
                     onKeyDown={detectCapsLock}
                     onKeyUp={detectCapsLock}
                     required
+                    maxLength={LIMITS.password}
                     autoComplete="current-password"
                     aria-required="true"
                   />

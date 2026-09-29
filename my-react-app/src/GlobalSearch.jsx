@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { LIMITS, sanitizeSearchInput } from './utils/security';
 import { parcelsApi, ridersApi, sellersApi, accountsApi } from './services/api';
 import { Package, Bike, Store, ShieldCheck } from 'lucide-react';
 import { sendSearchHandoff } from './utils/searchHandoff';
@@ -124,7 +125,8 @@ export default function GlobalSearch({ onNavigate, canOpen = () => true }) {
           placeholder={placeholderTargets.length ? `Search ${joinList(placeholderTargets)}...` : 'Search...'}
           aria-label="Search the portal"
           value={query}
-          onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
+          maxLength={LIMITS.search}
+          onChange={(e) => { setQuery(sanitizeSearchInput(e.target.value)); setOpen(true); }}
           onFocus={() => setOpen(true)}
         />
       </div>

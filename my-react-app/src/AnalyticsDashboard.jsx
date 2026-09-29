@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   PackageCheck, Bike, Truck, UserCheck,
   ClipboardList, Download, FileSpreadsheet,
@@ -564,6 +564,24 @@ export default function AnalyticsDashboard({
   const canOpenPage = (key) => key === 'logout' || currentUser?.role === 'super_admin' || visibleMenuItems.some(
     (item) => item.key === key || item.children?.some((c) => c.key === key),
   );
+
+  // Route guard (2026-09-29): a page the role cannot open — typed into the
+  // address bar (#/manage-accounts as staff), a stale bookmark, or a shared
+  // link — is never rendered. The user is sent back to the Dashboard with a
+  // notice instead of a blank screen. This is the UI half; the server's
+  // requireRole checks refuse the matching API calls regardless.
+  const lastBlockedRef = useRef({ key: null, at: 0 });
+  useEffect(() => {
+    if (!currentUser || !activeMenuItem || activeMenuItem === 'dashboard') return;
+    if (canOpenPage(activeMenuItem)) return;
+    setActiveMenuItem('dashboard');
+    // One notice per attempt (an effect can re-run before the redirect lands).
+    const now = Date.now();
+    const last = lastBlockedRef.current;
+    if (last.key === activeMenuItem && now - last.at < 1500) return;
+    lastBlockedRef.current = { key: activeMenuItem, at: now };
+    if (toast) toast("You don't have access to that page. Showing your Dashboard instead.", 'error', { ttl: 5000 });
+  }, [activeMenuItem, currentUser, visibleMenuItems]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Keep the sidebar's open section in sync when the active page route changes (e.g. deep link or menu click)
   useEffect(() => {
