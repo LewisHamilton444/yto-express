@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './ViewSeller.css';
+import './LedgerPage.css';
+import { LEDGER_MODAL_CARD, LEDGER_MODAL_OVERLAY, LEDGER_MODAL_TINT, initialsOf } from './ledger';
 import { normalizeSeller, formatStatusLabel, SELLER_STATUS } from './sellerRiderData';
 import PaginationControls from './PaginationControls';
 import { exportToCSV, exportToExcel, exportToWord, exportToPDF } from './exportUtils';
@@ -7,10 +9,9 @@ import ExportDropdown from './components/ui/ExportDropdown';
 import RefreshButton from './components/ui/RefreshButton';
 import { apiFetch } from './services/api';
 import useSSE from './services/useSSE';
-import StatusBadge from './components/ui/StatusBadge';
-import { SELLER_STATUS_COLORS } from './components/ui/statusColors';
+import LedgerStatus from './components/ui/LedgerStatus';
 import Modal from './components/ui/Modal';
-import { Hash, User, Mail, Phone, MapPin, Activity, Store } from 'lucide-react';
+import { Hash, User, Mail, Phone, MapPin, Activity, Store, Eye, Pencil, X, Info, History } from 'lucide-react';
 import { useToast } from './components/ui/useToast';
 import PageHeader from './components/ui/PageHeader';
 import EmptyState from './components/ui/EmptyState';
@@ -29,6 +30,15 @@ const SELLER_EXPORT_COLUMNS = [
   { key: 'storeAddress', label: 'Store Address' },
   { key: 'status', label: 'Status' },
 ];
+
+// Seller status → ledger pill tone.
+function sellerTone(status) {
+  const v = String(status || '').toUpperCase();
+  if (v === 'ACTIVE') return 'on';
+  if (v === 'PENDING_VERIFICATION' || v === 'PENDING') return 'pending';
+  if (['INACTIVE', 'DEACTIVATED', 'SUSPENDED', 'ARCHIVED'].includes(v)) return 'off';
+  return 'neutral';
+}
 
 const GenerateSellerReport = () => {
   // Sellers come from the live GET /api/sellers fetch below — the old
@@ -233,9 +243,25 @@ const GenerateSellerReport = () => {
     detailSection:{ fontSize: 12, fontWeight: 700, color: '#390955', textTransform: 'uppercase', letterSpacing: '0.5px', margin: '18px 0 6px' },
   };
 
+  const openDetails = (seller) => {
+    setDetailTab('details');
+    setSellerTimeline([]);
+    setDetailSeller(seller);
+    fetchSellerTimeline(seller);
+  };
+  const openEdit = (seller) => {
+    setEditingSeller({ ...seller, address: { ...seller.address } });
+    setShowEditModal(true);
+  };
+
+  const visibleSellers = sellers.filter(x => x.status !== SELLER_STATUS.ARCHIVED);
+  const activeCount = visibleSellers.filter(x => sellerTone(x.status) === 'on').length;
+  const pendingCount = visibleSellers.filter(x => sellerTone(x.status) === 'pending').length;
+
   return (
-    <div style={s.main}>
+    <div className="lp-page">
       <PageHeader
+        className="lp-header"
         title="Seller Profiles Management"
         subtitle="Search and update seller records · Archiving is managed in Settings > Archived Records"
         breadcrumb={['Dashboard', 'People', 'Sellers', 'Seller Directory']}
@@ -247,16 +273,36 @@ const GenerateSellerReport = () => {
         )}
       />
 
-      <SectionCard noPadding className="mb-6">
-        <CardSectionHeader
-          icon={Store}
-          title="Registered Sellers Ledger"
-          subtitle={`${filteredSellers.length} of ${sellers.length} records — registered merchant accounts and shipping profiles`}
-        />
-        <FilterBar>
+      {/* Ledger card — fills the rest of the screen; only the table body
+          scrolls (header row pinned) and pagination is docked in the footer. */}
+      <SectionCard
+        noPadding
+        className="lp-card"
+        bodyClassName="lp-card-body"
+        footer={filteredSellers.length > 0 ? (
+          <div className="lp-footer">
+            <PaginationControls
+              currentPage={safePage}
+              totalRecords={filteredSellers.length}
+              rowsPerPage={recordsPerPage}
+              onPageChange={setCurrentPage}
+              onRowsPerPageChange={(n) => { setRecordsPerPage(n); setCurrentPage(1); }}
+            />
+          </div>
+        ) : null}
+      >
+        <div className="lp-section-head">
+          <CardSectionHeader
+            icon={Store}
+            title="Registered Sellers Ledger"
+            subtitle="Registered merchant accounts and shipping profiles"
+          />
+        </div>
+        <FilterBar className="lp-toolbar">
           <FilterBar.Group>
             <FilterBar.Search
               placeholder="Search seller by name, store, or ID..."
+              aria-label="Search sellers"
               value={searchTerm}
               onChange={handleSearchChange}
             />
@@ -269,196 +315,224 @@ const GenerateSellerReport = () => {
               <option value={SELLER_STATUS.ACTIVE} className="font-medium text-slate-700 bg-white">Active</option>
               <option value="INACTIVE" className="font-medium text-slate-700 bg-white">Inactive</option>
             </FilterBar.Select>
-            <FilterBar.Count count={filteredSellers.length} label="results" />
+            <span className="lp-count">
+              <strong>{filteredSellers.length}</strong> of {visibleSellers.length} sellers
+              <span className="lp-count-active">{activeCount} active</span>
+              {pendingCount > 0 && <span className="lp-count-active lp-count-pending">{pendingCount} pending</span>}
+            </span>
           </FilterBar.Group>
           <FilterBar.Actions>
-            <ExportDropdown onExport={handleExport} disabled={filteredSellers.length === 0} />
+            <ExportDropdown onExport={handleExport} disabled={filteredSellers.length === 0} className="lp-export" />
           </FilterBar.Actions>
         </FilterBar>
 
-        <div style={{ padding: '8px 24px 24px' }}>
-          <style>{`
-            .seller-row:hover td { background: #faf7fd !important; }
-            .seller-actions { opacity: 0.8; transition: opacity 0.15s ease; }
-            .seller-row:hover .seller-actions { opacity: 1; }
-          `}</style>
-          <div className="custom-table-scroll" style={{ overflowX: 'auto', border: '1px solid #e4d8f2', borderRadius: '12px' }}>
-            <table style={s.table}>
-              <thead>
+        <div className="lp-table-scroll custom-table-scroll">
+          <table className="lp-table w-full text-left">
+            <thead>
+              <tr>
+                {[
+                  { label: 'Seller ID', icon: Hash },
+                  { label: 'Full Name', icon: User },
+                  { label: 'Email Address', icon: Mail },
+                  { label: 'Phone Number', icon: Phone },
+                  { label: 'Store', icon: MapPin },
+                  { label: 'Status', icon: Activity },
+                ].map(h => (
+                  <th key={h.label} className="whitespace-nowrap font-bold uppercase text-left">
+                    <span className="flex items-center gap-1.5"><h.icon size={12} className="lp-th-icon" aria-hidden="true" />{h.label}</span>
+                  </th>
+                ))}
+                <th className="whitespace-nowrap font-bold uppercase text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {currentRecords.length === 0 ? (
                 <tr>
-                  <th style={{ ...s.th, position: 'sticky', left: 0, zIndex: 10, background: '#f8fafc', borderRight: '1px solid #e2e8f0', boxShadow: '2px 0 5px -2px rgba(0,0,0,0.06)' }}><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Hash size={12} style={{ color: '#94a3b8' }} />Seller ID</span></th>
-                  <th style={s.th}><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><User size={12} style={{ color: '#94a3b8' }} />Full Name</span></th>
-                  <th style={s.th}><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Mail size={12} style={{ color: '#94a3b8' }} />Email Address</span></th>
-                  <th style={s.th}><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Phone size={12} style={{ color: '#94a3b8' }} />Phone Number</span></th>
-                  <th style={s.th}><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><MapPin size={12} style={{ color: '#94a3b8' }} />Store Address</span></th>
-                  <th style={s.th}><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Activity size={12} style={{ color: '#94a3b8' }} />Status</span></th>
-                  <th style={{ ...s.th, textAlign: 'right' }}>Actions</th>
+                  <td colSpan="7" style={{ padding: '32px 16px' }}>
+                    <EmptyState
+                      title={visibleSellers.length === 0 ? 'No seller records yet' : 'No seller records match your search'}
+                      description={visibleSellers.length === 0 ? 'Sellers appear here once they register through the mobile app.' : 'Try adjusting your search or status filter.'}
+                    />
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {currentRecords.length === 0 ? (
-                  <tr>
-                    <td colSpan="7" style={{ padding: '32px 16px' }}>
-                      <EmptyState
-                        title="No seller records match your search"
-                        description="Try adjusting your search or lifecycle status filter."
-                      />
-                    </td>
-                  </tr>
-                ) : (
-                  currentRecords.map((seller, idx) => {
-                    return (
-                      <tr key={seller._id || idx} className="seller-row" style={{ background: 'white' }}>
-                        <td style={{ ...s.td, fontFamily: "'DM Mono', monospace", fontWeight: 600, fontSize: '12px', position: 'sticky', left: 0, zIndex: 5, background: 'white', borderRight: '1px solid #f1ecf8', boxShadow: '2px 0 5px -2px rgba(0,0,0,0.06)' }}>{seller.sellerId}</td>
-                        <td style={{ ...s.td, fontWeight: 700 }}>
-                          <div>{seller.fullName || '—'}</div>
-                        </td>
-                        <td style={{ ...s.td, fontSize: '12px' }}>
-                          <div>{seller.email || '—'}</div>
-                        </td>
-                        <td style={{ ...s.td, fontSize: '12px' }}>
-                          <div>{seller.phone || '—'}</div>
-                        </td>
-                        <td style={s.td}>
-                          <div style={{ fontWeight: 600, color: '#390955', whiteSpace: 'nowrap' }}>{seller.storeName || seller.raw?.storeName || '—'}</div>
-                          <div style={{ fontSize: '11.5px', color: '#a890c0', marginTop: '2px', whiteSpace: 'nowrap' }}>
-                            {seller.address?.street || seller.warehouseAddress || seller.raw?.warehouseAddress || seller.address?.city || seller.raw?.address || '—'}
-                          </div>
-                        </td>
-                        <td style={s.td}>
-                          <StatusBadge status={seller.status} label={formatStatusLabel(seller.status)} colorMap={SELLER_STATUS_COLORS} fallback="ACTIVE" />
-                        </td>
-                        <td style={{ ...s.td, textAlign: 'right' }}>
-                          <div className="seller-actions" style={{ display: 'inline-flex', gap: '8px', whiteSpace: 'nowrap' }}>
-                            <button style={s.btnOutline} onClick={() => { setDetailTab('details'); setSellerTimeline([]); setDetailSeller(seller); fetchSellerTimeline(seller); }}>
-                              View Details
-                            </button>
-                            <button style={s.btnOutline} onClick={() => { setEditingSeller({ ...seller, address: { ...seller.address } }); setShowEditModal(true); }}>
-                              Edit Info
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          <PaginationControls
-            currentPage={safePage}
-            totalRecords={filteredSellers.length}
-            rowsPerPage={recordsPerPage}
-            onPageChange={setCurrentPage}
-            onRowsPerPageChange={(n) => { setRecordsPerPage(n); setCurrentPage(1); }}
-          />
+              ) : (
+                currentRecords.map((seller, idx) => {
+                  const storeName = seller.storeName || seller.raw?.storeName || '';
+                  const storeAddress = seller.address?.street || seller.warehouseAddress || seller.raw?.warehouseAddress || seller.address?.city || seller.raw?.address || '';
+                  return (
+                    <tr key={seller._id || idx} className="group cursor-pointer" onClick={() => openDetails(seller)}>
+                      <td className="lp-id whitespace-nowrap">{seller.sellerId}</td>
+                      <td className="whitespace-nowrap">
+                        <span className="lp-name">
+                          <span className="lp-avatar" aria-hidden="true">{initialsOf(seller.fullName)}</span>
+                          <span className="lp-name-text">{seller.fullName || '—'}</span>
+                        </span>
+                      </td>
+                      <td className="lp-muted lp-email whitespace-nowrap" title={seller.email || undefined}>{seller.email || '—'}</td>
+                      <td className="lp-muted whitespace-nowrap tabular-nums">{seller.phone || '—'}</td>
+                      <td className="whitespace-nowrap">
+                        <span className="lp-stack lp-clip" title={[storeName, storeAddress].filter(Boolean).join(' — ') || undefined}>
+                          <span className="lp-stack-main">{storeName || 'Personal merchant'}</span>
+                          {storeAddress && <span className="lp-stack-sub">{storeAddress}</span>}
+                        </span>
+                      </td>
+                      <td className="whitespace-nowrap">
+                        <LedgerStatus tone={sellerTone(seller.status)}>{formatStatusLabel(seller.status)}</LedgerStatus>
+                      </td>
+                      <td className="whitespace-nowrap text-right" onClick={e => e.stopPropagation()}>
+                        <span className="lp-row-actions">
+                          <button type="button" className="lp-view-btn" onClick={() => openDetails(seller)}>
+                            <Eye size={13} aria-hidden="true" /> View
+                          </button>
+                          <button type="button" className="lp-view-btn is-quiet" onClick={() => openEdit(seller)} aria-label={`Edit ${seller.fullName || 'seller'}`}>
+                            <Pencil size={13} aria-hidden="true" /> <span className="lp-btn-label">Edit</span>
+                          </button>
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
         </div>
       </SectionCard>
 
-      {/* DETAIL VIEW MODAL — full bank + address info */}
+      {/* DETAIL VIEW MODAL — identity header, tabs on top, grouped details
+          that scroll inside the card, fixed footer. */}
       {detailSeller && (
-        <Modal tint="rgba(26,6,40,0.5)" blur={false} maxWidth={480} padding={0} onBackdropClick={() => setDetailSeller(null)} cardStyle={{ borderRadius: 12, overflow: 'hidden', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)' }}>
-            <div style={{ background: '#390955', padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <h3 style={{ color: 'white', margin: 0, fontSize: '15px', fontWeight: 700 }}>{detailSeller.fullName || 'Seller'}</h3>
-                {(detailSeller.storeName || detailSeller.raw?.storeName) && (
-                  <div style={{ color: '#f37021', fontSize: '12px', fontWeight: 600, marginTop: '2px' }}>
-                    {detailSeller.storeName || detailSeller.raw?.storeName}
-                  </div>
-                )}
-                <p style={{ color: 'rgba(255,255,255,0.6)', margin: '2px 0 0', fontSize: '12px' }}>{detailSeller.sellerId}</p>
+        <Modal tint={LEDGER_MODAL_TINT} blur={false} overlayStyle={LEDGER_MODAL_OVERLAY} maxWidth={560} padding={0} label="Seller details" onBackdropClick={() => setDetailSeller(null)} cardStyle={LEDGER_MODAL_CARD}>
+          <div className="lp-modal-head">
+            <span className="lp-modal-avatar" aria-hidden="true">{initialsOf(detailSeller.fullName)}</span>
+            <div className="lp-modal-identity">
+              <h3>{detailSeller.fullName || 'Seller'}</h3>
+              {(detailSeller.storeName || detailSeller.raw?.storeName) && (
+                <div className="lp-modal-store">{detailSeller.storeName || detailSeller.raw?.storeName}</div>
+              )}
+              <div className="lp-modal-meta">
+                <span className="lp-modal-id">{detailSeller.sellerId || 'No ID yet'}</span>
+                <LedgerStatus tone={sellerTone(detailSeller.status)}>{formatStatusLabel(detailSeller.status)}</LedgerStatus>
               </div>
-              <button onClick={() => setDetailSeller(null)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', fontSize: '20px', lineHeight: 1 }}>&times;</button>
             </div>
-            <div style={{ padding: '20px 24px 24px' }}>
-              <div style={s.detailSection}>Identification</div>
-              <div style={s.detailRow}><span style={s.detailLabel}>ID Type</span><span style={s.detailValue}>{detailSeller.idType}</span></div>
-              <div style={s.detailRow}><span style={s.detailLabel}>Government ID No.</span><span style={s.detailValue}>{detailSeller.governmentIdNumber || '—'}</span></div>
+            <button type="button" className="lp-modal-close" onClick={() => setDetailSeller(null)} aria-label="Close seller details">
+              <X size={18} aria-hidden="true" />
+            </button>
+          </div>
 
-              <div style={s.detailSection}>Contact Point</div>
-              <div style={s.detailRow}><span style={s.detailLabel}>Email</span><span style={s.detailValue}>{detailSeller.email || '—'}</span></div>
-              <div style={s.detailRow}><span style={s.detailLabel}>Phone</span><span style={s.detailValue}>{detailSeller.phone || '—'}</span></div>
+          <div className="lp-modal-tabs" role="tablist" aria-label="Seller details sections">
+            {[{ key: 'details', label: 'Details', icon: Info }, { key: 'timeline', label: 'Timeline', icon: History }].map(tab => (
+              <button
+                key={tab.key}
+                type="button"
+                role="tab"
+                aria-selected={detailTab === tab.key}
+                className={`lp-modal-tab${detailTab === tab.key ? ' is-active' : ''}`}
+                onClick={() => setDetailTab(tab.key)}
+              >
+                <tab.icon size={14} aria-hidden="true" /> {tab.label}
+              </button>
+            ))}
+          </div>
 
-              <div style={s.detailSection}>Address</div>
-              <div style={s.detailRow}><span style={s.detailLabel}>Street</span><span style={s.detailValue}>{detailSeller.address.street || '—'}</span></div>
-              <div style={s.detailRow}><span style={s.detailLabel}>City</span><span style={s.detailValue}>{detailSeller.address.city || '—'}</span></div>
-              <div style={s.detailRow}><span style={s.detailLabel}>State / Province</span><span style={s.detailValue}>{detailSeller.address.state || '—'}</span></div>
-              <div style={s.detailRow}><span style={s.detailLabel}>Postal Code</span><span style={s.detailValue}>{detailSeller.address.postalCode || '—'}</span></div>
-              <div style={s.detailRow}><span style={s.detailLabel}>Country</span><span style={s.detailValue}>{detailSeller.address.country || '—'}</span></div>
-
-              {/* Tabs */}
-              <div style={{ display: 'flex', borderBottom: '2px solid #f0eaf8', margin: '16px 0 0' }}>
-                {[{ key: 'details', label: 'Details' }, { key: 'timeline', label: 'Timeline' }].map(tab => (
-                  <button key={tab.key} onClick={() => setDetailTab(tab.key)} style={{
-                    flex: 1, padding: '10px 0', border: 'none', cursor: 'pointer',
-                    fontSize: 12, fontWeight: 600, transition: 'all 0.2s',
-                    background: detailTab === tab.key ? '#faf7fd' : 'transparent',
-                    color: detailTab === tab.key ? '#390955' : '#a890c0',
-                    borderBottom: detailTab === tab.key ? '2px solid #390955' : '2px solid transparent',
-                    marginBottom: -2,
-                  }}>{tab.label}</button>
+          <div className="lp-modal-body" role="tabpanel">
+            {detailTab === 'details' && (
+              <div className="lp-detail-groups">
+                {[
+                  {
+                    title: 'Identification',
+                    rows: [
+                      { label: 'ID Type', value: detailSeller.idType },
+                      { label: 'Government ID No.', value: detailSeller.governmentIdNumber },
+                    ],
+                  },
+                  {
+                    title: 'Contact Point',
+                    rows: [
+                      { label: 'Email', value: detailSeller.email, wrap: true },
+                      { label: 'Phone', value: detailSeller.phone },
+                    ],
+                  },
+                  {
+                    title: 'Address',
+                    rows: [
+                      { label: 'Street', value: detailSeller.address?.street, wrap: true },
+                      { label: 'City', value: detailSeller.address?.city },
+                      { label: 'State / Province', value: detailSeller.address?.state },
+                      { label: 'Postal Code', value: detailSeller.address?.postalCode },
+                      { label: 'Country', value: detailSeller.address?.country },
+                    ],
+                  },
+                  {
+                    title: 'Store & Operations',
+                    rows: [
+                      { label: 'Store Name', value: detailSeller.storeName || detailSeller.raw?.storeName || 'Personal Merchant' },
+                      { label: 'Warehouse Address', value: detailSeller.warehouseAddress || detailSeller.raw?.warehouseAddress, wrap: true },
+                      { label: 'Operating Hours', value: detailSeller.operatingHours || detailSeller.raw?.operatingHours },
+                      { label: 'Registration Date', value: (detailSeller.createdAt || detailSeller.raw?.createdAt) ? formatTimelineDate(detailSeller.createdAt || detailSeller.raw?.createdAt) : '' },
+                    ],
+                  },
+                  ...(detailSeller.bankName ? [{
+                    title: 'Bank & Payout',
+                    rows: [
+                      { label: 'Bank Name', value: detailSeller.bankName },
+                      { label: 'Account Number', value: detailSeller.accountNumber },
+                      { label: 'Payment Cycle', value: detailSeller.paymentCycle || 'Weekly' },
+                      { label: 'Commission Rate', value: `${detailSeller.commissionRate ?? 0}%` },
+                    ],
+                  }] : []),
+                ].map(group => (
+                  <section key={group.title} className="lp-detail-group" aria-label={group.title}>
+                    <h4>{group.title}</h4>
+                    <dl>
+                      {group.rows.map(row => {
+                        const empty = !(row.value && String(row.value).trim());
+                        return (
+                          <div key={row.label} className="lp-detail-row">
+                            <dt>{row.label}</dt>
+                            <dd className={`${row.wrap ? 'is-wrap' : ''}${empty ? ' is-empty' : ''}`}>{empty ? 'Not provided' : row.value}</dd>
+                          </div>
+                        );
+                      })}
+                    </dl>
+                  </section>
                 ))}
               </div>
+            )}
 
-              {/* Details Tab */}
-              {detailTab === 'details' && (
-                <>
-                  <div style={s.detailSection}>Store &amp; Operations</div>
-                  <div style={s.detailRow}><span style={s.detailLabel}>Store Name</span><span style={s.detailValue}>{detailSeller.storeName || detailSeller.raw?.storeName || 'Personal Merchant'}</span></div>
-                  <div style={s.detailRow}><span style={s.detailLabel}>Warehouse Address</span><span style={s.detailValue}>{detailSeller.warehouseAddress || detailSeller.raw?.warehouseAddress || '—'}</span></div>
-                  <div style={s.detailRow}><span style={s.detailLabel}>Operating Hours</span><span style={s.detailValue}>{detailSeller.operatingHours || detailSeller.raw?.operatingHours || '—'}</span></div>
-                  <div style={s.detailRow}><span style={s.detailLabel}>Registration Date</span><span style={s.detailValue}>{detailSeller.createdAt || detailSeller.raw?.createdAt ? formatTimelineDate(detailSeller.createdAt || detailSeller.raw?.createdAt) : '—'}</span></div>
-                  {detailSeller.bankName ? (
-                    <>
-                      <div style={s.detailSection}>Bank &amp; Payout</div>
-                      <div style={s.detailRow}><span style={s.detailLabel}>Bank Name</span><span style={s.detailValue}>{detailSeller.bankName}</span></div>
-                      <div style={s.detailRow}><span style={s.detailLabel}>Account Number</span><span style={s.detailValue}>{detailSeller.accountNumber || '—'}</span></div>
-                      <div style={s.detailRow}><span style={s.detailLabel}>Payment Cycle</span><span style={s.detailValue}>{detailSeller.paymentCycle || 'Weekly'}</span></div>
-                      <div style={s.detailRow}><span style={s.detailLabel}>Commission Rate</span><span style={s.detailValue}>{detailSeller.commissionRate ?? 0}%</span></div>
-                    </>
-                  ) : null}
-                </>
-              )}
+            {detailTab === 'timeline' && (
+              timelineLoading ? (
+                <div className="lp-empty-note">Loading timeline…</div>
+              ) : sellerTimeline.length === 0 ? (
+                <div className="lp-empty-note">No status history yet</div>
+              ) : (
+                <ol className="lp-timeline">
+                  {sellerTimeline.map((evt, idx) => (
+                    <li key={idx} className="lp-timeline-item">
+                      <i className="lp-timeline-dot" aria-hidden="true" />
+                      <div className="lp-timeline-card">
+                        <header>
+                          <strong>{evt.status === 'Registered' ? 'Registered' : `Status: ${formatStatusLabel(evt.status)}`}</strong>
+                          <time dateTime={evt.changedAt || undefined}>{formatTimelineDate(evt.changedAt)}</time>
+                        </header>
+                        <p>{evt.reason || 'No reason provided'}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              )
+            )}
+          </div>
 
-              {/* Timeline Tab */}
-              {detailTab === 'timeline' && (
-                <div style={{ marginTop: 12 }}>
-                  {timelineLoading ? (
-                    <div style={{ padding: 20, textAlign: 'center', color: '#a890c0', fontSize: 12 }}>Loading timeline...</div>
-                  ) : sellerTimeline.length === 0 ? (
-                    <div style={{ padding: 20, textAlign: 'center' }}>
-                      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#d4c8e8" strokeWidth="1.5" style={{ marginBottom: 6 }}>
-                        <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
-                      </svg>
-                      <p style={{ color: '#a890c0', fontSize: 12, margin: 0 }}>No status history yet</p>
-                    </div>
-                  ) : (
-                    <div style={{ position: 'relative', paddingLeft: 24 }}>
-                      <div style={{ position: 'absolute', left: 9, top: 6, bottom: 6, width: 2, background: '#390955', borderRadius: 1, opacity: 0.3 }} />
-                      {sellerTimeline.map((evt, idx) => (
-                        <div key={idx} style={{ position: 'relative', marginBottom: idx < sellerTimeline.length - 1 ? 16 : 0 }}>
-                          <div style={{ position: 'absolute', left: -24, top: 2, width: 18, height: 18, borderRadius: '50%', background: '#390955', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1, boxShadow: '0 0 0 3px white, 0 0 0 4px rgba(57,9,85,0.2)' }}>
-                            <svg width="10" height="10" viewBox="0 0 24 24" fill="white"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" /></svg>
-                          </div>
-                          <div style={{ padding: '8px 12px', background: '#faf7fd', borderRadius: 8, border: '1px solid #ede6f7' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
-                              <span style={{ fontSize: 11, fontWeight: 700, color: '#1f1329' }}>Status: {evt.status}</span>
-                              <span style={{ fontSize: 9, color: '#a890c0' }}>{formatTimelineDate(evt.changedAt)}</span>
-                            </div>
-                            <p style={{ margin: 0, fontSize: 10, color: '#6b7280' }}>{evt.reason || 'No reason provided'}</p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '16px' }}>
-                <button style={s.btnOutline} onClick={() => setDetailSeller(null)}>Close</button>
-              </div>
-            </div>
+          <div className="lp-modal-foot">
+            <button type="button" className="lp-btn is-secondary" onClick={() => setDetailSeller(null)}>Close</button>
+            <button
+              type="button"
+              className="lp-btn is-primary"
+              onClick={() => { const target = detailSeller; setDetailSeller(null); openEdit(target); }}
+            >
+              <Pencil size={14} aria-hidden="true" /> Edit Info
+            </button>
+          </div>
         </Modal>
       )}
 

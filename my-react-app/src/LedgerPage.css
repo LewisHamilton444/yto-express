@@ -1,14 +1,15 @@
 /* ============================================================
-   CUSTOMER LIST — one-screen layout (2026-09-29)
-   The page fits the desktop viewport: compact header on top, the table
-   card takes the rest. Only the table body scrolls (header row pinned) and
+   LEDGER PAGES — shared one-screen layout (2026-09-29)
+   Used by Customer List and Seller Directory (lp- classes). The page
+   fits the desktop viewport: compact header on top, the table card
+   takes the rest. Only the table body scrolls (header row pinned) and
    pagination is docked in the card footer. The shell switches .ad-main to
    its no-scroll frame for this page (NO_SCROLL_PAGES in AnalyticsDashboard).
    Plain (unlayered) CSS, so these rules beat Tailwind's utility classes on
    the shared primitives without editing them.
    ============================================================ */
 
-.cl-page {
+.lp-page {
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -19,13 +20,13 @@
   box-sizing: border-box;
   overflow: hidden;
 }
-.ad-main--no-scroll > .cl-page {
+.ad-main--no-scroll > .lp-page {
   flex: 1 1 auto;
   min-height: 0;
 }
 
 /* ── Page header (shared PageHeader, compacted) ── */
-.cl-header {
+.lp-header {
   flex-shrink: 0;
   margin-bottom: 0;
   padding: 16px 22px;
@@ -33,21 +34,21 @@
   border-radius: 16px;
   box-shadow: 0 1px 2px rgba(57, 9, 85, 0.04), 0 10px 28px -20px rgba(57, 9, 85, 0.22);
 }
-.cl-header h1 {
+.lp-header h1 {
   font-size: 22px;
   font-weight: 800;
   letter-spacing: -0.02em;
   color: #1a1030;
 }
-.cl-header h1 + p {
+.lp-header h1 + p {
   margin-top: 2px;
 }
-.cl-header nav {
+.lp-header nav {
   margin-top: 8px;
 }
 
 /* ── Table card ── */
-.cl-card {
+.lp-card {
   display: flex;
   flex-direction: column;
   flex: 1 1 auto;
@@ -56,7 +57,7 @@
   border-radius: 16px;
   box-shadow: 0 1px 2px rgba(57, 9, 85, 0.04), 0 10px 28px -18px rgba(57, 9, 85, 0.22);
 }
-.cl-card-body {
+.lp-card-body {
   display: flex;
   flex-direction: column;
   flex: 1 1 auto;
@@ -64,12 +65,12 @@
 }
 
 /* ── Search / filter / export bar ── */
-.cl-toolbar {
+.lp-toolbar {
   flex-shrink: 0;
   padding: 14px 20px;
   gap: 12px;
 }
-.cl-toolbar input[type='text'] {
+.lp-toolbar input[type='text'] {
   height: 40px;
   border-radius: 10px;
   border-color: #e2d9ee;
@@ -77,15 +78,15 @@
   font-size: 13.5px;
   transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
 }
-.cl-toolbar input[type='text']:hover {
+.lp-toolbar input[type='text']:hover {
   border-color: #cfc2e2;
 }
-.cl-toolbar input[type='text']:focus {
+.lp-toolbar input[type='text']:focus {
   background: #ffffff;
   border-color: #390955;
   box-shadow: 0 0 0 4px rgba(57, 9, 85, 0.10);
 }
-.cl-toolbar select {
+.lp-toolbar select {
   height: 40px;
   min-width: 112px;
   padding: 0 34px 0 14px;
@@ -99,14 +100,14 @@
   background-repeat: no-repeat;
   background-position: right 12px center;
 }
-.cl-toolbar select:hover {
+.lp-toolbar select:hover {
   border-color: #cfc2e2;
 }
-.cl-toolbar select:focus {
+.lp-toolbar select:focus {
   border-color: #390955;
   box-shadow: 0 0 0 4px rgba(57, 9, 85, 0.10);
 }
-.cl-count {
+.lp-count {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -115,11 +116,11 @@
   color: #7b6d8d;
   white-space: nowrap;
 }
-.cl-count strong {
+.lp-count strong {
   font-weight: 800;
   color: #390955;
 }
-.cl-count-active {
+.lp-count-active {
   padding: 3px 9px;
   border-radius: 9999px;
   background: #ecfdf3;
@@ -128,7 +129,7 @@
   font-size: 11px;
   font-weight: 700;
 }
-.cl-export > button {
+.lp-export > button {
   height: 40px;
   padding: 0 16px;
   border-radius: 10px;
@@ -138,33 +139,33 @@
   box-shadow: 0 6px 16px -8px rgba(243, 112, 33, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.25);
   transition: box-shadow 0.18s ease, transform 0.18s ease, filter 0.18s ease;
 }
-.cl-export > button:hover:not(:disabled) {
+.lp-export > button:hover:not(:disabled) {
   transform: translateY(-1px);
   filter: none;
   box-shadow: 0 10px 22px -10px rgba(243, 112, 33, 0.85), inset 0 1px 0 rgba(255, 255, 255, 0.25);
 }
-.cl-export > button:focus-visible {
+.lp-export > button:focus-visible {
   outline: none;
   box-shadow: 0 0 0 3px #ffffff, 0 0 0 5px #f37021;
 }
 
 /* ── Table ── */
-.cl-table-scroll {
+.lp-table-scroll {
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
 }
-.cl-table {
+.lp-table {
   /* Fits the card at laptop widths (no sideways scroll, so the pinned ID
      column never covers the names); scrolls sideways only below this. */
   min-width: 940px;
   border-collapse: separate;
   border-spacing: 0;
 }
-.cl-table thead {
+.lp-table thead {
   border-bottom: none;
 }
-.cl-table thead th {
+.lp-table thead th {
   position: sticky;
   top: 0;
   z-index: 3;
@@ -175,51 +176,51 @@
   letter-spacing: 0.07em;
   color: #6b5b84;
 }
-.cl-table thead th:first-child {
+.lp-table thead th:first-child {
   z-index: 4;
   padding-left: 20px;
   border-right: none;
   box-shadow: none;
 }
-.cl-table thead th:last-child {
+.lp-table thead th:last-child {
   padding-right: 20px;
 }
-.cl-th-icon {
+.lp-th-icon {
   color: #b3a6c6;
 }
-.cl-table tbody td {
+.lp-table tbody td {
   padding: 13px 16px;
   border-bottom: 1px solid #f3eff8;
   font-size: 13px;
 }
-.cl-table tbody td:first-child {
+.lp-table tbody td:first-child {
   padding-left: 20px;
   border-right: none;
   box-shadow: none;
 }
-.cl-table tbody td:last-child {
+.lp-table tbody td:last-child {
   padding-right: 20px;
 }
-.cl-table tbody tr:last-child td {
+.lp-table tbody tr:last-child td {
   border-bottom: none;
 }
-.cl-table tbody tr:hover td {
+.lp-table tbody tr:hover td {
   background: #fbf8fe;
 }
-.cl-id {
+.lp-id {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.02em;
   color: #390955;
 }
-.cl-name {
+.lp-name {
   display: inline-flex;
   align-items: center;
   gap: 10px;
   min-width: 0;
 }
-.cl-avatar {
+.lp-avatar {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -234,22 +235,22 @@
   font-weight: 800;
   letter-spacing: 0.02em;
 }
-.cl-name-text {
+.lp-name-text {
   font-size: 13.5px;
   font-weight: 600;
   color: #1a1030;
 }
-.cl-muted {
+.lp-muted {
   color: #5f5670;
 }
-.cl-email {
+.lp-email {
   max-width: 240px;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 /* Status pill: soft tinted fill, crisp text, glowing dot. */
-.cl-status {
+.lp-status {
   display: inline-flex;
   align-items: center;
   gap: 7px;
@@ -260,34 +261,34 @@
   letter-spacing: 0.01em;
   white-space: nowrap;
 }
-.cl-status.is-on {
+.lp-status.is-on {
   background: #ecfdf3;
   border: 1px solid #c7f0d8;
   color: #047857;
   box-shadow: 0 0 14px -4px rgba(16, 185, 129, 0.40);
 }
-.cl-status.is-off {
+.lp-status.is-off {
   background: #fef2f2;
   border: 1px solid #fbd5d5;
   color: #b42318;
   box-shadow: 0 0 14px -4px rgba(239, 68, 68, 0.35);
 }
-.cl-status-dot {
+.lp-status-dot {
   width: 7px;
   height: 7px;
   border-radius: 50%;
   background: currentColor;
 }
-.cl-status.is-on .cl-status-dot {
+.lp-status.is-on .lp-status-dot {
   background: #22c55e;
   box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.20);
 }
-.cl-status.is-off .cl-status-dot {
+.lp-status.is-off .lp-status-dot {
   background: #ef4444;
   box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.18);
 }
 
-.cl-view-btn {
+.lp-view-btn {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -303,24 +304,24 @@
   cursor: pointer;
   transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 }
-.cl-view-btn:hover {
+.lp-view-btn:hover {
   background: #f7f1fc;
   border-color: #cdb8e6;
   box-shadow: 0 4px 12px -6px rgba(57, 9, 85, 0.30);
 }
-.cl-view-btn:focus-visible {
+.lp-view-btn:focus-visible {
   outline: none;
   box-shadow: 0 0 0 3px rgba(57, 9, 85, 0.18);
   border-color: #390955;
 }
 
 /* ── Docked pagination footer ── */
-.cl-footer {
+.lp-footer {
   padding: 10px 20px;
   background: #fcfbfe;
 }
 /* PaginationControls carries inline spacing meant for a bar below a card. */
-.cl-footer > div {
+.lp-footer > div {
   margin-top: 0 !important;
   padding-top: 0 !important;
 }
@@ -328,46 +329,47 @@
 /* Laptop widths: tighter cells so all eight columns fit without sideways
    scrolling at 1280–1440px. */
 @media (max-width: 1440px) {
-  .cl-page { padding-left: 18px; padding-right: 18px; }
-  .cl-table thead th,
-  .cl-table tbody td { padding-left: 10px; padding-right: 10px; }
-  .cl-table thead th:first-child,
-  .cl-table tbody td:first-child { padding-left: 16px; }
-  .cl-table thead th:last-child,
-  .cl-table tbody td:last-child { padding-right: 16px; }
-  .cl-avatar { width: 26px; height: 26px; font-size: 10px; }
-  .cl-name { gap: 8px; }
-  .cl-email { max-width: 200px; }
-  .cl-view-btn { padding: 0 10px; }
+  .lp-page { padding-left: 18px; padding-right: 18px; }
+  .lp-table thead th,
+  .lp-table tbody td { padding-left: 10px; padding-right: 10px; }
+  .lp-table thead th:first-child,
+  .lp-table tbody td:first-child { padding-left: 16px; }
+  .lp-table thead th:last-child,
+  .lp-table tbody td:last-child { padding-right: 16px; }
+  .lp-avatar { width: 26px; height: 26px; font-size: 10px; }
+  .lp-name { gap: 8px; }
+  .lp-email { max-width: 200px; }
+  .lp-view-btn { padding: 0 10px; }
 }
 
 @media (max-width: 1320px) {
-  .cl-avatar { display: none; }
-  .cl-email { max-width: 180px; }
+  .lp-avatar { display: none; }
+  .lp-email { max-width: 180px; }
 }
 
 /* Short screens: trim chrome so the table keeps room for rows. */
 @media (max-height: 740px) and (min-width: 1201px) {
-  .cl-page { gap: 12px; padding-top: 14px; padding-bottom: 14px; }
-  .cl-header { padding: 12px 20px; }
-  .cl-header h1 { font-size: 20px; }
-  .cl-header nav { margin-top: 6px; }
-  .cl-toolbar { padding-top: 10px; padding-bottom: 10px; }
-  .cl-table tbody td { padding-top: 10px; padding-bottom: 10px; }
+  .lp-page { gap: 12px; padding-top: 14px; padding-bottom: 14px; }
+  .lp-header { padding: 12px 20px; }
+  .lp-header h1 { font-size: 20px; }
+  .lp-header nav { margin-top: 6px; }
+  .lp-toolbar { padding-top: 10px; padding-bottom: 10px; }
+  .lp-table tbody td { padding-top: 10px; padding-bottom: 10px; }
 }
 
 /* Below the desktop breakpoint the shell scrolls normally again, so the page
    and table grow to their natural height. */
 @media (max-width: 1200px) {
-  .cl-page { height: auto; overflow: visible; padding: 16px; }
-  .cl-card,
-  .cl-card-body { flex: none; }
-  .cl-table-scroll { overflow-x: auto; overflow-y: visible; }
+  .lp-page { height: auto; overflow: visible; padding: 16px; }
+  .lp-card,
+  .lp-card-body { flex: none; }
+  .lp-table-scroll { overflow-x: auto; overflow-y: visible; }
 }
 
 /* ── Customer details modal ── */
-.cl-modal-head {
+.lp-modal-head {
   position: relative;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   gap: 14px;
@@ -377,7 +379,7 @@
     linear-gradient(135deg, #2a0640 0%, #390955 45%, #5a1f80 100%);
   color: #ffffff;
 }
-.cl-modal-avatar {
+.lp-modal-avatar {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -391,11 +393,11 @@
   font-weight: 800;
   letter-spacing: 0.02em;
 }
-.cl-modal-identity {
+.lp-modal-identity {
   min-width: 0;
   flex: 1;
 }
-.cl-modal-identity h3 {
+.lp-modal-identity h3 {
   margin: 0;
   font-size: 17px;
   font-weight: 800;
@@ -405,14 +407,14 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.cl-modal-meta {
+.lp-modal-meta {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 6px;
 }
-.cl-modal-id {
+.lp-modal-id {
   padding: 3px 8px;
   border-radius: 6px;
   background: rgba(255, 255, 255, 0.12);
@@ -422,11 +424,11 @@
   font-weight: 600;
   color: rgba(255, 255, 255, 0.9);
 }
-.cl-modal-meta .cl-status {
+.lp-modal-meta .lp-status {
   padding: 2px 9px 2px 8px;
   font-size: 11px;
 }
-.cl-modal-close {
+.lp-modal-close {
   align-self: flex-start;
   display: inline-flex;
   align-items: center;
@@ -441,16 +443,17 @@
   cursor: pointer;
   transition: background-color 0.15s ease, border-color 0.15s ease;
 }
-.cl-modal-close:hover {
+.lp-modal-close:hover {
   background: rgba(255, 255, 255, 0.2);
   border-color: rgba(255, 255, 255, 0.35);
 }
-.cl-modal-close:focus-visible {
+.lp-modal-close:focus-visible {
   outline: none;
   box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.45);
 }
 
-.cl-modal-tabs {
+.lp-modal-tabs {
+  flex-shrink: 0;
   display: flex;
   gap: 4px;
   margin: 14px 20px 0;
@@ -459,7 +462,7 @@
   background: #f4f0f9;
   border: 1px solid #ebe3f4;
 }
-.cl-modal-tab {
+.lp-modal-tab {
   flex: 1;
   display: inline-flex;
   align-items: center;
@@ -476,31 +479,35 @@
   cursor: pointer;
   transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
 }
-.cl-modal-tab:hover {
+.lp-modal-tab:hover {
   color: #390955;
 }
-.cl-modal-tab.is-active {
+.lp-modal-tab.is-active {
   background: #ffffff;
   color: #390955;
   font-weight: 700;
   box-shadow: 0 1px 2px rgba(57, 9, 85, 0.08), 0 4px 12px -6px rgba(57, 9, 85, 0.25);
 }
-.cl-modal-tab:focus-visible {
+.lp-modal-tab:focus-visible {
   outline: none;
   box-shadow: 0 0 0 3px rgba(57, 9, 85, 0.2);
 }
 
-.cl-modal-body {
-  max-height: min(60vh, 480px);
+/* The modal card is a flex column capped at the viewport (see LEDGER_MODAL_CARD
+   in the pages): header, tabs and footer stay put, only this body scrolls. */
+.lp-modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
   padding: 16px 20px 20px;
+  overscroll-behavior: contain;
 }
-.cl-detail-groups {
+.lp-detail-groups {
   display: flex;
   flex-direction: column;
   gap: 14px;
 }
-.cl-detail-group h4 {
+.lp-detail-group h4 {
   margin: 0 0 6px 2px;
   font-size: 10.5px;
   font-weight: 800;
@@ -508,13 +515,13 @@
   text-transform: uppercase;
   color: #9a8cb0;
 }
-.cl-detail-group dl {
+.lp-detail-group dl {
   margin: 0;
   border: 1px solid #ebe3f4;
   border-radius: 12px;
   overflow: hidden;
 }
-.cl-detail-row {
+.lp-detail-row {
   display: grid;
   grid-template-columns: 150px minmax(0, 1fr);
   align-items: center;
@@ -522,18 +529,18 @@
   padding: 10px 14px;
   border-bottom: 1px solid #f3eff8;
 }
-.cl-detail-row:last-child {
+.lp-detail-row:last-child {
   border-bottom: none;
 }
-.cl-detail-row:nth-child(even) {
+.lp-detail-row:nth-child(even) {
   background: #fcfbfe;
 }
-.cl-detail-row dt {
+.lp-detail-row dt {
   font-size: 12px;
   font-weight: 600;
   color: #7b6d8d;
 }
-.cl-detail-row dd {
+.lp-detail-row dd {
   margin: 0;
   justify-self: end;
   text-align: right;
@@ -545,17 +552,223 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.cl-detail-row dd.is-wrap {
+.lp-detail-row dd.is-wrap {
   white-space: normal;
   overflow-wrap: anywhere;
 }
-.cl-detail-row dd.is-empty {
+.lp-detail-row dd.is-empty {
   font-weight: 500;
   font-style: italic;
   color: #b3a6c6;
 }
 
 @media (max-width: 560px) {
-  .cl-detail-row { grid-template-columns: 1fr; gap: 2px; }
-  .cl-detail-row dd { justify-self: start; text-align: left; }
+  .lp-detail-row { grid-template-columns: 1fr; gap: 2px; }
+  .lp-detail-row dd { justify-self: start; text-align: left; }
+}
+
+/* ── Additions for Seller Directory (2026-09-29) ── */
+
+/* Card section header (shared CardSectionHeader, compacted) */
+.lp-section-head > div:first-child {
+  padding: 12px 20px;
+}
+
+/* Pending / neutral pill tones */
+.lp-status.is-pending {
+  background: #fffbeb;
+  border: 1px solid #fde7a7;
+  color: #b45309;
+  box-shadow: 0 0 14px -4px rgba(245, 158, 11, 0.45);
+}
+.lp-status.is-pending .lp-status-dot {
+  background: #f59e0b;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.22);
+}
+.lp-status.is-neutral {
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  color: #475569;
+}
+.lp-status.is-neutral .lp-status-dot {
+  background: #94a3b8;
+}
+
+/* Two-line cell: primary text + quiet secondary line */
+.lp-stack {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.lp-stack-main {
+  font-weight: 600;
+  color: #1a1030;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lp-stack-sub {
+  margin-top: 2px;
+  font-size: 11.5px;
+  color: #9a8cb0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lp-clip {
+  max-width: 220px;
+}
+
+/* Row actions */
+.lp-row-actions {
+  display: inline-flex;
+  gap: 6px;
+}
+.lp-view-btn.is-quiet {
+  color: #6b5b84;
+}
+
+/* Modal: store name under the title, sticky footer */
+.lp-modal-store {
+  margin-top: 2px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #ffb27d;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lp-modal-foot {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 20px;
+  border-top: 1px solid #f0eaf8;
+  background: #fcfbfe;
+}
+.lp-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 10px;
+  font-size: 12.5px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.lp-btn.is-secondary {
+  background: #ffffff;
+  border: 1px solid #e2d9ee;
+  color: #390955;
+}
+.lp-btn.is-secondary:hover {
+  background: #f7f1fc;
+  border-color: #cdb8e6;
+}
+.lp-btn.is-primary {
+  background: #390955;
+  border: 1px solid #390955;
+  color: #ffffff;
+}
+.lp-btn.is-primary:hover {
+  background: #2a0640;
+}
+.lp-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(57, 9, 85, 0.2);
+}
+
+/* Timeline (seller status history) */
+.lp-timeline {
+  position: relative;
+  margin: 0;
+  padding-left: 26px;
+  list-style: none;
+}
+.lp-timeline::before {
+  content: '';
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  border-radius: 2px;
+  background: linear-gradient(#390955, #f37021);
+  opacity: 0.25;
+}
+.lp-timeline-item {
+  position: relative;
+  margin-bottom: 12px;
+}
+.lp-timeline-item:last-child {
+  margin-bottom: 0;
+}
+.lp-timeline-dot {
+  position: absolute;
+  left: -24px;
+  top: 12px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #390955;
+  box-shadow: 0 0 0 3px #ffffff, 0 0 0 4px rgba(57, 9, 85, 0.2);
+}
+.lp-timeline-card {
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid #ebe3f4;
+  background: #fcfbfe;
+}
+.lp-timeline-card header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+}
+.lp-timeline-card strong {
+  font-size: 12.5px;
+  color: #1a1030;
+}
+.lp-timeline-card time {
+  font-size: 11px;
+  color: #9a8cb0;
+  white-space: nowrap;
+}
+.lp-timeline-card p {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #5f5670;
+}
+.lp-empty-note {
+  padding: 28px 12px;
+  text-align: center;
+  font-size: 12.5px;
+  color: #9a8cb0;
+}
+.lp-count-pending {
+  background: #fffbeb;
+  border-color: #fde7a7;
+  color: #b45309;
+}
+.lp-table tbody td {
+  color: #1a1030;
+  vertical-align: middle;
+}
+.lp-table tbody tr.cursor-pointer:focus-within td {
+  background: #fbf8fe;
+}
+.lp-row-actions .lp-view-btn {
+  padding: 0 10px;
+}
+@media (max-width: 1440px) {
+  .lp-clip { max-width: 190px; }
+}
+@media (max-width: 1400px) {
+  .lp-row-actions .lp-btn-label { display: none; }
+  .lp-row-actions .is-quiet { padding: 0 9px; }
+}
+@media (max-width: 1320px) {
+  .lp-clip { max-width: 140px; }
 }

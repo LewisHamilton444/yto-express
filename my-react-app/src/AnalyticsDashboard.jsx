@@ -391,7 +391,7 @@ const buildLastNWeeks = (parcels, n = 6) => {
 };
 
 // Pages laid out to fit one desktop viewport (no page-level scroll ≥1201px).
-const NO_SCROLL_PAGES = new Set(['dashboard', 'customer-list']);
+const NO_SCROLL_PAGES = new Set(['dashboard', 'customer-list', 'seller-report']);
 
 export default function AnalyticsDashboard({
   onLogout,

@@ -13,7 +13,9 @@ import DataTable from './components/ui/DataTable';
 import FilterBar from './components/ui/FilterBar';
 import TableSkeleton from './components/ui/TableSkeleton';
 import EmptyState from './components/ui/EmptyState';
-import './CustomerList.css';
+import './LedgerPage.css';
+import { LEDGER_MODAL_CARD, LEDGER_MODAL_OVERLAY, LEDGER_MODAL_TINT, initialsOf } from './ledger';
+import LedgerStatus from './components/ui/LedgerStatus';
 import {
   Users, Search, X,
   Hash, User, Mail, Phone, Activity, Globe, Calendar,
@@ -277,9 +279,9 @@ const CustomerList = () => {
   const activeCount = customers.filter(c => c.status !== 'Deactivated').length;
 
   return (
-    <div className="cl-page">
+    <div className="lp-page">
       <PageHeader
-        className="cl-header"
+        className="lp-header"
         title="Customer List"
         subtitle="Customers registered through the mobile app"
         breadcrumb={['Dashboard', 'People', 'Customer List']}
@@ -296,10 +298,10 @@ const CustomerList = () => {
           scrolls (header row pinned); pagination is docked in the footer. */}
       <SectionCard
         noPadding
-        className="cl-card"
-        bodyClassName="cl-card-body"
+        className="lp-card"
+        bodyClassName="lp-card-body"
         footer={!loading && filtered.length > 0 ? (
-          <div className="cl-footer">
+          <div className="lp-footer">
             <PaginationControls
               currentPage={safePage}
               totalRecords={filtered.length}
@@ -311,7 +313,7 @@ const CustomerList = () => {
         ) : null}
       >
         {/* Control bar */}
-        <FilterBar className="cl-toolbar">
+        <FilterBar className="lp-toolbar">
           <FilterBar.Group>
             <FilterBar.Search
               placeholder="Search by name, email, or ID..."
@@ -328,18 +330,18 @@ const CustomerList = () => {
               <option value="Active" className="font-medium text-slate-700 bg-white">Active</option>
               <option value="Inactive" className="font-medium text-slate-700 bg-white">Inactive</option>
             </FilterBar.Select>
-            <span className="cl-count">
+            <span className="lp-count">
               <strong>{filtered.length}</strong> of {customers.length} customers
-              <span className="cl-count-active">{activeCount} active</span>
+              <span className="lp-count-active">{activeCount} active</span>
             </span>
           </FilterBar.Group>
           <FilterBar.Actions>
-            <ExportDropdown onExport={handleExport} disabled={filtered.length === 0} className="cl-export" />
+            <ExportDropdown onExport={handleExport} disabled={filtered.length === 0} className="lp-export" />
           </FilterBar.Actions>
         </FilterBar>
 
         {/* Table */}
-        <DataTable className="cl-table" containerClassName="cl-table-scroll">
+        <DataTable className="lp-table" containerClassName="lp-table-scroll">
           <DataTable.Head>
             <tr>
               {TABLE_HEADERS.map((h, idx) => (
@@ -352,7 +354,7 @@ const CustomerList = () => {
                   {h.label === 'Actions' ? (
                     <span>{h.label}</span>
                   ) : (
-                    <span className="flex items-center gap-1.5"><h.icon size={12} className="cl-th-icon" aria-hidden="true" />{h.label}</span>
+                    <span className="flex items-center gap-1.5"><h.icon size={12} className="lp-th-icon" aria-hidden="true" />{h.label}</span>
                   )}
                 </DataTable.Th>
               ))}
@@ -384,18 +386,18 @@ const CustomerList = () => {
                 key={c._id || i}
                 onClick={() => { setDetailCustomer(c); setDetailTab('details'); setOrders([]); setTimelineEvents([]); }}
               >
-                <DataTable.Cell stickyLeft className="cl-id whitespace-nowrap">{c.customerId || '-'}</DataTable.Cell>
+                <DataTable.Cell stickyLeft className="lp-id whitespace-nowrap">{c.customerId || '-'}</DataTable.Cell>
                 <DataTable.Cell className="whitespace-nowrap">
-                  <span className="cl-name">
-                    <span className="cl-avatar" aria-hidden="true">{initialsOf(c.fullName)}</span>
-                    <span className="cl-name-text">{c.fullName || '-'}</span>
+                  <span className="lp-name">
+                    <span className="lp-avatar" aria-hidden="true">{initialsOf(c.fullName)}</span>
+                    <span className="lp-name-text">{c.fullName || '-'}</span>
                   </span>
                 </DataTable.Cell>
-                <DataTable.Cell className="cl-muted cl-email whitespace-nowrap" title={c.email || undefined}>{c.email || '-'}</DataTable.Cell>
-                <DataTable.Cell tabularNums className="cl-muted whitespace-nowrap">{c.phone || '-'}</DataTable.Cell>
+                <DataTable.Cell className="lp-muted lp-email whitespace-nowrap" title={c.email || undefined}>{c.email || '-'}</DataTable.Cell>
+                <DataTable.Cell tabularNums className="lp-muted whitespace-nowrap">{c.phone || '-'}</DataTable.Cell>
                 <DataTable.Cell className="whitespace-nowrap"><StatusPill status={c.status || 'Active'} /></DataTable.Cell>
-                <DataTable.Cell className="cl-muted whitespace-nowrap">{formatSource(c.source)}</DataTable.Cell>
-                <DataTable.Cell tabularNums className="cl-muted whitespace-nowrap">{formatDate(c.createdAt)}</DataTable.Cell>
+                <DataTable.Cell className="lp-muted whitespace-nowrap">{formatSource(c.source)}</DataTable.Cell>
+                <DataTable.Cell tabularNums className="lp-muted whitespace-nowrap">{formatDate(c.createdAt)}</DataTable.Cell>
                 <DataTable.Cell align="right" className="whitespace-nowrap" onClick={e => e.stopPropagation()}>
                   <button
                     type="button"
@@ -406,7 +408,7 @@ const CustomerList = () => {
                       setOrders([]);
                       setTimelineEvents([]);
                     }}
-                    className="cl-view-btn"
+                    className="lp-view-btn"
                   >
                     <Eye size={13} aria-hidden="true" /> View Details
                   </button>
@@ -420,21 +422,21 @@ const CustomerList = () => {
       {/* Detail Modal — a fixed, inset-0 overlay, so it sits outside the
           page's flex layout and is unaffected by the no-scroll frame. */}
       {detailCustomer && (
-        <Modal tint="rgba(26,6,40,0.55)" blur={false} maxWidth={560} padding={0} onBackdropClick={() => setDetailCustomer(null)} cardStyle={{ borderRadius: 18, overflow: 'hidden', boxShadow: '0 30px 60px -20px rgba(26,6,40,0.55), 0 0 0 1px rgba(57,9,85,0.08)' }}>
+        <Modal tint={LEDGER_MODAL_TINT} blur={false} overlayStyle={LEDGER_MODAL_OVERLAY} maxWidth={560} padding={0} label="Customer details" onBackdropClick={() => setDetailCustomer(null)} cardStyle={LEDGER_MODAL_CARD}>
           {/* Header — identity at a glance: initials, name, ID, status */}
-          <div className="cl-modal-head">
-            <span className="cl-modal-avatar" aria-hidden="true">{initialsOf(detailCustomer.fullName)}</span>
-            <div className="cl-modal-identity">
-              <h3 id="cl-modal-title">{detailCustomer.fullName || 'Customer'}</h3>
-              <div className="cl-modal-meta">
-                <span className="cl-modal-id">{detailCustomer.customerId || 'No ID yet'}</span>
+          <div className="lp-modal-head">
+            <span className="lp-modal-avatar" aria-hidden="true">{initialsOf(detailCustomer.fullName)}</span>
+            <div className="lp-modal-identity">
+              <h3 id="lp-modal-title">{detailCustomer.fullName || 'Customer'}</h3>
+              <div className="lp-modal-meta">
+                <span className="lp-modal-id">{detailCustomer.customerId || 'No ID yet'}</span>
                 <StatusPill status={detailCustomer.status || 'Active'} />
               </div>
             </div>
             <button
               type="button"
               onClick={() => setDetailCustomer(null)}
-              className="cl-modal-close"
+              className="lp-modal-close"
               aria-label="Close customer details"
             >
               <X size={18} aria-hidden="true" />
@@ -442,7 +444,7 @@ const CustomerList = () => {
           </div>
 
           {/* Tabs — segmented control */}
-          <div className="cl-modal-tabs" role="tablist" aria-label="Customer details sections">
+          <div className="lp-modal-tabs" role="tablist" aria-label="Customer details sections">
             {DETAIL_TABS.map(tab => (
               <button
                 key={tab.key}
@@ -450,7 +452,7 @@ const CustomerList = () => {
                 role="tab"
                 aria-selected={detailTab === tab.key}
                 onClick={() => setDetailTab(tab.key)}
-                className={`cl-modal-tab${detailTab === tab.key ? ' is-active' : ''}`}
+                className={`lp-modal-tab${detailTab === tab.key ? ' is-active' : ''}`}
               >
                 <tab.icon size={14} aria-hidden="true" /> {tab.label}
               </button>
@@ -458,10 +460,10 @@ const CustomerList = () => {
           </div>
 
           {/* Tab Content */}
-          <div className="cl-modal-body" role="tabpanel">
+          <div className="lp-modal-body" role="tabpanel">
             {/* ── Details Tab ── grouped into Contact / Address / Account */}
             {detailTab === 'details' && (
-              <div className="cl-detail-groups">
+              <div className="lp-detail-groups">
                 {[
                   {
                     title: 'Contact',
@@ -489,13 +491,13 @@ const CustomerList = () => {
                     ],
                   },
                 ].map(group => (
-                  <section key={group.title} className="cl-detail-group" aria-label={group.title}>
+                  <section key={group.title} className="lp-detail-group" aria-label={group.title}>
                     <h4>{group.title}</h4>
                     <dl>
                       {group.rows.map(row => {
                         const empty = !row.node && !(row.value && String(row.value).trim());
                         return (
-                          <div key={row.label} className="cl-detail-row">
+                          <div key={row.label} className="lp-detail-row">
                             <dt>{row.label}</dt>
                             <dd className={`${row.wrap ? 'is-wrap' : ''}${empty ? ' is-empty' : ''}`}>
                               {row.node || (empty ? 'Not provided' : row.value)}
@@ -598,24 +600,9 @@ function formatSource(source) {
   return raw.charAt(0).toUpperCase() + raw.slice(1);
 }
 
-function initialsOf(name) {
-  const parts = (name || '').trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return '?';
-  const first = parts[0][0] || '';
-  const last = parts.length > 1 ? parts[parts.length - 1][0] : '';
-  return (first + last).toUpperCase();
-}
-
-// Soft status pill with a glowing dot — table rows only; the detail modal
-// keeps the shared Badge.
+// Customer status → shared ledger pill (table rows and the detail modal).
 function StatusPill({ status }) {
-  const tone = STATUS_TONE[status] === 'red' ? 'is-off' : 'is-on';
-  return (
-    <span className={`cl-status ${tone}`}>
-      <i className="cl-status-dot" aria-hidden="true" />
-      {status}
-    </span>
-  );
+  return <LedgerStatus tone={STATUS_TONE[status] === 'red' ? 'off' : 'on'}>{status}</LedgerStatus>;
 }
 
 export default CustomerList;
