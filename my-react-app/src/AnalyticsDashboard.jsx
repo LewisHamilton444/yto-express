@@ -27,9 +27,8 @@ import ListSkeleton from "./components/ui/ListSkeleton";
 import EmptyState from "./components/ui/EmptyState";
 import ErrorBoundary from "./components/ui/ErrorBoundary";
 import { initialPendingSellers, initialPendingRiders } from "./verification/registrationCredentials";
-import { isDeliveredStatus, isReturnFamilyStatus, isInTransitFamilyStatus, normalizeParcelStatus } from "./utils/parcelStatus";
+import { isDeliveredStatus, isInTransitFamilyStatus, normalizeParcelStatus } from "./utils/parcelStatus";
 import { PARCEL_STATUS_COLORS } from "./components/ui/statusColors";
-import TrendArea from "./components/ui/TrendArea";
 import { useToast } from "./components/ui/useToast";
 
 function mapSellerToPendingItem(seller) {
@@ -341,53 +340,29 @@ icons['tracking-info'] = (
 
 const getIcon = (key) => icons[key] || icons.sub;
 
-// Status-family predicates moved to utils/parcelStatus.js — the local
-// isReturnStatus was kept case-sensitive-adjacent (/return/i is fine) but
-// delivered/transit checks elsewhere compared exact Title-case strings
-// against lowercase DB values, undercounting whenever the /dashboard/stats
-// aggregate was unreachable and the client-side fallback kicked in.
-const isReturnStatus = isReturnFamilyStatus;
-const toDayKey = (isoString) => (isoString ? isoString.slice(0, 10) : null);
-
-// Last 7 calendar days (oldest first), each bucket built from real parcel timestamps.
-const buildLast7Days = (parcels) => {
-  const days = [];
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    days.push(d);
-  }
-  return days.map(d => {
-    const dayKey = d.toISOString().slice(0, 10);
-    const created  = parcels.filter(p => toDayKey(p.createdAt) === dayKey).length;
-    const delivered = parcels.filter(p => isDeliveredStatus(p.status) && toDayKey(p.updatedAt) === dayKey).length;
-    const returned  = parcels.filter(p => isReturnStatus(p.status) && toDayKey(p.updatedAt) === dayKey).length;
-    return { label: d.toLocaleDateString('en-US', { weekday: 'short' }), dayKey, created, delivered, returned };
-  });
-};
-
-// Last N calendar weeks (oldest first), each bucket built from real parcel
-// timestamps — the "Weekly" view for the Parcel Volume chart. Windows are
-// non-overlapping day ranges: week i covers [today-6-7i, today-7i], so a
-// parcel can never be counted in two adjacent weeks.
-const buildLastNWeeks = (parcels, n = 6) => {
-  const weeks = [];
-  const todayKey = new Date().toISOString().slice(0, 10);
+// Last N calendar months (oldest first, current month last), each bucket
+// counting parcels by their real createdAt in local time — the Parcel Volume
+// chart. Calendar months never overlap, so a parcel is counted exactly once.
+const buildLastNMonths = (parcels, n = 6) => {
+  const now = new Date();
+  const months = [];
   for (let i = n - 1; i >= 0; i--) {
-    const end = new Date();
-    end.setDate(end.getDate() - i * 7);
-    const start = new Date(end);
-    start.setDate(end.getDate() - 6);
-    if (i === 0) end.setHours(23, 59, 59, 999);
-    const startKey = start.toISOString().slice(0, 10);
-    const endKey = i === 0 ? todayKey : end.toISOString().slice(0, 10);
-    const created = parcels.filter(p => {
-      const dayKey = toDayKey(p.createdAt);
-      return dayKey && dayKey >= startKey && dayKey <= endKey;
-    }).length;
-    weeks.push({ label: `${start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`, created });
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    months.push({ year: d.getFullYear(), month: d.getMonth(), date: d, created: 0 });
   }
-  return weeks;
+  const index = new Map(months.map((m, i) => [`${m.year}-${m.month}`, i]));
+  for (const p of parcels) {
+    if (!p.createdAt) continue;
+    const at = new Date(p.createdAt);
+    if (Number.isNaN(at.getTime())) continue;
+    const i = index.get(`${at.getFullYear()}-${at.getMonth()}`);
+    if (i !== undefined) months[i].created += 1;
+  }
+  return months.map((m) => ({
+    label: m.date.toLocaleDateString('en-US', { month: 'short' }),
+    fullLabel: m.date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+    created: m.created,
+  }));
 };
 
 // Pages laid out to fit one desktop viewport (no page-level scroll ≥1201px).
@@ -403,9 +378,8 @@ export default function AnalyticsDashboard({
 }) {
   // NOTE: the old dateRange select (Today/7/30) was removed — its state was
   // never read by any computation, so the control changed nothing on screen
-  // (ghost UI). If a real date filter is wanted later, wire it into
-  // buildLast7Days/buildLastNWeeks first, then reintroduce the select.
-  const [volumeView, setVolumeView]         = useState('daily');
+  // (ghost UI). Parcel Volume is monthly only (2026-09-30, owner request:
+  // the Daily/Weekly/Hourly switch was replaced by one Monthly view).
   // Single routing authority: the active page lives in App.jsx (hash-synced,
   // deep-linkable). This shell renders whatever page is active and forwards
   // navigation requests up through setActivePage. The historical names are
@@ -659,9 +633,6 @@ export default function AnalyticsDashboard({
     : riders.length ? (riders.reduce((s, r) => s + (r.rating || 0), 0) / riders.length).toFixed(1) : '0.0';
   const totalRides  = hasNum(dashboardStats?.totalDeliveries) ? dashboardStats.totalDeliveries : riders.reduce((s, r) => s + (r.deliveries || 0), 0);
 
-  const last7 = useMemo(() => buildLast7Days(parcels), [parcels]);
-  const createdVals  = last7.map(d => d.created);
-
   // Week-over-week windows, reused below for the one primary KPI with enough
   // history for a real trend.
   const now = new Date();
@@ -778,48 +749,15 @@ export default function AnalyticsDashboard({
     },
   ];
 
-  const weekly = useMemo(() => buildLastNWeeks(parcels, 6), [parcels]);
-
-  // Hour granularity for the Parcel Volume card. The standalone "Hourly
-  // Activity" panel drew a second parcel-over-time chart for the same metric at
-  // a finer scale; that scale now lives in this card's period switch instead of
-  // in a card of its own.
-  const hourly = useMemo(() => {
-    const now = new Date();
-    const buckets = [];
-    for (let i = 13; i >= 0; i--) {
-      const slot = new Date(now.getTime() - i * 3600000);
-      const dayKey = slot.toISOString().slice(0, 10);
-      const hour = slot.getHours();
-      const countedAt = (iso) => {
-        if (!iso) return false;
-        const at = new Date(iso);
-        return !Number.isNaN(at.getTime()) && at.toISOString().slice(0, 10) === dayKey && at.getHours() === hour;
-      };
-      buckets.push({
-        label: `${String(hour).padStart(2, '0')}:00`,
-        booked: parcels.filter((p) => countedAt(p.createdAt)).length,
-        delivered: parcels.filter((p) => isDeliveredStatus(p.status) && countedAt(p.updatedAt)).length,
-      });
-    }
-    return buckets;
-  }, [parcels]);
-
-  const isHourlyView = volumeView === 'hourly';
-  const volumeVals = isHourlyView
-    ? hourly.map((h) => h.booked)
-    : volumeView === 'daily' ? createdVals : weekly.map(w => w.created);
-  const volumeLabels = isHourlyView
-    ? hourly.map((h) => h.label)
-    : volumeView === 'daily' ? last7.map(d => d.label) : weekly.map(w => w.label);
+  const VOLUME_MONTHS = 6;
+  const monthly = useMemo(() => buildLastNMonths(parcels, VOLUME_MONTHS), [parcels]);
+  const volumeVals = monthly.map((m) => m.created);
   const maxVolume = Math.max(1, ...volumeVals);
   const volumeMax = niceAxisMax(maxVolume);
   const volumeTicks = axisTicks(volumeMax);
   const hasVolume = volumeVals.some((v) => v > 0);
-  const hourlyBooked = hourly.reduce((sum, h) => sum + h.booked, 0);
-  const hourlyDelivered = hourly.reduce((sum, h) => sum + h.delivered, 0);
-  const hourlyActiveHours = hourly.filter((h) => h.booked > 0).length || 1;
-  const hourlyAvg = Math.round((hourlyBooked / hourlyActiveHours) * 10) / 10;
+  const volumeTotal = volumeVals.reduce((a, b) => a + b, 0);
+  const busiestMonth = monthly[volumeVals.indexOf(Math.max(...volumeVals))];
 
   // ── Parcel status composition ──────────────────────────────────────────
   // Grouped through the canonical normalizer (never a local status map) and
@@ -1098,65 +1036,37 @@ export default function AnalyticsDashboard({
                     headerClassName="ed-card-head"
                     bodyClassName="ed-top-card-body"
                     title="Parcel Volume"
-                    subtitle={volumeView === 'daily' ? 'Parcels booked per day, last 7 days' : volumeView === 'weekly' ? 'Parcels booked per week, last 6 weeks' : 'Parcels booked per hour, last 14 hours'}
-                    actions={(
-                      <div className="ed-segmented" role="group" aria-label="Chart period">
-                        {['daily', 'weekly', 'hourly'].map((v) => (
-                          <button
-                            key={v}
-                            type="button"
-                            className={`ed-segmented-btn${volumeView === v ? ' is-active' : ''}`}
-                            aria-pressed={volumeView === v}
-                            onClick={() => setVolumeView(v)}
-                          >
-                            {v === 'daily' ? 'Daily' : v === 'weekly' ? 'Weekly' : 'Hourly'}
-                          </button>
-                        ))}
-                      </div>
-                    )}
+                    subtitle={`Parcels booked per month, last ${VOLUME_MONTHS} months`}
                     footer={!hasVolume ? null : (
                       <CardFooter
                         className="ed-card-foot"
-                        resultsLabel={isHourlyView
-                          ? `${hourlyBooked} booked and ${hourlyDelivered} delivered in the last 14 hours`
-                          : `${volumeVals.reduce((a, b) => a + b, 0)} parcels booked in this period`}
-                        pills={isHourlyView
-                          ? [
-                              { label: 'Peak hour', value: maxVolume, tone: 'purple' },
-                              { label: 'Average per active hour', value: hourlyAvg, tone: 'slate' },
-                            ]
-                          : [
-                              { label: 'Busiest', value: volumeLabels[volumeVals.indexOf(maxVolume)], tone: 'purple' },
-                              { label: 'Peak', value: maxVolume, tone: 'slate' },
-                            ]}
+                        resultsLabel={`${volumeTotal} ${volumeTotal === 1 ? 'parcel' : 'parcels'} booked in the last ${VOLUME_MONTHS} months`}
+                        pills={[
+                          { label: 'Busiest', value: busiestMonth ? busiestMonth.label : '—', tone: 'purple' },
+                          { label: 'Peak', value: maxVolume, tone: 'slate' },
+                        ]}
                       />
                     )}
                   >
                     {!hasVolume ? (
                       <EmptyState className="ed-empty-compact" icon={PackageSearch} title="No parcel activity yet" description="Parcels booked through the app will show up here." />
-                    ) : isHourlyView ? (
-                      <TrendArea
-                        points={hourly.map((h) => ({ label: h.label, value: h.booked }))}
-                        reference={{ value: hourlyAvg, label: `Average ${hourlyAvg}` }}
-                        height={140}
-                        ariaLabel={`Parcels booked per hour over the last 14 hours, ${hourlyBooked} in total.`}
-                      />
                     ) : (
                       <>
-                        <div className="ed-plot">
+                        <div className="ed-plot" role="img" aria-label={`Parcels booked per month over the last ${VOLUME_MONTHS} months: ${monthly.map((m) => `${m.fullLabel} ${m.created}`).join(', ')}.`}>
                           <div className="ed-plot-y" aria-hidden="true">
                             {volumeTicks.map((tick) => <span key={tick}>{tick}</span>)}
                           </div>
-                          <div className="ed-plot-area">
-                            <div className="ed-plot-grid" aria-hidden="true">
+                          <div className="ed-plot-area" aria-hidden="true">
+                            <div className="ed-plot-grid">
                               {volumeTicks.map((tick) => <span key={tick} />)}
                             </div>
                             <div className="ed-plot-bars">
-                              {volumeVals.map((v, i) => {
+                              {monthly.map((m) => {
+                                const v = m.created;
                                 const pct = barHeightPercent(v, volumeMax);
                                 return (
-                                  <div className="ed-plot-col" key={volumeLabels[i]}>
-                                    <div className="ed-plot-track" title={`${volumeLabels[i]}: ${v} ${v === 1 ? 'parcel' : 'parcels'} booked`}>
+                                  <div className="ed-plot-col" key={m.fullLabel}>
+                                    <div className="ed-plot-track" title={`${m.fullLabel}: ${v} ${v === 1 ? 'parcel' : 'parcels'} booked`}>
                                       <div
                                         className={`ed-plot-fill${isUniquePeak(v, volumeVals) ? ' is-peak' : ''}`}
                                         style={{ height: `${pct}%` }}
@@ -1170,7 +1080,7 @@ export default function AnalyticsDashboard({
                           </div>
                         </div>
                         <div className="ed-plot-x" aria-hidden="true">
-                          {volumeVals.map((v, i) => <span key={volumeLabels[i]}>{volumeLabels[i]}</span>)}
+                          {monthly.map((m) => <span key={m.fullLabel}>{m.label}</span>)}
                         </div>
                       </>
                     )}
