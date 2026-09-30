@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './ViewSeller.css';
 import './LedgerPage.css';
-import { LEDGER_MODAL_CARD, LEDGER_MODAL_OVERLAY, LEDGER_MODAL_TINT, initialsOf } from './ledger';
+import { LEDGER_MODAL_CARD, LEDGER_MODAL_OVERLAY, LEDGER_MODAL_TINT, initialsOf, statusTone } from './ledger';
 import { normalizeSeller, formatStatusLabel, SELLER_STATUS } from './sellerRiderData';
 import PaginationControls from './PaginationControls';
 import { exportToCSV, exportToExcel, exportToWord, exportToPDF } from './exportUtils';
@@ -30,15 +30,6 @@ const SELLER_EXPORT_COLUMNS = [
   { key: 'storeAddress', label: 'Store Address' },
   { key: 'status', label: 'Status' },
 ];
-
-// Seller status → ledger pill tone.
-function sellerTone(status) {
-  const v = String(status || '').toUpperCase();
-  if (v === 'ACTIVE') return 'on';
-  if (v === 'PENDING_VERIFICATION' || v === 'PENDING') return 'pending';
-  if (['INACTIVE', 'DEACTIVATED', 'SUSPENDED', 'ARCHIVED'].includes(v)) return 'off';
-  return 'neutral';
-}
 
 const GenerateSellerReport = () => {
   // Sellers come from the live GET /api/sellers fetch below — the old
@@ -255,8 +246,8 @@ const GenerateSellerReport = () => {
   };
 
   const visibleSellers = sellers.filter(x => x.status !== SELLER_STATUS.ARCHIVED);
-  const activeCount = visibleSellers.filter(x => sellerTone(x.status) === 'on').length;
-  const pendingCount = visibleSellers.filter(x => sellerTone(x.status) === 'pending').length;
+  const activeCount = visibleSellers.filter(x => statusTone(x.status) === 'on').length;
+  const pendingCount = visibleSellers.filter(x => statusTone(x.status) === 'pending').length;
 
   return (
     <div className="lp-page">
@@ -377,7 +368,7 @@ const GenerateSellerReport = () => {
                         </span>
                       </td>
                       <td className="whitespace-nowrap">
-                        <LedgerStatus tone={sellerTone(seller.status)}>{formatStatusLabel(seller.status)}</LedgerStatus>
+                        <LedgerStatus tone={statusTone(seller.status)}>{formatStatusLabel(seller.status)}</LedgerStatus>
                       </td>
                       <td className="whitespace-nowrap text-right" onClick={e => e.stopPropagation()}>
                         <span className="lp-row-actions">
@@ -411,7 +402,7 @@ const GenerateSellerReport = () => {
               )}
               <div className="lp-modal-meta">
                 <span className="lp-modal-id">{detailSeller.sellerId || 'No ID yet'}</span>
-                <LedgerStatus tone={sellerTone(detailSeller.status)}>{formatStatusLabel(detailSeller.status)}</LedgerStatus>
+                <LedgerStatus tone={statusTone(detailSeller.status)}>{formatStatusLabel(detailSeller.status)}</LedgerStatus>
               </div>
             </div>
             <button type="button" className="lp-modal-close" onClick={() => setDetailSeller(null)} aria-label="Close seller details">

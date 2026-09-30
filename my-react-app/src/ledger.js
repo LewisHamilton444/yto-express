@@ -26,3 +26,16 @@ export function initialsOf(name) {
   const last = parts.length > 1 ? parts[parts.length - 1][0] : '';
   return (first + last).toUpperCase();
 }
+
+/**
+ * Registration/account status → LedgerStatus tone. Accepts the canonical
+ * enum (ACTIVE, PENDING_VERIFICATION, ...) and loose legacy values
+ * ('Active', 'Pending', 'Verified').
+ */
+export function statusTone(status) {
+  const v = String(status || '').trim().toUpperCase().replace(/\s+/g, '_');
+  if (v === 'ACTIVE' || v === 'VERIFIED' || v === 'APPROVED') return 'on';
+  if (v === 'PENDING_VERIFICATION' || v === 'PENDING' || v === '') return 'pending';
+  if (['INACTIVE', 'DEACTIVATED', 'SUSPENDED', 'ARCHIVED', 'REJECTED'].includes(v)) return 'off';
+  return 'neutral';
+}

@@ -50,10 +50,10 @@ const ProcessRiderInformation = ({ pendingRiders: ridersProp, setPendingRiders: 
   });
 
   return (
-    <div className="process-rider-information-main-content">
-      <div className="process-rider-information-container-inner">
+    <div className="lp-page">
 
         <PageHeader
+          className="lp-header"
           title="Process Rider Information"
           subtitle="Review pending rider registrations submitted from the mobile app"
           breadcrumb={['Dashboard', 'People', 'Riders', 'Pending Verifications']}
@@ -70,8 +70,6 @@ const ProcessRiderInformation = ({ pendingRiders: ridersProp, setPendingRiders: 
           items={pendingRiders}
           onReview={openReview}
         />
-
-      </div>
 
       <ReviewModal
         item={reviewItem}

@@ -50,10 +50,10 @@ const ProcessSellerInformation = ({ pendingSellers: sellersProp, setPendingSelle
   });
 
   return (
-    <div className="process-seller-information-main-content">
-      <div className="process-seller-information-container-inner">
+    <div className="lp-page">
 
         <PageHeader
+          className="lp-header"
           title="Process Seller Information"
           subtitle="Review pending seller registrations submitted from the mobile app"
           breadcrumb={['Dashboard', 'People', 'Sellers', 'Pending Verifications']}
@@ -70,8 +70,6 @@ const ProcessSellerInformation = ({ pendingSellers: sellersProp, setPendingSelle
           items={pendingSellers}
           onReview={openReview}
         />
-
-      </div>
 
       <ReviewModal
         item={reviewItem}

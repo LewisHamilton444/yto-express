@@ -1,31 +1,21 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Modal from '../components/ui/Modal';
 import Tooltip from '../components/ui/Tooltip';
-import { FileText, Smartphone } from 'lucide-react';
+import { FileText, Smartphone, X, User, Store, Bike, Truck, ShieldCheck, XCircle, CheckCircle2 } from 'lucide-react';
+import LedgerStatus from '../components/ui/LedgerStatus';
+import './ReviewModal.css';
 
-const s = {
-  header:      { background: '#390955', padding: '18px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0 },
-  title:       { color: 'white', margin: 0, fontSize: '16px', fontWeight: 700 },
-  subtitle:    { color: 'rgba(255,255,255,0.65)', margin: '2px 0 0', fontSize: '12px' },
-  closeBtn:    { background: 'none', border: 'none', color: 'white', cursor: 'pointer', fontSize: '22px', lineHeight: 1 },
-  body:        { padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px' },
-  sectionTitle:{ fontSize: '11px', fontWeight: 700, color: '#a890c0', textTransform: 'uppercase', letterSpacing: '0.6px', margin: '0 0 10px' },
-  infoGrid:    { display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' },
-  infoCard:    { display: 'flex', flexDirection: 'column', gap: '4px', padding: '12px 14px', background: '#faf7fd', borderRadius: '12px', border: '1px solid #e4d8f2' },
-  infoLabel:   { fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.6px', color: '#a890c0' },
-  infoValue:   { fontSize: '14px', fontWeight: 700, color: '#390955', wordBreak: 'break-word' },
-  docList:     { display: 'flex', flexDirection: 'column', gap: '8px' },
-  docRow:      { display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', background: '#faf7fd', border: '1px solid #e4d8f2', borderRadius: '10px', fontSize: '13px', color: '#390955', fontWeight: 600 },
-  docIcon:     { display: 'flex', alignItems: 'center', color: '#9b82b2', flexShrink: 0 },
-  actions:     { display: 'flex', gap: '10px', justifyContent: 'flex-end', paddingTop: '4px', borderTop: '1px solid #f3edfb', marginTop: '4px' },
-  btnDanger:   { padding: '10px 20px', borderRadius: '10px', fontSize: '13px', fontWeight: 700, cursor: 'pointer', background: '#fee2e2', color: '#991b1b', border: '1px solid #fca5a5', fontFamily: 'inherit' },
-  btnOutline:  { padding: '10px 20px', borderRadius: '10px', fontSize: '13px', fontWeight: 700, cursor: 'pointer', background: 'white', color: '#390955', border: '1.5px solid #e4d8f2', fontFamily: 'inherit' },
-  btnPrimary:  { padding: '10px 20px', borderRadius: '10px', fontSize: '13px', fontWeight: 700, cursor: 'pointer', background: '#f37021', color: 'white', border: 'none', fontFamily: 'inherit', boxShadow: '0 2px 8px rgba(243,112,33,0.25)' },
-  reasonBox:   { display: 'flex', flexDirection: 'column', gap: '8px', padding: '14px', background: '#fef2f2', border: '1.5px solid #fca5a5', borderRadius: '12px' },
-  reasonLabel: { fontSize: '11px', fontWeight: 700, color: '#991b1b', textTransform: 'uppercase', letterSpacing: '0.5px' },
-  reasonInput: { padding: '10px 12px', border: '1.5px solid #fca5a5', borderRadius: '8px', fontSize: '13px', fontFamily: 'inherit', resize: 'vertical', minHeight: '60px', color: '#7f1d1d' },
-  reasonActions: { display: 'flex', gap: '8px', justifyContent: 'flex-end' },
+const clean = (v) => {
+  const t = String(v ?? '').trim();
+  return t === '—' || t === '-' ? '' : t;
 };
+
+const formatSubmitted = (iso) => {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return isNaN(d.getTime()) ? '' : d.toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' });
+};
+
 
 const isImageFile = (fileName) => /\.(png|jpe?g|webp|gif|heic)$/i.test(fileName || '');
 
@@ -33,6 +23,13 @@ const ReviewModal = ({ item, type, onClose, onApprove, onReject }) => {
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState('');
   const [zoomDoc, setZoomDoc] = useState(null);
+  const rejectRef = useRef(null);
+
+  // The reason box opens at the bottom of the scrolling body; bring it into
+  // view so the reviewer sees where to type.
+  useEffect(() => {
+    if (rejecting && rejectRef.current) rejectRef.current.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [rejecting]);
 
   if (!item) return null;
 
@@ -43,129 +40,148 @@ const ReviewModal = ({ item, type, onClose, onApprove, onReject }) => {
     setReason('');
   };
 
+  const submitted = formatSubmitted(item.submittedAt);
+  const TypeIcon = type === 'rider' ? Bike : Store;
+  const field = (label, value, opts = {}) => {
+    const v = clean(value);
+    return (
+      <div className={`rv-field${opts.wide ? ' is-wide' : ''}`}>
+        <span className="rv-field-label">{label}</span>
+        <span className={`rv-field-value${v ? '' : ' is-empty'}${opts.accent && v ? ' is-accent' : ''}${opts.mono && v ? ' is-mono' : ''}`}>
+          {v || 'Not provided'}
+        </span>
+      </div>
+    );
+  };
+
   return (
     <>
-    <Modal onBackdropClick={handleClose} blur={false} tint="rgba(26,6,40,0.5)" maxWidth={560} padding={0} cardStyle={{ borderRadius: 12, boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)', fontFamily: "'DM Sans', sans-serif" }}>
-        <div style={s.header}>
-          <div>
-            <h3 style={s.title}>Review {type === 'rider' ? 'Rider' : 'Seller'} Application</h3>
-            <p style={s.subtitle}>{item.id} · Submitted via mobile app</p>
-          </div>
-          <button style={s.closeBtn} onClick={handleClose}>&times;</button>
-        </div>
-
-        <div style={s.body}>
-          <div>
-            <p style={s.sectionTitle}>Applicant Details</p>
-            <div style={s.infoGrid}>
-              <div style={s.infoCard}>
-                <span style={s.infoLabel}>Full Name</span>
-                <span style={s.infoValue}>{item.fullName}</span>
-              </div>
-              <div style={s.infoCard}>
-                <span style={s.infoLabel}>Email Address</span>
-                <span style={s.infoValue}>{item.email || '—'}</span>
-              </div>
-              <div style={s.infoCard}>
-                <span style={s.infoLabel}>Phone Number</span>
-                <span style={s.infoValue}>{item.contactNumber || item.phone || '—'}</span>
-              </div>
-              <div style={{ ...s.infoCard, gridColumn: 'span 2' }}>
-                <span style={s.infoLabel}>{type === 'seller' ? 'Store Address' : 'Hub Address'}</span>
-                <span style={s.infoValue}>{item.address || '—'}</span>
-              </div>
-
-              {type === 'seller' && (
-                <>
-                  <div style={{ ...s.infoCard, gridColumn: 'span 2' }}>
-                    <span style={s.infoLabel}>Store Name</span>
-                    <span style={{ ...s.infoValue, color: '#f37021' }}>{item.storeName || item.businessName || '—'}</span>
-                  </div>
-                </>
-              )}
-
-              {type === 'rider' && (
-                <>
-                  <div style={s.infoCard}>
-                    <span style={s.infoLabel}>Vehicle Info (Type)</span>
-                    <span style={s.infoValue}>{item.vehicle?.type || 'Motorcycle'}</span>
-                  </div>
-                  <div style={s.infoCard}>
-                    <span style={s.infoLabel}>Plate Number</span>
-                    <span style={s.infoValue}>{item.vehicle?.plate || '—'}</span>
-                  </div>
-                </>
-              )}
+    <Modal
+      onBackdropClick={handleClose}
+      blur={false}
+      tint="rgba(14,4,24,0.55)"
+      overlayStyle={{ backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}
+      maxWidth={600}
+      padding={0}
+      label={`Review ${type === 'rider' ? 'rider' : 'seller'} application`}
+      cardStyle={{ background: 'transparent', boxShadow: 'none', overflow: 'visible', maxHeight: 'none', borderRadius: 20 }}
+    >
+      <div className="rv-card">
+        <header className="rv-head">
+          <span className="rv-head-icon" aria-hidden="true"><TypeIcon size={20} /></span>
+          <div className="rv-head-text">
+            <h3>Review {type === 'rider' ? 'Rider' : 'Seller'} Application</h3>
+            <div className="rv-head-meta">
+              <span className="rv-chip">{item.id}</span>
+              <span>Submitted via mobile app{submitted ? ` · ${submitted}` : ''}</span>
             </div>
           </div>
+          <LedgerStatus tone="pending">Pending review</LedgerStatus>
+          <button type="button" className="rv-close" onClick={handleClose} aria-label="Close review">
+            <X size={18} aria-hidden="true" />
+          </button>
+        </header>
 
-          <div>
-            <p style={s.sectionTitle}>Verification Status & Documents</p>
+        <div className="rv-body">
+          <section className="rv-section" aria-labelledby="rv-applicant">
+            <h4 id="rv-applicant"><User size={13} aria-hidden="true" /> Applicant Details</h4>
+            <div className="rv-grid">
+              {field('Full Name', item.fullName)}
+              {field('Email Address', item.email)}
+              {field('Phone Number', item.contactNumber || item.phone, { mono: true })}
+              {type === 'rider' && field('Hub Address', item.address)}
+            </div>
+          </section>
+
+          {type === 'seller' ? (
+            <section className="rv-section" aria-labelledby="rv-store">
+              <h4 id="rv-store"><Store size={13} aria-hidden="true" /> Store Details</h4>
+              <div className="rv-grid">
+                {field('Store Name', item.storeName || item.businessName, { accent: true, wide: true })}
+                {field('Store Address', item.address, { wide: true })}
+              </div>
+            </section>
+          ) : (
+            <section className="rv-section" aria-labelledby="rv-vehicle">
+              <h4 id="rv-vehicle"><Truck size={13} aria-hidden="true" /> Vehicle</h4>
+              <div className="rv-grid">
+                {field('Vehicle Type', item.vehicle?.type || 'Motorcycle')}
+                {field('Plate Number', item.vehicle?.plate, { mono: true })}
+              </div>
+            </section>
+          )}
+
+          <section className="rv-section" aria-labelledby="rv-verify">
+            <h4 id="rv-verify"><ShieldCheck size={13} aria-hidden="true" /> Verification Status &amp; Documents</h4>
             {item.documents && item.documents.length > 0 ? (
-              <div style={s.docList}>
+              <div className="rv-docs">
                 {item.documents.map((doc) => {
                   const isImg = isImageFile(doc.fileName);
                   const src = doc.url || doc.dataUrl || '';
                   const canPreview = isImg && !!src;
+                  const Tag = canPreview ? 'button' : 'div';
                   return (
-                    <div
+                    <Tag
                       key={doc.fileName}
-                      style={{ ...s.docRow, alignItems: canPreview ? 'center' : 'flex-start', cursor: canPreview ? 'pointer' : 'default' }}
+                      type={canPreview ? 'button' : undefined}
+                      className={`rv-doc${canPreview ? ' is-clickable' : ''}`}
                       onClick={canPreview ? () => setZoomDoc(doc) : undefined}
                       title={canPreview ? 'Click to enlarge' : undefined}
                     >
-                      {canPreview ? (
-                        <img
-                          src={src}
-                          alt={doc.label}
-                          style={{ width: 46, height: 46, borderRadius: 8, objectFit: 'cover', border: '1px solid #e4d8f2', flexShrink: 0 }}
-                        />
-                      ) : (
-                        <span style={s.docIcon}><FileText size={20} aria-hidden="true" /></span>
-                      )}
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 13, color: '#390955', fontWeight: 600 }}>{doc.label}</div>
-                        <div style={{ color: '#a890c0', fontWeight: 500, fontFamily: "'DM Mono', monospace", fontSize: '11px', marginTop: 2 }}>{doc.fileName}</div>
-                      </div>
-                    </div>
+                      {canPreview
+                        ? <img src={src} alt={doc.label} className="rv-doc-thumb" />
+                        : <span className="rv-doc-icon"><FileText size={18} aria-hidden="true" /></span>}
+                      <span className="rv-doc-text">
+                        <span className="rv-doc-label">{doc.label}</span>
+                        <span className="rv-doc-file">{doc.fileName}</span>
+                      </span>
+                    </Tag>
                   );
                 })}
               </div>
             ) : (
-              <div style={{ padding: '14px 16px', background: '#faf7fd', border: '1px solid #e4d8f2', borderRadius: '10px', fontSize: '12px', color: '#6b7280', display: 'flex', alignItems: 'center', gap: 10 }}>
-                <Smartphone size={16} aria-hidden="true" style={{ flexShrink: 0, color: '#390955' }} />
-                <span>Submitted directly from the mobile app. Phone & email authenticated via OTP verification.</span>
+              <div className="rv-note">
+                <Smartphone size={16} aria-hidden="true" />
+                <span>Submitted directly from the mobile app. Phone &amp; email authenticated via OTP verification.</span>
               </div>
             )}
-          </div>
+          </section>
 
           {rejecting && (
-            <div style={s.reasonBox}>
-              <span style={s.reasonLabel}>Reason for Rejection</span>
+            <section ref={rejectRef} className="rv-reject" aria-labelledby="rv-reason">
+              <label id="rv-reason" htmlFor="rv-reason-input">Reason for Rejection</label>
               <textarea
-                style={s.reasonInput}
+                id="rv-reason-input"
                 value={reason}
                 autoFocus
+                maxLength={500}
                 placeholder="e.g. Government ID photo is blurry / does not match applicant name..."
                 onChange={(e) => setReason(e.target.value)}
               />
-              <div style={s.reasonActions}>
-                <button style={s.btnOutline} onClick={() => { setRejecting(false); setReason(''); }}>Cancel</button>
-                <button style={s.btnDanger} disabled={!reason.trim()} onClick={confirmReject}>Confirm Rejection</button>
+              <div className="rv-reject-actions">
+                <span className="rv-reject-count">{reason.length}/500</span>
+                <button type="button" className="rv-btn is-ghost" onClick={() => { setRejecting(false); setReason(''); }}>Cancel</button>
+                <button type="button" className="rv-btn is-danger" disabled={!reason.trim()} onClick={confirmReject}>Confirm Rejection</button>
               </div>
-            </div>
+            </section>
           )}
-
-          <div style={s.actions}>
-            <Tooltip content="Decline this application — a reason is required">
-            <button style={s.btnDanger} onClick={() => setRejecting(true)}>Reject</button>
-            </Tooltip>
-            <button style={s.btnOutline} onClick={handleClose}>Close</button>
-            <Tooltip content="Approve the registration and email login credentials to the applicant">
-            <button style={s.btnPrimary} onClick={() => onApprove(item)}>Approve &amp; Send Credentials</button>
-            </Tooltip>
-          </div>
         </div>
+
+        <footer className="rv-foot">
+          <Tooltip content="Decline this application — a reason is required">
+            <button type="button" className="rv-btn is-danger" onClick={() => setRejecting(true)} disabled={rejecting}>
+              <XCircle size={15} aria-hidden="true" /> Reject
+            </button>
+          </Tooltip>
+          <span className="rv-foot-spacer" />
+          <button type="button" className="rv-btn is-ghost" onClick={handleClose}>Close</button>
+          <Tooltip content="Approve the registration and email login credentials to the applicant">
+            <button type="button" className="rv-btn is-approve" onClick={() => onApprove(item)} disabled={rejecting}>
+              <CheckCircle2 size={15} aria-hidden="true" /> Approve &amp; Send Credentials
+            </button>
+          </Tooltip>
+        </footer>
+      </div>
     </Modal>
 
       {/* Zoomed document preview — fixed overlay, rendered outside the modal card */}
