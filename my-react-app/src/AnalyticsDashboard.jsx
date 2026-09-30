@@ -340,6 +340,53 @@ icons['tracking-info'] = (
 
 const getIcon = (key) => icons[key] || icons.sub;
 
+const toDayKey = (isoString) => (isoString ? isoString.slice(0, 10) : null);
+
+// Parcel Volume periods (2026-09-30): Daily / Weekly / Monthly, each a list of
+// { label, fullLabel, created } buckets, oldest first, from real createdAt.
+
+// Last 7 calendar days.
+const buildLast7Days = (parcels) => {
+  const days = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    days.push(d);
+  }
+  return days.map((d) => {
+    const dayKey = d.toISOString().slice(0, 10);
+    return {
+      label: d.toLocaleDateString('en-US', { weekday: 'short' }),
+      fullLabel: d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }),
+      created: parcels.filter((p) => toDayKey(p.createdAt) === dayKey).length,
+    };
+  });
+};
+
+// Last N weeks as non-overlapping 7-day windows ending today: week i covers
+// [today-6-7i, today-7i], so a parcel is never counted in two adjacent weeks.
+const buildLastNWeeks = (parcels, n = 6) => {
+  const weeks = [];
+  for (let i = n - 1; i >= 0; i--) {
+    const end = new Date();
+    end.setDate(end.getDate() - i * 7);
+    const start = new Date(end);
+    start.setDate(end.getDate() - 6);
+    const startKey = start.toISOString().slice(0, 10);
+    const endKey = end.toISOString().slice(0, 10);
+    const fmt = (d) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    weeks.push({
+      label: fmt(start),
+      fullLabel: `Week of ${fmt(start)} – ${fmt(end)}`,
+      created: parcels.filter((p) => {
+        const dayKey = toDayKey(p.createdAt);
+        return dayKey && dayKey >= startKey && dayKey <= endKey;
+      }).length,
+    });
+  }
+  return weeks;
+};
+
 // Last N calendar months (oldest first, current month last), each bucket
 // counting parcels by their real createdAt in local time — the Parcel Volume
 // chart. Calendar months never overlap, so a parcel is counted exactly once.
@@ -378,8 +425,9 @@ export default function AnalyticsDashboard({
 }) {
   // NOTE: the old dateRange select (Today/7/30) was removed — its state was
   // never read by any computation, so the control changed nothing on screen
-  // (ghost UI). Parcel Volume is monthly only (2026-09-30, owner request:
-  // the Daily/Weekly/Hourly switch was replaced by one Monthly view).
+  // (ghost UI). Parcel Volume switches Daily / Weekly / Monthly (2026-09-30,
+  // owner request: Monthly replaced the Hourly view).
+  const [volumeView, setVolumeView] = useState('daily');
   // Single routing authority: the active page lives in App.jsx (hash-synced,
   // deep-linkable). This shell renders whatever page is active and forwards
   // navigation requests up through setActivePage. The historical names are
@@ -749,15 +797,23 @@ export default function AnalyticsDashboard({
     },
   ];
 
-  const VOLUME_MONTHS = 6;
-  const monthly = useMemo(() => buildLastNMonths(parcels, VOLUME_MONTHS), [parcels]);
-  const volumeVals = monthly.map((m) => m.created);
+  const daily = useMemo(() => buildLast7Days(parcels), [parcels]);
+  const weekly = useMemo(() => buildLastNWeeks(parcels, 6), [parcels]);
+  const monthly = useMemo(() => buildLastNMonths(parcels, 6), [parcels]);
+  const VOLUME_PERIODS = {
+    daily:   { button: 'Daily',   series: daily,   span: 'the last 7 days',   subtitle: 'Parcels booked per day, last 7 days' },
+    weekly:  { button: 'Weekly',  series: weekly,  span: 'the last 6 weeks',  subtitle: 'Parcels booked per week, last 6 weeks' },
+    monthly: { button: 'Monthly', series: monthly, span: 'the last 6 months', subtitle: 'Parcels booked per month, last 6 months' },
+  };
+  const volumePeriod = VOLUME_PERIODS[volumeView] || VOLUME_PERIODS.daily;
+  const volumeSeries = volumePeriod.series;
+  const volumeVals = volumeSeries.map((m) => m.created);
   const maxVolume = Math.max(1, ...volumeVals);
   const volumeMax = niceAxisMax(maxVolume);
   const volumeTicks = axisTicks(volumeMax);
   const hasVolume = volumeVals.some((v) => v > 0);
   const volumeTotal = volumeVals.reduce((a, b) => a + b, 0);
-  const busiestMonth = monthly[volumeVals.indexOf(Math.max(...volumeVals))];
+  const busiestBucket = volumeSeries[volumeVals.indexOf(Math.max(...volumeVals))];
 
   // ── Parcel status composition ──────────────────────────────────────────
   // Grouped through the canonical normalizer (never a local status map) and
@@ -1036,13 +1092,28 @@ export default function AnalyticsDashboard({
                     headerClassName="ed-card-head"
                     bodyClassName="ed-top-card-body"
                     title="Parcel Volume"
-                    subtitle={`Parcels booked per month, last ${VOLUME_MONTHS} months`}
+                    subtitle={volumePeriod.subtitle}
+                    actions={(
+                      <div className="ed-segmented" role="group" aria-label="Chart period">
+                        {Object.entries(VOLUME_PERIODS).map(([key, period]) => (
+                          <button
+                            key={key}
+                            type="button"
+                            className={`ed-segmented-btn${volumeView === key ? ' is-active' : ''}`}
+                            aria-pressed={volumeView === key}
+                            onClick={() => setVolumeView(key)}
+                          >
+                            {period.button}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                     footer={!hasVolume ? null : (
                       <CardFooter
                         className="ed-card-foot"
-                        resultsLabel={`${volumeTotal} ${volumeTotal === 1 ? 'parcel' : 'parcels'} booked in the last ${VOLUME_MONTHS} months`}
+                        resultsLabel={`${volumeTotal} ${volumeTotal === 1 ? 'parcel' : 'parcels'} booked in ${volumePeriod.span}`}
                         pills={[
-                          { label: 'Busiest', value: busiestMonth ? busiestMonth.label : '—', tone: 'purple' },
+                          { label: 'Busiest', value: busiestBucket ? busiestBucket.label : '—', tone: 'purple' },
                           { label: 'Peak', value: maxVolume, tone: 'slate' },
                         ]}
                       />
@@ -1052,7 +1123,7 @@ export default function AnalyticsDashboard({
                       <EmptyState className="ed-empty-compact" icon={PackageSearch} title="No parcel activity yet" description="Parcels booked through the app will show up here." />
                     ) : (
                       <>
-                        <div className="ed-plot" role="img" aria-label={`Parcels booked per month over the last ${VOLUME_MONTHS} months: ${monthly.map((m) => `${m.fullLabel} ${m.created}`).join(', ')}.`}>
+                        <div className="ed-plot" role="img" aria-label={`${volumePeriod.subtitle}: ${volumeSeries.map((m) => `${m.fullLabel} ${m.created}`).join(', ')}.`}>
                           <div className="ed-plot-y" aria-hidden="true">
                             {volumeTicks.map((tick) => <span key={tick}>{tick}</span>)}
                           </div>
@@ -1061,7 +1132,7 @@ export default function AnalyticsDashboard({
                               {volumeTicks.map((tick) => <span key={tick} />)}
                             </div>
                             <div className="ed-plot-bars">
-                              {monthly.map((m) => {
+                              {volumeSeries.map((m) => {
                                 const v = m.created;
                                 const pct = barHeightPercent(v, volumeMax);
                                 return (
@@ -1080,7 +1151,7 @@ export default function AnalyticsDashboard({
                           </div>
                         </div>
                         <div className="ed-plot-x" aria-hidden="true">
-                          {monthly.map((m) => <span key={m.fullLabel}>{m.label}</span>)}
+                          {volumeSeries.map((m) => <span key={m.fullLabel}>{m.label}</span>)}
                         </div>
                       </>
                     )}
