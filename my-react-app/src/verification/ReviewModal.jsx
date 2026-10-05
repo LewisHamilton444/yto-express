@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Modal from '../components/ui/Modal';
 import Tooltip from '../components/ui/Tooltip';
-import { FileText, Smartphone, X, User, Store, Bike, Truck, ShieldCheck, XCircle, CheckCircle2 } from 'lucide-react';
+import { FileText, X, Store, Bike, ShieldCheck, XCircle, CheckCircle2 } from 'lucide-react';
+import { LEDGER_MODAL_CARD, LEDGER_MODAL_OVERLAY, LEDGER_MODAL_TINT, initialsOf } from '../ledger';
+import '../LedgerPage.css';
 import LedgerStatus from '../components/ui/LedgerStatus';
 import './ReviewModal.css';
 
@@ -40,85 +42,118 @@ const ReviewModal = ({ item, type, onClose, onApprove, onReject }) => {
     setReason('');
   };
 
+  const raw = item.raw || {};
+  const isRider = type === 'rider';
   const submitted = formatSubmitted(item.submittedAt);
-  const TypeIcon = type === 'rider' ? Bike : Store;
-  const field = (label, value, opts = {}) => {
-    const v = clean(value);
-    return (
-      <div className={`rv-field${opts.wide ? ' is-wide' : ''}`}>
-        <span className="rv-field-label">{label}</span>
-        <span className={`rv-field-value${v ? '' : ' is-empty'}${opts.accent && v ? ' is-accent' : ''}${opts.mono && v ? ' is-mono' : ''}`}>
-          {v || 'Not provided'}
-        </span>
-      </div>
-    );
-  };
+  const storeName = clean(item.storeName || item.businessName);
+  const pick = (...vals) => vals.map(clean).find(Boolean) || '';
+
+  // Same grouped layout as the Seller Directory "View Details" modal.
+  const groups = [
+    {
+      title: 'Identification',
+      rows: [
+        { label: 'ID Type', value: pick(item.governmentId?.type, raw.idType) },
+        { label: 'Government ID No.', value: pick(item.governmentId?.number, raw.idNumber) },
+      ],
+    },
+    {
+      title: 'Contact Point',
+      rows: [
+        { label: 'Email', value: pick(item.email, raw.email), wrap: true },
+        { label: 'Phone', value: pick(item.contactNumber, item.phone, raw.phone) },
+      ],
+    },
+    {
+      title: isRider ? 'Hub Address' : 'Address',
+      rows: [
+        { label: 'Street', value: pick(item.address, raw.address?.street, typeof raw.address === 'string' ? raw.address : ''), wrap: true },
+        { label: 'City', value: pick(raw.city, raw.address?.city) },
+        { label: 'State / Province', value: pick(raw.state, raw.address?.state) },
+        { label: 'Postal Code', value: pick(raw.postalCode, raw.address?.postalCode) },
+        { label: 'Country', value: pick(raw.country, raw.address?.country) },
+      ],
+    },
+    isRider
+      ? {
+          title: 'Vehicle',
+          rows: [
+            { label: 'Vehicle Type', value: pick(item.vehicleType, raw.vehicleType, item.vehicle?.type) || 'Motorcycle' },
+            { label: 'Plate Number', value: pick(item.plateNumber, raw.vehiclePlate, item.vehicle?.plate) },
+          ],
+        }
+      : {
+          title: 'Store & Operations',
+          rows: [
+            { label: 'Store Name', value: storeName || 'Personal Merchant' },
+            { label: 'Warehouse Address', value: pick(raw.warehouseAddress), wrap: true },
+            { label: 'Operating Hours', value: pick(raw.operatingHours) },
+            { label: 'Registration Date', value: submitted },
+          ],
+        },
+  ];
 
   return (
     <>
     <Modal
       onBackdropClick={handleClose}
       blur={false}
-      tint="rgba(14,4,24,0.55)"
-      overlayStyle={{ backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}
-      maxWidth={600}
+      tint={LEDGER_MODAL_TINT}
+      overlayStyle={LEDGER_MODAL_OVERLAY}
+      maxWidth={580}
       padding={0}
-      label={`Review ${type === 'rider' ? 'rider' : 'seller'} application`}
-      cardStyle={{ background: 'transparent', boxShadow: 'none', overflow: 'visible', maxHeight: 'none', borderRadius: 20 }}
+      label={`Review ${isRider ? 'rider' : 'seller'} application`}
+      cardStyle={LEDGER_MODAL_CARD}
     >
-      <div className="rv-card">
-        <header className="rv-head">
-          <span className="rv-head-icon" aria-hidden="true"><TypeIcon size={20} /></span>
-          <div className="rv-head-text">
-            <h3>Review {type === 'rider' ? 'Rider' : 'Seller'} Application</h3>
-            <div className="rv-head-meta">
-              <span className="rv-chip">{item.id}</span>
-              <span>Submitted via mobile app{submitted ? ` · ${submitted}` : ''}</span>
-            </div>
+      <div className="lp-modal-head">
+        <span className="lp-modal-avatar" aria-hidden="true">{initialsOf(item.fullName)}</span>
+        <div className="lp-modal-identity">
+          <h3>{clean(item.fullName) || 'Applicant'}</h3>
+          {!isRider && storeName && <div className="lp-modal-store">{storeName}</div>}
+          <div className="lp-modal-meta">
+            <span className="lp-modal-id">{item.id}</span>
+            <LedgerStatus tone="pending">Pending Review</LedgerStatus>
           </div>
-          <LedgerStatus tone="pending">Pending review</LedgerStatus>
-          <button type="button" className="rv-close" onClick={handleClose} aria-label="Close review">
-            <X size={18} aria-hidden="true" />
-          </button>
-        </header>
+        </div>
+        <button type="button" className="lp-modal-close" onClick={handleClose} aria-label="Close review">
+          <X size={18} aria-hidden="true" />
+        </button>
+      </div>
 
-        <div className="rv-body">
-          <section className="rv-section" aria-labelledby="rv-applicant">
-            <h4 id="rv-applicant"><User size={13} aria-hidden="true" /> Applicant Details</h4>
-            <div className="rv-grid">
-              {field('Full Name', item.fullName)}
-              {field('Email Address', item.email)}
-              {field('Phone Number', item.contactNumber || item.phone, { mono: true })}
-              {type === 'rider' && field('Hub Address', item.address)}
-            </div>
-          </section>
+      <div className="rv-banner">
+        {isRider ? <Bike size={15} aria-hidden="true" /> : <Store size={15} aria-hidden="true" />}
+        <span>
+          <strong>Review {isRider ? 'Rider' : 'Seller'} Application</strong>
+          {' · '}Submitted via mobile app{submitted ? ` · ${submitted}` : ''}
+        </span>
+      </div>
 
-          {type === 'seller' ? (
-            <section className="rv-section" aria-labelledby="rv-store">
-              <h4 id="rv-store"><Store size={13} aria-hidden="true" /> Store Details</h4>
-              <div className="rv-grid">
-                {field('Store Name', item.storeName || item.businessName, { accent: true, wide: true })}
-                {field('Store Address', item.address, { wide: true })}
-              </div>
+      <div className="lp-modal-body">
+        <div className="lp-detail-groups">
+          {groups.map((group) => (
+            <section key={group.title} className="lp-detail-group" aria-label={group.title}>
+              <h4>{group.title}</h4>
+              <dl>
+                {group.rows.map((row) => {
+                  const empty = !clean(row.value);
+                  return (
+                    <div key={row.label} className="lp-detail-row">
+                      <dt>{row.label}</dt>
+                      <dd className={`${row.wrap ? 'is-wrap' : ''}${empty ? ' is-empty' : ''}`}>{empty ? 'Not provided' : row.value}</dd>
+                    </div>
+                  );
+                })}
+              </dl>
             </section>
-          ) : (
-            <section className="rv-section" aria-labelledby="rv-vehicle">
-              <h4 id="rv-vehicle"><Truck size={13} aria-hidden="true" /> Vehicle</h4>
-              <div className="rv-grid">
-                {field('Vehicle Type', item.vehicle?.type || 'Motorcycle')}
-                {field('Plate Number', item.vehicle?.plate, { mono: true })}
-              </div>
-            </section>
-          )}
+          ))}
 
-          <section className="rv-section" aria-labelledby="rv-verify">
-            <h4 id="rv-verify"><ShieldCheck size={13} aria-hidden="true" /> Verification Status &amp; Documents</h4>
+          <section className="lp-detail-group" aria-label="Verification and documents">
+            <h4>Verification &amp; Documents</h4>
             {item.documents && item.documents.length > 0 ? (
               <div className="rv-docs">
                 {item.documents.map((doc) => {
-                  const isImg = isImageFile(doc.fileName);
                   const src = doc.url || doc.dataUrl || '';
-                  const canPreview = isImg && !!src;
+                  const canPreview = isImageFile(doc.fileName) && !!src;
                   const Tag = canPreview ? 'button' : 'div';
                   return (
                     <Tag
@@ -141,7 +176,7 @@ const ReviewModal = ({ item, type, onClose, onApprove, onReject }) => {
               </div>
             ) : (
               <div className="rv-note">
-                <Smartphone size={16} aria-hidden="true" />
+                <ShieldCheck size={16} aria-hidden="true" />
                 <span>Submitted directly from the mobile app. Phone &amp; email authenticated via OTP verification.</span>
               </div>
             )}
@@ -160,27 +195,27 @@ const ReviewModal = ({ item, type, onClose, onApprove, onReject }) => {
               />
               <div className="rv-reject-actions">
                 <span className="rv-reject-count">{reason.length}/500</span>
-                <button type="button" className="rv-btn is-ghost" onClick={() => { setRejecting(false); setReason(''); }}>Cancel</button>
-                <button type="button" className="rv-btn is-danger" disabled={!reason.trim()} onClick={confirmReject}>Confirm Rejection</button>
+                <button type="button" className="lp-btn is-secondary" onClick={() => { setRejecting(false); setReason(''); }}>Cancel</button>
+                <button type="button" className="lp-btn is-danger" disabled={!reason.trim()} onClick={confirmReject}>Confirm Rejection</button>
               </div>
             </section>
           )}
         </div>
+      </div>
 
-        <footer className="rv-foot">
-          <Tooltip content="Decline this application — a reason is required">
-            <button type="button" className="rv-btn is-danger" onClick={() => setRejecting(true)} disabled={rejecting}>
-              <XCircle size={15} aria-hidden="true" /> Reject
-            </button>
-          </Tooltip>
-          <span className="rv-foot-spacer" />
-          <button type="button" className="rv-btn is-ghost" onClick={handleClose}>Close</button>
-          <Tooltip content="Approve the registration and email login credentials to the applicant">
-            <button type="button" className="rv-btn is-approve" onClick={() => onApprove(item)} disabled={rejecting}>
-              <CheckCircle2 size={15} aria-hidden="true" /> Approve &amp; Send Credentials
-            </button>
-          </Tooltip>
-        </footer>
+      <div className="lp-modal-foot rv-foot">
+        <Tooltip content="Decline this application — a reason is required">
+          <button type="button" className="lp-btn is-danger" onClick={() => setRejecting(true)} disabled={rejecting}>
+            <XCircle size={14} aria-hidden="true" /> Reject
+          </button>
+        </Tooltip>
+        <span className="rv-foot-spacer" />
+        <button type="button" className="lp-btn is-secondary" onClick={handleClose}>Close</button>
+        <Tooltip content="Approve the registration and email login credentials to the applicant">
+          <button type="button" className="lp-btn is-approve" onClick={() => onApprove(item)} disabled={rejecting}>
+            <CheckCircle2 size={14} aria-hidden="true" /> Approve &amp; Send Credentials
+          </button>
+        </Tooltip>
       </div>
     </Modal>
 

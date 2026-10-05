@@ -857,3 +857,33 @@
 .lp-table--review .lp-stack-sub.lp-mono {
   font-size: 11px;
 }
+
+/* ── Button variants for review workflows (2026-10-05) ── */
+.lp-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+/* Soft destructive */
+.lp-btn.is-danger {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b42318;
+}
+.lp-btn.is-danger:hover:not(:disabled) {
+  background: #fee2e2;
+  border-color: #fca5a5;
+}
+/* Primary approve: brand-orange gradient with a soft glow */
+.lp-btn.is-approve {
+  border: 1px solid rgba(226, 94, 16, 0.55);
+  background: linear-gradient(120deg, #ff9a4f 0%, #f37021 55%, #e0520a 100%);
+  color: #ffffff;
+  box-shadow: 0 10px 22px -10px rgba(243, 112, 33, 0.85), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+.lp-btn.is-approve:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 28px -12px rgba(243, 112, 33, 0.95), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+.lp-btn.is-approve:focus-visible {
+  box-shadow: 0 0 0 3px #ffffff, 0 0 0 5px #f37021;
+}
