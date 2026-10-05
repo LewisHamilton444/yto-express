@@ -1,10 +1,9 @@
 import React, { useState } from 'react';
 import Modal from '../components/ui/Modal';
+import { CheckCircle2 } from 'lucide-react';
+import ModalHeader from '../components/ui/ModalHeader';
 
 const s = {
-  header:     { background: '#390955', padding: '18px 24px' },
-  title:      { color: 'white', margin: 0, fontSize: '16px', fontWeight: 700 },
-  subtitle:   { color: 'rgba(255,255,255,0.65)', margin: '2px 0 0', fontSize: '12px' },
   body:       { padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' },
   row:        { display: 'flex', flexDirection: 'column', gap: '4px' },
   label:      { fontSize: '11px', fontWeight: 700, color: '#a890c0', textTransform: 'uppercase', letterSpacing: '0.6px' },
@@ -33,10 +32,13 @@ const SendSMSModal = ({ item, credentials, message, onCancel, onConfirm, sending
 
   return (
     <Modal onBackdropClick={onCancel} blur={false} tint="rgba(26,6,40,0.5)" zIndex={2100} maxWidth={460} padding={0} cardStyle={{ borderRadius: 12, overflow: 'hidden', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)', fontFamily: "'DM Sans', sans-serif" }}>
-        <div style={s.header}>
-          <h3 style={s.title}>Approve Account Registration</h3>
-          <p style={s.subtitle}>Confirm before activating account and notifying {item.fullName}</p>
-        </div>
+        <ModalHeader
+          title="Approve Account Registration"
+          subtitle={`Confirm before activating account and notifying ${item.fullName}`}
+          icon={CheckCircle2}
+          onClose={onCancel}
+          closeDisabled={sending}
+        />
 
         <div style={s.body}>
           <div style={s.row}>

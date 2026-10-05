@@ -20,6 +20,7 @@ import {
   AlertTriangle, Hash, User, Shield, Activity, FileText, CheckCircle,
   Calendar, Eye, Copy, Check, Users, Clock,
 } from 'lucide-react';
+import ModalHeader from './components/ui/ModalHeader';
 
 const ROLE_TONE = {
   customer: 'blue',
@@ -584,17 +585,7 @@ export default function ActivityLog() {
           padding={0}
           cardStyle={{ borderRadius: 12, overflow: 'hidden', boxShadow: '0 20px 40px rgba(0,0,0,0.2)' }}
         >
-          <div className="bg-gradient-to-r from-brand-purple to-[#5a1f80] px-6 py-4 flex items-center justify-between">
-            <h3 className="text-white text-sm font-bold m-0 flex items-center gap-2">
-              <Eye size={16} className="text-purple-200" /> Activity Details
-            </h3>
-            <button
-              onClick={() => setDetailEvent(null)}
-              className="text-white/80 hover:text-white text-xl leading-none border-none bg-transparent cursor-pointer"
-            >
-              &times;
-            </button>
-          </div>
+          <ModalHeader title="Activity Details" icon={Eye} onClose={() => setDetailEvent(null)} closeLabel="Close activity details" />
 
           <div className="p-6 space-y-4">
             {/* Header Identity Block */}

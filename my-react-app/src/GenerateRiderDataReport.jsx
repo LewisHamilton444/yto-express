@@ -18,6 +18,7 @@ import { ArrowLeft, ArrowRight, CheckCircle2, XCircle, Hash, User, Mail, Phone, 
 import EmptyState from './components/ui/EmptyState';
 import TableSkeleton from './components/ui/TableSkeleton';
 import { takeSearchHandoff, onSearchHandoff } from './utils/searchHandoff';
+import ModalHeader from './components/ui/ModalHeader';
 
 const RIDER_EXPORT_COLUMNS = [
   { key: 'riderId', label: 'Rider ID' },
@@ -676,10 +677,7 @@ export default function GenerateRiderDataReport() {
           padding={0} cardStyle={{ background: 'transparent', boxShadow: 'none', width: 'auto', maxWidth: 'none', maxHeight: 'none', overflowY: 'visible' }}
         >
           <form onSubmit={handleSaveEdit} style={{ width: 460, background: 'white', borderRadius: 12, overflow: 'hidden', boxShadow: '0 12px 36px rgba(57,9,85,0.25)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '18px 24px', borderBottom: '1px solid #f0eaf8', background: '#390955' }}>
-              <h3 style={{ fontSize: 16, fontWeight: 800, color: 'white', margin: 0 }}>Edit Rider Profile</h3>
-              <button type="button" onClick={() => setEditingRider(null)} style={{ background: 'none', border: 'none', color: 'white', fontSize: 24, cursor: 'pointer' }}>×</button>
-            </div>
+            <ModalHeader title="Edit Rider Profile" icon={User} onClose={() => setEditingRider(null)} />
 
             {saveMsg && <div style={{ background: '#d1fae5', color: '#065f46', padding: '10px 24px', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 7 }}><CheckCircle2 size={15} aria-hidden="true" /> {saveMsg}</div>}
             {saveErr && <div style={{ background: '#fee2e2', color: '#991b1b', padding: '10px 24px', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 7 }}><XCircle size={15} aria-hidden="true" /> {saveErr}</div>}
@@ -769,13 +767,7 @@ export default function GenerateRiderDataReport() {
           onBackdropClick={() => setViewParcel(null)}
           padding={0} cardStyle={{ width: 460, borderRadius: 12, overflow: 'hidden', boxShadow: '0 12px 36px rgba(57,9,85,0.25)', maxHeight: '85vh', maxWidth: 'none', display: 'flex', flexDirection: 'column' }}
         >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '18px 24px', borderBottom: '1px solid #f0eaf8', background: '#390955' }}>
-              <div>
-                <h3 style={{ fontSize: 16, fontWeight: 800, color: 'white', margin: 0 }}>{viewParcel.trackingNumber}</h3>
-                <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', margin: '2px 0 0' }}>Parcel Info</p>
-              </div>
-              <button type="button" onClick={() => setViewParcel(null)} style={{ background: 'none', border: 'none', color: 'white', fontSize: 24, cursor: 'pointer' }}>×</button>
-            </div>
+            <ModalHeader title={viewParcel.trackingNumber} subtitle="Parcel Info" icon={Package} onClose={() => setViewParcel(null)} closeLabel="Close parcel info" />
             <div style={{ padding: '20px 24px', overflowY: 'auto' }}>
               <div style={{ marginBottom: 18, paddingBottom: 16, borderBottom: '1px solid #f0eaf8' }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: '#390955', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10 }}>Delivery Progress</div>

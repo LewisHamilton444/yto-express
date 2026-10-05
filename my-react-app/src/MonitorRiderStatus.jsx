@@ -16,6 +16,7 @@ import useSSE from './services/useSSE';
 // that had drifted (it even listed Davao City, outside the Bulacan/Luzon
 // service area). Positions here are approximate city-level references only.
 import { CITY_COORDS } from './luzonCityCoords';
+import ModalHeader from './components/ui/ModalHeader';
 
 
 function MapView({ lat, lng, vehicle, uniqueId }) {
@@ -412,18 +413,13 @@ export default function MonitorRiderStatus() {
           cardStyle={{ borderRadius: 12, overflow: 'hidden', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)' }}
         >
           {/* Header */}
-          <div style={{ background: '#390955', padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white' }}>
-                <VehicleIcon type={selectedRider.vehicleType} size={22} />
-              </div>
-              <div>
-                <h3 style={{ color: 'white', margin: 0, fontSize: 15, fontWeight: 700 }}>{selectedRider.fullName || 'Rider'}</h3>
-                <p style={{ color: 'rgba(255,255,255,0.6)', margin: '2px 0 0', fontSize: 12 }}>{selectedRider.riderId} · {selectedRider.vehicleType}</p>
-              </div>
-            </div>
-            <button onClick={() => setSelectedRider(null)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', fontSize: 20, lineHeight: 1 }}>&times;</button>
-          </div>
+          <ModalHeader
+            title={selectedRider.fullName || 'Rider'}
+            subtitle={`${selectedRider.riderId} · ${selectedRider.vehicleType}`}
+            iconNode={<VehicleIcon type={selectedRider.vehicleType} size={18} />}
+            onClose={() => setSelectedRider(null)}
+            closeLabel="Close rider details"
+          />
 
           {/* Tabs */}
           <div style={{ display: 'flex', borderBottom: '2px solid #f0eaf8' }}>

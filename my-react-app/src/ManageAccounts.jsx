@@ -17,6 +17,7 @@ import ExportDropdown from './components/ui/ExportDropdown';
 import { takeSearchHandoff, onSearchHandoff } from './utils/searchHandoff';
 import { exportToCSV, exportToExcel, exportToWord, exportToPDF } from './exportUtils';
 import { Hash, User, Mail, Shield, ShieldCheck, Activity, Calendar, X, Users, ClipboardList, Package } from 'lucide-react';
+import ModalHeader from './components/ui/ModalHeader';
 
 const ROLE_LABELS = {
   super_admin:  'Super Admin',
@@ -235,7 +236,6 @@ export default function ManageAccounts() {
     btnOutline:  { padding: '7px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', background: 'white', color: '#390955', border: '1.5px solid #e4d8f2', fontFamily: 'inherit' },
     btnDanger:   { padding: '7px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', background: '#fee2e2', color: '#991b1b', border: '1px solid #fca5a5', fontFamily: 'inherit' },
     btnSuccess:  { padding: '7px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', background: '#d1fae5', color: '#065f46', border: '1px solid #6ee7b7', fontFamily: 'inherit' },
-    modalHead:   { background: '#390955', padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
     label:       { fontSize: '11px', fontWeight: 700, color: '#7b6d8d', textTransform: 'uppercase', letterSpacing: '0.6px', display: 'block', marginBottom: '6px' },
   };
 
@@ -502,10 +502,7 @@ export default function ManageAccounts() {
       {/* Add / Edit Modal */}
       {showModal && (
         <Modal tint="rgba(26,6,40,0.55)" blur={false} maxWidth={480} padding={0} cardStyle={{ borderRadius: 12, overflow: 'hidden', boxShadow: '0 20px 40px rgba(0,0,0,0.18)' }}>
-            <div style={s.modalHead}>
-              <h3 style={{ color: 'white', margin: 0, fontSize: '15px', fontWeight: 700 }}>{editingAccount ? 'Edit Account' : 'Add New Account'}</h3>
-              <button onClick={() => setShowModal(false)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', fontSize: '20px', lineHeight: 1 }}>&times;</button>
-            </div>
+            <ModalHeader title={editingAccount ? 'Edit Account' : 'Add New Account'} icon={editingAccount ? User : Users} onClose={() => setShowModal(false)} />
             <form onSubmit={handleSave} style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                 <div style={{ gridColumn: 'span 2' }}>
@@ -553,10 +550,7 @@ export default function ManageAccounts() {
       {/* Deactivate Confirm Modal */}
       {showDeactivateConfirm && (
         <Modal tint="rgba(26,6,40,0.55)" blur={false} maxWidth={400} padding={0} cardStyle={{ borderRadius: 12, overflow: 'hidden', boxShadow: '0 20px 40px rgba(0,0,0,0.18)' }}>
-            <div style={s.modalHead}>
-              <h3 style={{ color: 'white', margin: 0, fontSize: '15px', fontWeight: 700 }}>Deactivate Account</h3>
-              <button onClick={() => setShowDeactivateConfirm(null)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', fontSize: '20px', lineHeight: 1 }}>&times;</button>
-            </div>
+            <ModalHeader title="Deactivate Account" icon={Shield} tone="danger" onClose={() => setShowDeactivateConfirm(null)} />
             <div style={{ padding: '24px' }}>
               <p style={{ fontSize: '14px', color: '#390955', lineHeight: 1.6, marginBottom: '8px' }}>
                 Are you sure you want to deactivate <strong>{showDeactivateConfirm.name}</strong>'s account?

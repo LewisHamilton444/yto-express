@@ -20,6 +20,7 @@ import SectionCard from './components/ui/SectionCard';
 import CardSectionHeader from './components/ui/CardSectionHeader';
 import FilterBar from './components/ui/FilterBar';
 import { takeSearchHandoff, onSearchHandoff } from './utils/searchHandoff';
+import ModalHeader from './components/ui/ModalHeader';
 
 const SELLER_EXPORT_COLUMNS = [
   { key: 'sellerId', label: 'Seller ID' },
@@ -529,10 +530,12 @@ const GenerateSellerReport = () => {
 
       {showEditModal && editingSeller && (
         <Modal tint="rgba(26,6,40,0.5)" blur={false} maxWidth={500} padding={0} cardStyle={{ borderRadius: 12, overflow: 'hidden', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
-            <div style={{ background: '#390955', padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 style={{ color: 'white', margin: 0, fontSize: '15px', fontWeight: 700 }}>Update Profile Details</h3>
-              <button onClick={() => { setShowEditModal(false); setEditingSeller(null); }} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', fontSize: '20px', lineHeight: 1 }}>&times;</button>
-            </div>
+            <ModalHeader
+              title="Update Profile Details"
+              subtitle={editingSeller.fullName || undefined}
+              icon={Pencil}
+              onClose={() => { setShowEditModal(false); setEditingSeller(null); }}
+            />
             <form onSubmit={handleSaveChanges} style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px', overflowY: 'auto' }}>
 
 

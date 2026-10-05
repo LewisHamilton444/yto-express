@@ -1,0 +1,93 @@
+/* Shared light popup header (ModalHeader.jsx). Plain CSS so it wins over any
+   Tailwind utility on the surrounding card. */
+.mh {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 18px 22px;
+  background: #ffffff;
+  border-bottom: 1px solid #efe8f6;
+  flex-shrink: 0;
+}
+.mh--sticky {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+.mh-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  border-radius: 11px;
+  background: #f4ecfb;
+  border: 1px solid #e7dbf4;
+  color: #390955;
+}
+.mh-icon--danger {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #dc2626;
+}
+.mh-icon--warning {
+  background: #fff7ed;
+  border-color: #fed7aa;
+  color: #ea580c;
+}
+.mh-text {
+  flex: 1;
+  min-width: 0;
+}
+.mh-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: #111827;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mh-subtitle {
+  margin: 2px 0 0;
+  font-size: 12.5px;
+  color: #6b7280;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mh-extra {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.mh-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  color: #6b7280;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.mh-close:hover:not(:disabled) {
+  background: #f9fafb;
+  border-color: #d1d5db;
+  color: #111827;
+}
+.mh-close:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(57, 9, 85, 0.18);
+}
+.mh-close:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}

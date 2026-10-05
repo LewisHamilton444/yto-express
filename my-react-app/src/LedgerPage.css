@@ -374,10 +374,10 @@
   align-items: center;
   gap: 14px;
   padding: 20px 22px;
-  background:
-    radial-gradient(120% 140% at 100% 0%, rgba(243, 112, 33, 0.22) 0%, rgba(243, 112, 33, 0) 45%),
-    linear-gradient(135deg, #2a0640 0%, #390955 45%, #5a1f80 100%);
-  color: #ffffff;
+  /* Light theme (2026-10-05): white header like every other popup. */
+  background: #ffffff;
+  border-bottom: 1px solid #efe8f6;
+  color: #111827;
 }
 .lp-modal-avatar {
   display: inline-flex;
@@ -387,8 +387,9 @@
   height: 46px;
   flex-shrink: 0;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.14);
-  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: linear-gradient(135deg, #f4ecfb 0%, #e9dcf6 100%);
+  border: 1px solid #e2d4f1;
+  color: #390955;
   font-size: 15px;
   font-weight: 800;
   letter-spacing: 0.02em;
@@ -402,7 +403,7 @@
   font-size: 17px;
   font-weight: 800;
   letter-spacing: -0.01em;
-  color: #ffffff;
+  color: #111827;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -417,12 +418,12 @@
 .lp-modal-id {
   padding: 3px 8px;
   border-radius: 6px;
-  background: rgba(255, 255, 255, 0.12);
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 11.5px;
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.9);
+  color: #374151;
 }
 .lp-modal-meta .lp-status {
   padding: 2px 9px 2px 8px;
@@ -437,19 +438,20 @@
   height: 34px;
   flex-shrink: 0;
   border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  background: rgba(255, 255, 255, 0.1);
-  color: #ffffff;
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  color: #6b7280;
   cursor: pointer;
-  transition: background-color 0.15s ease, border-color 0.15s ease;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 .lp-modal-close:hover {
-  background: rgba(255, 255, 255, 0.2);
-  border-color: rgba(255, 255, 255, 0.35);
+  background: #f9fafb;
+  border-color: #d1d5db;
+  color: #111827;
 }
 .lp-modal-close:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.45);
+  box-shadow: 0 0 0 3px rgba(57, 9, 85, 0.18);
 }
 
 .lp-modal-tabs {
@@ -631,7 +633,7 @@
   margin-top: 2px;
   font-size: 12.5px;
   font-weight: 700;
-  color: #ffb27d;
+  color: #d9580d;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

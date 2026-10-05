@@ -18,6 +18,7 @@ import {
   Archive, Store, Bike, Users, Package, RotateCcw, Trash2, Hash, User, Mail, Phone,
   CreditCard, Activity, CheckCircle, X, AlertTriangle, Eye, Download, Calendar, MapPin,
 } from 'lucide-react';
+import ModalHeader from './components/ui/ModalHeader';
 
 const isTerminalStatus = (status = '') => {
   const s = String(status).toLowerCase();
@@ -765,13 +766,7 @@ export default function SettingsArchiveView({
       {/* ── AUDIT DETAILS DRAWER / MODAL ── */}
       {auditModalRecord && (
         <Modal tint="rgba(26,6,40,0.55)" blur={false} maxWidth={540} padding={0} cardStyle={{ borderRadius: 12, overflow: 'hidden', boxShadow: '0 20px 40px rgba(0,0,0,0.2)' }}>
-          <div className="bg-gradient-to-r from-brand-purple to-[#5a1f80] px-6 py-4 flex items-center justify-between">
-            <h3 className="text-white text-sm font-bold m-0 flex items-center gap-2">
-              <Eye size={16} className="text-purple-200" />
-              Audit Inspector — {auditModalRecord.displayId}
-            </h3>
-            <button onClick={() => setAuditModalRecord(null)} className="text-white/80 hover:text-white text-xl leading-none border-none bg-transparent cursor-pointer">&times;</button>
-          </div>
+          <ModalHeader title={`Audit Inspector — ${auditModalRecord.displayId}`} icon={Eye} onClose={() => setAuditModalRecord(null)} closeLabel="Close audit inspector" />
           <div className="p-6 space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-gray-100">
               <div>
@@ -838,12 +833,7 @@ export default function SettingsArchiveView({
       {/* ── CONFIRM ARCHIVE MODAL ── */}
       {confirmArchive && (
         <Modal tint="rgba(26,6,40,0.55)" blur={false} maxWidth={440} padding={0} cardStyle={{ borderRadius: 12, overflow: 'hidden', boxShadow: '0 20px 40px rgba(0,0,0,0.18)' }}>
-          <div className="bg-[#390955] px-6 py-4 flex items-center justify-between">
-            <h3 className="text-white text-sm font-bold m-0 flex items-center gap-2">
-              <Archive size={16} className="text-purple-300" /> Archive Record
-            </h3>
-            <button onClick={() => setConfirmArchive(null)} className="text-white/80 hover:text-white text-lg leading-none border-none bg-transparent cursor-pointer">&times;</button>
-          </div>
+          <ModalHeader title="Archive Record" icon={Archive} tone="warning" onClose={() => setConfirmArchive(null)} />
           <div className="p-6">
             <p className="text-sm text-gray-800 leading-relaxed mb-2">
               Are you sure you want to archive <strong>{confirmArchive.record.primaryName || confirmArchive.record.displayId}</strong>?
@@ -872,12 +862,7 @@ export default function SettingsArchiveView({
       {/* ── CONFIRM SINGLE DELETE MODAL ── */}
       {confirmDelete && (
         <Modal tint="rgba(26,6,40,0.55)" blur={false} maxWidth={440} padding={0} cardStyle={{ borderRadius: 12, overflow: 'hidden', boxShadow: '0 20px 40px rgba(0,0,0,0.18)' }}>
-          <div className="bg-red-700 px-6 py-4 flex items-center justify-between">
-            <h3 className="text-white text-sm font-bold m-0 flex items-center gap-2">
-              <AlertTriangle size={16} className="text-red-200" /> Permanently Delete Record
-            </h3>
-            <button onClick={() => setConfirmDelete(null)} className="text-white/80 hover:text-white text-lg leading-none border-none bg-transparent cursor-pointer">&times;</button>
-          </div>
+          <ModalHeader title="Permanently Delete Record" icon={AlertTriangle} tone="danger" onClose={() => setConfirmDelete(null)} />
           <div className="p-6">
             <p className="text-sm text-gray-800 leading-relaxed mb-2">
               Are you sure you want to permanently delete <strong>{confirmDelete.record.primaryName || confirmDelete.record.displayId}</strong>?
@@ -906,12 +891,7 @@ export default function SettingsArchiveView({
       {/* ── CONFIRM BULK DELETE MODAL ── */}
       {confirmBulkDelete && (
         <Modal tint="rgba(26,6,40,0.55)" blur={false} maxWidth={440} padding={0} cardStyle={{ borderRadius: 12, overflow: 'hidden', boxShadow: '0 20px 40px rgba(0,0,0,0.18)' }}>
-          <div className="bg-red-700 px-6 py-4 flex items-center justify-between">
-            <h3 className="text-white text-sm font-bold m-0 flex items-center gap-2">
-              <AlertTriangle size={16} className="text-red-200" /> Bulk Permanent Deletion
-            </h3>
-            <button onClick={() => setConfirmBulkDelete(false)} className="text-white/80 hover:text-white text-lg leading-none border-none bg-transparent cursor-pointer">&times;</button>
-          </div>
+          <ModalHeader title="Bulk Permanent Deletion" icon={AlertTriangle} tone="danger" onClose={() => setConfirmBulkDelete(false)} />
           <div className="p-6">
             <p className="text-sm text-gray-800 leading-relaxed mb-2">
               Are you sure you want to permanently delete all <strong>{selectedIds.size} selected records</strong>?

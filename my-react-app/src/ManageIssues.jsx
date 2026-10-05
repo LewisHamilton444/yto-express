@@ -20,6 +20,7 @@ import {
   Eye, Search, ShieldAlert, X,
   Camera, Tag, User, Hash, Package, Activity, Calendar,
 } from 'lucide-react';
+import ModalHeader from './components/ui/ModalHeader';
 
 const STATUS_TONE = {
   'Open': 'red',
@@ -421,17 +422,14 @@ export default function ManageIssues() {
           onBackdropClick={() => !updating && setSelectedIssue(null)}
           cardStyle={{ borderRadius: 12, overflow: 'hidden', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)' }}
         >
-          <div className="flex items-start justify-between bg-gradient-to-br from-brand-purple to-[#5a1f80] px-6 py-5">
-            <div>
-              <h3 className="flex items-center gap-2 text-[15px] font-bold text-white">
-                <Hash size={15} className="text-white/70" /> Ticket Details — {selectedIssue.ticketId}
-              </h3>
-              <p className="mt-0.5 text-xs text-white/60">Filed {selectedIssue.createdAt ? new Date(selectedIssue.createdAt).toLocaleString() : 'N/A'}</p>
-            </div>
-            <button onClick={() => !updating && setSelectedIssue(null)} className="text-white/80 transition hover:text-white">
-              <X size={20} />
-            </button>
-          </div>
+          <ModalHeader
+            title={`Ticket Details — ${selectedIssue.ticketId}`}
+            subtitle={`Filed ${selectedIssue.createdAt ? new Date(selectedIssue.createdAt).toLocaleString() : 'N/A'}`}
+            icon={Hash}
+            onClose={() => !updating && setSelectedIssue(null)}
+            closeDisabled={updating}
+            closeLabel="Close ticket details"
+          />
 
           <div className="max-h-[70vh] overflow-y-auto p-6">
             <div className="mb-4 grid grid-cols-1 gap-3.5 sm:grid-cols-2">
