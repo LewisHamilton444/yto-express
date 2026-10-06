@@ -9,6 +9,7 @@ import { CircleDot, Flame, Map, Package, Satellite, X } from 'lucide-react';
 import { ridersApi, parcelsApi, parcelLocationsApi } from './services/api';
 import Tooltip from './components/ui/Tooltip';
 import useSSE from './services/useSSE';
+import { getFreshPing, LIVE_REFRESH_MS } from './utils/riderGps';
 
 const TILE_LAYERS = {
   street: { url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', attribution: '© OpenStreetMap contributors' },
@@ -46,6 +47,15 @@ function buildRiderIcon(L, vehicleType, bearing, selected) {
   `;
   return L.divIcon({ className: '', html, iconSize: [size, size], iconAnchor: [size / 2, size / 2], popupAnchor: [0, -size / 2 - 6] });
 }function buildRiderPopupHtml(rider) {  const hub = LOGISTICS_HUBS.find(h => h.hubId === rider.destinationHubId);  // Position-source honesty: a real GPS fix (from the app's status-update  // telemetry) vs. the city-derived fallback.  const gpsLine = rider.hasRealGps    ? '<span style="color:#16a34a;font-weight:700;">● Live GPS</span><br/>'    : '<span style="color:#b45309;font-weight:700;">● Approximate (city-level)</span><br/>';  return `    <div style="font-family:sans-serif;font-size:12px;line-height:1.8;min-width:180px;">      <b style="color:#390955;font-size:13px;">${rider.fullName}</b><br/>      <span style="color:#9b82b2;font-size:11px;font-family:monospace;">${rider.riderId}</span><br/>      <span style="color:#555;">${vehicleTypeLabel(rider.vehicleType)} · ${rider.vehicleType}</span><br/>      ${gpsLine}      <span style="color:#888;">${rider.city || 'Luzon'}</span><br/>      <span style="color:#f37021;">${hub ? hub.hubName : '—'}</span>    </div>  `;}
+
+// Returns the cached route for a rider when its points haven't changed, so
+// React effects that depend on `rider.route` don't re-run on every refresh.
+function stableRoute(cache, riderId, route) {
+  const prev = cache[riderId];
+  if (prev && JSON.stringify(prev) === JSON.stringify(route)) return prev;
+  cache[riderId] = route;
+  return route;
+}
 
 // One instance per active rider. Renders nothing itself — it owns a Leaflet
 // marker + route polyline directly on the shared map and drives them with
@@ -108,6 +118,62 @@ function AnimatedRiderMarker({ L, map, rider, isSelected, onSelect }) {
   return null;
 }
 
+// How long a live marker takes to glide from its old position to a new ping.
+// Slightly shorter than the 3 s refresh so it arrives before the next ping.
+const LIVE_GLIDE_MS = 2500;
+
+// One instance per rider with a fresh GPS ping. The marker is created once and
+// then glides to each new position (no route line, no simulated movement) and
+// rotates to the heading the rider app reported.
+function LiveGpsMarker({ L, map, rider, isSelected, onSelect }) {
+  const markerRef = useRef(null);
+  const bearingRef = useRef(rider.heading ?? 0);
+  const onSelectRef = useRef(onSelect);
+  useEffect(() => { onSelectRef.current = onSelect; });
+
+  // Create the marker once per rider.
+  useEffect(() => {
+    if (!L || !map) return undefined;
+    const marker = L.marker([rider.lat, rider.lng], {
+      icon: buildRiderIcon(L, rider.vehicleType, bearingRef.current, false),
+      zIndexOffset: 1000,
+    })
+      .bindPopup(buildRiderPopupHtml(rider))
+      .on('mouseover', function () { this.openPopup(); })
+      .on('mouseout', function () { this.closePopup(); })
+      .on('click', () => onSelectRef.current(rider.riderId))
+      .addTo(map);
+    markerRef.current = marker;
+    return () => { marker.remove(); markerRef.current = null; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [L, map, rider.riderId]);
+
+  // Each new ping: rotate to the reported heading and glide to the new spot.
+  useEffect(() => {
+    const marker = markerRef.current;
+    if (!marker) return undefined;
+    if (rider.heading != null) bearingRef.current = rider.heading;
+    marker.setIcon(buildRiderIcon(L, rider.vehicleType, bearingRef.current, isSelected));
+    marker.setPopupContent(buildRiderPopupHtml(rider));
+
+    const from = marker.getLatLng();
+    const startTime = performance.now();
+    let rafId = null;
+    const step = (now) => {
+      const t = Math.min(1, (now - startTime) / LIVE_GLIDE_MS);
+      marker.setLatLng([
+        from.lat + (rider.lat - from.lat) * t,
+        from.lng + (rider.lng - from.lng) * t,
+      ]);
+      if (t < 1) rafId = requestAnimationFrame(step);
+    };
+    rafId = requestAnimationFrame(step);
+    return () => { if (rafId) cancelAnimationFrame(rafId); };
+  }, [L, rider, isSelected]);
+
+  return null;
+}
+
 export default function LiveRiderMap({
   externalSelectedRiderId,
   onSelectRider,
@@ -135,6 +201,7 @@ export default function LiveRiderMap({
   const hubMarkerRefs = useRef({});
   const tileLayerRef  = useRef(null);
   const heatLayerRef  = useRef(null);
+  const routeCacheRef = useRef({});
 
   const handleSelectRider = (id) => {
     setSelectedHub(null);
@@ -166,7 +233,7 @@ export default function LiveRiderMap({
       }
     } else if (prevSelectedRiderRef.current && LRef.current) {
       const bounds = LOGISTICS_HUBS.map(h => [h.coordinates.lat, h.coordinates.lng]);
-      mapRef.current.fitBounds(LRef.current.latLngBounds(bounds), { padding: [60, 60] });
+      mapRef.current.fitBounds(LRef.current.latLngBounds(bounds), { padding: [60, 60], maxZoom: 12 });
     }
     prevSelectedRiderRef.current = selectedRider;
   }, [selectedRider, riders]);
@@ -212,7 +279,9 @@ export default function LiveRiderMap({
           const heldParcel = safeParcels.find(
             p => p.riderId && (p.riderId === (r.registrationId || r._id)) && telemetryByParcel[p.trackingNumber]
           );
-          const fix = heldParcel ? telemetryByParcel[heldParcel.trackingNumber] : null;
+          // A fresh GPS ping from the rider app (under 60 s old) beats both.
+          const ping = getFreshPing(r);
+          const fix = ping || (heldParcel ? telemetryByParcel[heldParcel.trackingNumber] : null);
           // No city match and no telemetry: skip the pin entirely rather than
           // parking every unmatched rider on a false Manila coordinate.
           if (!fix && !coords) return null;
@@ -231,9 +300,15 @@ export default function LiveRiderMap({
             // positions, it does not claim a live speed.
             speedKmh: null,
             destinationHubId: hub.hubId,
+            // Live riders are drawn at their real position (LiveGpsMarker).
+            isLivePing: !!ping,
+            heading: ping ? ping.heading : null,
             // Real DB records don't carry a planned path, so the honest
-            // representation is a direct line to the nearest hub.
-            route: [{ lat, lng }, { lat: hub.coordinates.lat, lng: hub.coordinates.lng }],
+            // representation is a direct line to the nearest hub. Reuse the
+            // previous array when nothing moved, so the 3 s refresh doesn't
+            // restart this rider's animation.
+            route: stableRoute(routeCacheRef.current, r.registrationId || r._id,
+              [{ lat, lng }, { lat: hub.coordinates.lat, lng: hub.coordinates.lng }]),
           };
         })
         .filter(Boolean);
@@ -274,7 +349,7 @@ export default function LiveRiderMap({
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 15000);
+    const interval = setInterval(fetchData, LIVE_REFRESH_MS);
     return () => clearInterval(interval);
   }, [fetchData]);
 
@@ -328,7 +403,7 @@ export default function LiveRiderMap({
       });
 
       const bounds = LOGISTICS_HUBS.map(h => [h.coordinates.lat, h.coordinates.lng]);
-      map.fitBounds(L.latLngBounds(bounds), { padding: [60, 60] });
+      map.fitBounds(L.latLngBounds(bounds), { padding: [60, 60], maxZoom: 12 });
 
       mapRef.current = map;
       LRef.current = L;
@@ -547,7 +622,16 @@ export default function LiveRiderMap({
           )}
           <div ref={divRef} style={{ position: 'absolute', inset: 0 }} />
 
-          {mapReady && !loading && visibleRiders.map(r => (
+          {mapReady && !loading && visibleRiders.map(r => (r.isLivePing ? (
+            <LiveGpsMarker
+              key={`${r.riderId}-live`}
+              L={LRef.current}
+              map={mapRef.current}
+              rider={r}
+              isSelected={selectedRider === r.riderId}
+              onSelect={(id) => handleSelectRider(selectedRider === id ? null : id)}
+            />
+          ) : (
             <AnimatedRiderMarker
               key={r.riderId}
               L={LRef.current}
@@ -556,7 +640,7 @@ export default function LiveRiderMap({
               isSelected={selectedRider === r.riderId}
               onSelect={(id) => handleSelectRider(selectedRider === id ? null : id)}
             />
-          ))}
+          )))}
 
           <div style={{ position: 'absolute', bottom: 12, left: 12, zIndex: 1000, pointerEvents: 'none', background: 'rgba(255,255,255,0.96)', borderRadius: 9, padding: '8px 12px', border: '1px solid rgba(57,9,85,0.1)', display: 'flex', flexDirection: 'column', gap: 5 }}>
             {[

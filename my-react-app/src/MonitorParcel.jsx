@@ -3,6 +3,7 @@ import LiveRiderMap from './LiveRiderMap';
 import { CITY_COORDS } from './luzonCityCoords';
 import { LOGISTICS_HUBS, haversineKm } from './hubGeofenceData';
 import { ridersApi, parcelsApi, parcelLocationsApi } from './services/api';
+import { getFreshPing, formatLivePosition, LIVE_REFRESH_MS } from './utils/riderGps';
 import useSSE from './services/useSSE';
 import { VehicleIcon } from './components/ui/vehicleIcons';
 import Tooltip from './components/ui/Tooltip';
@@ -97,7 +98,9 @@ export default function MonitorGeofenceBoundary() {
           const heldParcelWithFix = safeParcels.find(
             p => (p.riderId === (r.registrationId || r._id)) && locMap[(p.trackingNumber || p.trackingId || '').toUpperCase()]
           );
-          const fix = heldParcelWithFix ? locMap[(heldParcelWithFix.trackingNumber || heldParcelWithFix.trackingId || '').toUpperCase()] : null;
+          // A fresh GPS ping from the rider app wins; then a parcel's location; then the city.
+          const ping = getFreshPing(r);
+          const fix = ping || (heldParcelWithFix ? locMap[(heldParcelWithFix.trackingNumber || heldParcelWithFix.trackingId || '').toUpperCase()] : null);
           const lat = fix ? fix.lat : (coords ? coords.lat + (i * 0.002) : LOGISTICS_HUBS[0].coordinates.lat + (i * 0.004));
           const lng = fix ? fix.lng : (coords ? coords.lng + (i * 0.002) : LOGISTICS_HUBS[0].coordinates.lng + (i * 0.003));
 
@@ -114,6 +117,7 @@ export default function MonitorGeofenceBoundary() {
             lat,
             lng,
             hasRealGps: !!fix,
+            livePosition: ping ? formatLivePosition(ping.lat, ping.lng) : '',
             battery: null,
             speed: null,
           };
@@ -180,7 +184,7 @@ export default function MonitorGeofenceBoundary() {
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 15000);
+    const interval = setInterval(fetchData, LIVE_REFRESH_MS);
     return () => clearInterval(interval);
   }, [fetchData]);
 
@@ -302,7 +306,7 @@ export default function MonitorGeofenceBoundary() {
         name: r.name,
         phone: r.phone || '—',
         vehicle: r.vehicle,
-        location: [r.barangay, r.city, r.province].filter(Boolean).join(', ') || '—',
+        location: r.livePosition || [r.barangay, r.city, r.province].filter(Boolean).join(', ') || '—',
         signal: r.hasRealGps ? 'Live GPS Ping' : 'City Approximation',
         packagesCount: courierParcels.length,
         proximity: `${distToHub.toFixed(1)} km to hub`,
@@ -596,7 +600,7 @@ export default function MonitorGeofenceBoundary() {
                         {/* 4. Current Location */}
                         <DataTable.Cell>
                           <span className="text-slate-700 text-xs font-medium">
-                            {[r.barangay, r.city, r.province].filter(Boolean).join(', ') || '—'}
+                            {r.livePosition || [r.barangay, r.city, r.province].filter(Boolean).join(', ') || '—'}
                           </span>
                         </DataTable.Cell>
 
@@ -732,7 +736,7 @@ export default function MonitorGeofenceBoundary() {
                           <div className="flex items-center justify-between text-[11px]">
                             <span className="text-slate-400 font-semibold">Location:</span>
                             <span className="text-slate-700 font-medium truncate max-w-[170px]">
-                              {[r.city, r.province].filter(Boolean).join(', ') || '—'}
+                              {r.livePosition || [r.city, r.province].filter(Boolean).join(', ') || '—'}
                             </span>
                           </div>
 

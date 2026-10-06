@@ -27,6 +27,14 @@ const riderSchema = new mongoose.Schema({
     // switch the rider flips. Declared explicitly — Mongoose strict mode
     // strips undeclared fields on save.
     isOnDuty: { type: Boolean, default: false },
+    // Latest GPS ping from the rider app (POST /api/riders/:registrationId/location).
+    // Only the newest position is kept — each ping overwrites the last one.
+    lastLocation: {
+        lat: Number,
+        lng: Number,
+        heading: Number,
+        recordedAt: Date,
+    },
     deliveries: { type: Number, default: 0 },
     rating: { type: Number, default: 5.0 },
     successRate: { type: Number, default: 100 },

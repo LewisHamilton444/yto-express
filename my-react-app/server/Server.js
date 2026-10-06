@@ -614,6 +614,56 @@ app.delete('/api/riders/:id', authenticateToken, requireRole(...SUPER_ONLY), asy
     }
 });
 
+// ── RIDER GPS PING ──
+// Called by the rider app (or server/simulateRider.js) every few seconds with
+// the rider's current position. Only the LATEST position is kept, on the rider
+// record itself, so the Geofence Monitor (which already loads GET /api/riders)
+// can move the rider's pin. The app has no admin login, so this route is locked
+// with the same shared secret as /api/bridge (header: x-bridge-api-key).
+function requireBridgeKey(req, res, next) {
+    const expected = process.env.BRIDGE_API_KEY;
+    if (!expected) {
+        return res.status(503).json({ error: 'Bridge API key not configured.' });
+    }
+    if (req.get('x-bridge-api-key') !== expected) {
+        return res.status(401).json({ error: 'Missing or invalid bridge API key.' });
+    }
+    next();
+}
+
+app.post('/api/riders/:registrationId/location', requireBridgeKey, async (req, res) => {
+    try {
+        const lat = Number(req.body.latitude);
+        const lng = Number(req.body.longitude);
+        if (!Number.isFinite(lat) || lat < -90 || lat > 90 || !Number.isFinite(lng) || lng < -180 || lng > 180) {
+            return res.status(400).json({ error: '"latitude" and "longitude" must be valid numbers.' });
+        }
+
+        const lastLocation = { lat, lng, recordedAt: new Date() };
+        const heading = Number(req.body.heading);
+        if (req.body.heading !== undefined && Number.isFinite(heading)) {
+            lastLocation.heading = ((heading % 360) + 360) % 360;
+        }
+        // Use the phone's timestamp when it is a real date, otherwise server time.
+        const sentAt = new Date(req.body.timestamp);
+        if (req.body.timestamp && !Number.isNaN(sentAt.getTime())) {
+            lastLocation.recordedAt = sentAt;
+        }
+
+        const rider = await Rider.findOneAndUpdate(
+            { registrationId: String(req.params.registrationId) },
+            { $set: { lastLocation } },
+            { new: true }
+        );
+        if (!rider) {
+            return res.status(404).json({ error: 'That rider could not be found.' });
+        }
+        res.json({ message: 'Location received.', riderId: rider.registrationId, lastLocation: rider.lastLocation });
+    } catch (error) {
+        sendServerError(res, error, `${req.method} ${req.path}`);
+    }
+});
+
 // ── CUSTOMER ROUTES ──
 app.get('/api/customers', authenticateToken, requireRole(...OFFICE), async (req, res) => {
     try {
