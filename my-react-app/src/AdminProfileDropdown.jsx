@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 
-const ROLE_LABELS = { super_admin: 'Super Admin', staff: 'Staff', hub_receiver: 'Hub Receiver' };
+const ROLE_LABELS = { super_admin: 'Super Admin', staff: 'Operations Staff', hub_receiver: 'Hub Receiver' };
 
 const s = {
   wrap:     { position: 'relative' },

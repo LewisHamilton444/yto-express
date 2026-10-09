@@ -21,7 +21,7 @@ import ModalHeader from './components/ui/ModalHeader';
 
 const ROLE_LABELS = {
   super_admin:  'Super Admin',
-  staff:        'Staff',
+  staff:        'Operations Staff',
   hub_receiver: 'Hub Receiver',
 };
 
@@ -259,7 +259,7 @@ export default function ManageAccounts() {
       <div className="space-y-6">
       <PageHeader
         title="Manage Accounts"
-        subtitle="Create and manage Staff and Hub Receiver accounts"
+        subtitle="Create and manage Operations Staff and Hub Receiver accounts"
         breadcrumb={['Dashboard', 'Manage Accounts']}
         actions={
           <div className="flex items-center gap-3">
@@ -286,7 +286,7 @@ export default function ManageAccounts() {
           trendTone="neutral"
         />
         <StatCard
-          label="Staff"
+          label="Operations Staff"
           value={accounts.filter(a => a.role === 'staff').length}
           sub="Operations and logistics staff"
           tone="blue"
@@ -324,7 +324,7 @@ export default function ManageAccounts() {
             pills={[
               { label: 'Active', value: accounts.filter(a => a.status === 'Active').length, tone: 'green' },
               { label: 'Deactivated', value: accounts.filter(a => a.status !== 'Active').length, tone: 'red' },
-              { label: 'Staff', value: accounts.filter(a => a.role === 'staff').length, tone: 'blue' },
+              { label: 'Operations Staff', value: accounts.filter(a => a.role === 'staff').length, tone: 'blue' },
               { label: 'Hub Receivers', value: accounts.filter(a => a.role === 'hub_receiver').length, tone: 'amber' },
             ]}
           />
@@ -346,7 +346,7 @@ export default function ManageAccounts() {
             >
               <option value="All">All</option>
               <option value="super_admin">Super Admin</option>
-              <option value="staff">Staff</option>
+              <option value="staff">Operations Staff</option>
               <option value="hub_receiver">Hub Receiver</option>
             </FilterBar.Select>
             <FilterBar.Select
@@ -407,7 +407,7 @@ export default function ManageAccounts() {
                     <EmptyState
                       icon={Users}
                       title="No accounts found"
-                      description={hasActiveFilters ? 'No accounts match your current filters. Try changing or clearing your filters.' : 'Create a Staff or Hub Receiver account to get started.'}
+                      description={hasActiveFilters ? 'No accounts match your current filters. Try changing or clearing your filters.' : 'Create an Operations Staff or Hub Receiver account to get started.'}
                       action={hasActiveFilters ? (
                         <button
                           onClick={handleClearFilters}
@@ -516,7 +516,7 @@ export default function ManageAccounts() {
                 <div style={{ gridColumn: 'span 2' }}>
                   <label style={s.label}>Role *</label>
                   <select style={s.select} name="role" value={formData.role} onChange={handleFormChange}>
-                    <option value="staff">Staff</option>
+                    <option value="staff">Operations Staff</option>
                     <option value="hub_receiver">Hub Receiver</option>
                   </select>
                 </div>
@@ -534,7 +534,7 @@ export default function ManageAccounts() {
               </div>
               <div style={{ background: '#faf7fd', border: '1px solid #e4d8f2', borderRadius: '10px', padding: '12px 16px', fontSize: '12px', color: '#7b6d8d', lineHeight: 1.6 }}>
                 {formData.role === 'staff'
-                  ? <span style={{ display: 'flex', alignItems: 'flex-start', gap: 7 }}><ClipboardList size={14} aria-hidden="true" /> Staff can manage sellers, parcels, and riders. No access to system settings or account management.</span>
+                  ? <span style={{ display: 'flex', alignItems: 'flex-start', gap: 7 }}><ClipboardList size={14} aria-hidden="true" /> Operations Staff can manage sellers, parcels, and riders. No access to system settings or account management.</span>
                   : <span style={{ display: 'flex', alignItems: 'flex-start', gap: 7 }}><Package size={14} aria-hidden="true" /> Hub Receiver can only mark parcels as Received or Returned at the hub. Limited access.</span>}
               </div>
               <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '4px' }}>

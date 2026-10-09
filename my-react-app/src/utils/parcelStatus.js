@@ -29,6 +29,9 @@ const TITLE_CASE_MAP = {
   'canceled':           'Cancelled',
   'returning':          'Returning',
   'returned':           'Returned',
+  // Set only by Hub Receiving (HubParcelReceiving.jsx)
+  'received at hub':    'Received at Hub',
+  'returned to hub':    'Returned to Hub',
   'failed':             'Failed',
   // Legacy web aliases kept writable on the mobile side
   'confirmed':          'Confirmed',
@@ -56,8 +59,9 @@ export const isReturnFamilyStatus = (status) =>
   /return/i.test(String(status ?? ''));
 
 // Anything physically moving through the network — includes Out for Delivery,
-// which the old substring check ('transit') missed.
+// which the old substring check ('transit') missed, and parcels sitting at the
+// hub mid-route (Received at Hub).
 export const isInTransitFamilyStatus = (status) => {
   const s = String(status ?? '').trim().toLowerCase();
-  return s === 'in transit' || s === 'out for delivery' || s === 'picked up' || s === 'shipping';
+  return s === 'in transit' || s === 'out for delivery' || s === 'picked up' || s === 'shipping' || s === 'received at hub';
 };

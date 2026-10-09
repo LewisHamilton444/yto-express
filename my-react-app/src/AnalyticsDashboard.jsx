@@ -935,7 +935,7 @@ export default function AnalyticsDashboard({
           <div className="ad-sidebar-user">
             <div className="ad-sidebar-user-name">{currentUser.name}</div>
             <div className="ad-sidebar-user-role">
-              {{ super_admin: 'Super Admin', staff: 'Staff', hub_receiver: 'Hub Receiver' }[currentUser.role] || currentUser.role}
+              {{ super_admin: 'Super Admin', staff: 'Operations Staff', hub_receiver: 'Hub Receiver' }[currentUser.role] || currentUser.role}
             </div>
           </div>
         )}

@@ -52,17 +52,21 @@ export default function HubParcelReceiving() {
       const res = await apiFetch(`/parcels/${parcel._id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          status,
-          events: [...(parcel.events || []), { time: new Date().toISOString(), event: status, location: 'Hub', status }],
-        }),
+        // Status only — the server adds the timeline entry itself.
+        body: JSON.stringify({ status }),
       });
-      if (!res.ok) throw new Error('Update failed');
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        // 409: the parcel changed since this list loaded — reload so the
+        // row shows its real status.
+        if (res.status === 409) fetchParcels();
+        throw new Error(body.error || 'Failed to update parcel status.');
+      }
       const updated = await res.json();
       setParcels(prev => prev.map(p => (p._id === updated._id ? updated : p)));
       flash(`Marked ${parcel.trackingNumber} as "${status}".`, 'success');
-    } catch {
-      flash('Failed to update parcel status.', 'error');
+    } catch (err) {
+      flash(err.message || 'Failed to update parcel status.', 'error');
     } finally {
       setUpdatingId(null);
     }
@@ -137,12 +141,14 @@ export default function HubParcelReceiving() {
                   const st = String(p.status || '').toLowerCase();
                   const alreadyReceived = st === 'received at hub';
                   const alreadyReturned = st === 'returned' || st === 'returned to hub';
-                  const terminal = st === 'delivered' || st === 'failed';
+                  const closed = st === 'delivered' || st === 'cancelled' || st === 'canceled';
                   const busy = updatingId === p._id;
-                  // Received only makes sense while a parcel is still on the
-                  // way; Returned is a guarded (confirmed) reversal.
-                  const receivedDisabled = busy || alreadyReceived || alreadyReturned || terminal;
-                  const returnedDisabled  = busy || alreadyReturned;
+                  // Same rule the server enforces (HUB_STATUS_BLOCKED_FROM):
+                  // Received only while a parcel is still on the way; Returned
+                  // is a confirmed reversal, but never for a delivered or
+                  // cancelled parcel (a failed delivery can still come back).
+                  const receivedDisabled = busy || alreadyReceived || alreadyReturned || closed || st === 'failed';
+                  const returnedDisabled  = busy || alreadyReturned || closed;
                   return (
                   <tr key={p._id} className="hub-row" style={{ background: 'white' }}>
                     <td style={{ padding: '12px 16px', fontFamily: 'monospace', color: '#390955', fontWeight: 700, whiteSpace: 'nowrap', borderBottom: '1px solid #f3f0f8', position: 'sticky', left: 0, zIndex: 5, background: 'white', borderRight: '1px solid #f3f0f8', boxShadow: '2px 0 5px -2px rgba(0,0,0,0.06)' }}>{p.trackingNumber}</td>
@@ -165,7 +171,7 @@ export default function HubParcelReceiving() {
                           type="button"
                           disabled={returnedDisabled}
                           onClick={() => setConfirmReturn(p)}
-                          title="Return parcel to the hub (requires confirmation)"
+                          title={closed ? `A ${st} parcel cannot be returned to the hub` : alreadyReturned ? 'Already returned' : 'Return parcel to the hub (requires confirmation)'}
                           style={{ padding: '5px 10px', borderRadius: '6px', border: '1px solid #fecaca', cursor: returnedDisabled ? 'not-allowed' : 'pointer', background: '#fef2f2', color: '#b91c1c', fontSize: '11px', fontWeight: 600, opacity: returnedDisabled ? 0.45 : 1, transition: 'all 0.15s ease', whiteSpace: 'nowrap' }}
                         >
                           Returned to Hub

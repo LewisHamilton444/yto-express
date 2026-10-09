@@ -150,8 +150,8 @@ const RIDER_EDITABLE_FIELDS = [
     'payoutRate', 'payoutCycle', 'assignedHub', 'status',
 ];
 
-// events IS allowed: the hub and status screens legitimately append timeline entries
-// through this route.
+// events IS allowed: office status screens legitimately append timeline entries
+// through this route. Hub accounts never reach this list (see applyHubStatus).
 const PARCEL_EDITABLE_FIELDS = [
     'senderName', 'senderPhone', 'senderEmail',
     'receiverName', 'receiverPhone', 'recipientEmail',
@@ -1088,18 +1088,69 @@ app.get('/api/parcels', authenticateToken, async (req, res) => {
     }
 });
 
+// Hub receivers may only move a parcel to one of the two hub statuses — every
+// other parcel field is office-only. Each status lists the current statuses it
+// may NOT be applied from (lower-case); mirrored by the buttons on
+// HubParcelReceiving.jsx so the screen never offers a refused action.
+const HUB_STATUS_BLOCKED_FROM = {
+    'Received at Hub': ['received at hub', 'returned', 'returned to hub', 'delivered', 'failed', 'cancelled', 'canceled'],
+    'Returned to Hub': ['returned', 'returned to hub', 'delivered', 'cancelled', 'canceled'],
+};
+
+// Applies a hub status change. The timeline entry is appended here with $push
+// rather than taken from the client, so a hub screen holding a stale copy can
+// never overwrite rider updates that arrived meanwhile. The update is guarded
+// on the status that was checked, so a concurrent change makes it a no-op
+// instead of slipping past the rule.
+async function applyHubStatus(parcelId, body) {
+    const extraFields = Object.keys(body || {}).filter(k => k !== 'status');
+    const status = body && body.status;
+    if (extraFields.length > 0 || !Object.prototype.hasOwnProperty.call(HUB_STATUS_BLOCKED_FROM, status)) {
+        return { code: 403, error: 'Hub accounts can only mark parcels as Received at Hub or Returned to Hub.' };
+    }
+    const current = await Parcel.findById(parcelId, 'status');
+    if (!current) return { code: 404, error: 'That parcel could not be found.' };
+    const currentStatus = String(current.status || '').trim().toLowerCase();
+    if (HUB_STATUS_BLOCKED_FROM[status].includes(currentStatus)) {
+        return { code: 409, error: `This parcel is "${current.status}" and cannot be marked as ${status}.` };
+    }
+    const updated = await Parcel.findOneAndUpdate(
+        { _id: parcelId, status: current.status },
+        {
+            $set: { status },
+            $push: { events: { time: new Date().toISOString(), event: status, location: 'Hub', status } },
+        },
+        { new: true, runValidators: true }
+    );
+    if (!updated) return { code: 409, error: 'This parcel was just updated by someone else. Refresh and try again.' };
+    return { updated };
+}
+
 app.put('/api/parcels/:id', authenticateToken, requireRole(...ANY_ROLE), async (req, res) => {
     try {
-        const updates = pickEditable(req.body, PARCEL_EDITABLE_FIELDS);
-        if (Object.keys(updates).length === 0) {
-            return res.status(400).json({ error: 'No updatable fields were provided.' });
-        }
+        let updated;
+        // Hub accounts always take the hub path. A super admin using the Hub
+        // Receiving screen sends the same status-only body and gets the same
+        // rule and server-written timeline entry.
+        const bodyKeys = Object.keys(req.body || {});
+        const isHubStatusOnly = bodyKeys.length === 1 && bodyKeys[0] === 'status'
+            && Object.prototype.hasOwnProperty.call(HUB_STATUS_BLOCKED_FROM, req.body.status);
+        if (req.user.role === 'hub_receiver' || isHubStatusOnly) {
+            const result = await applyHubStatus(req.params.id, req.body);
+            if (result.error) return res.status(result.code).json({ error: result.error });
+            updated = result.updated;
+        } else {
+            const updates = pickEditable(req.body, PARCEL_EDITABLE_FIELDS);
+            if (Object.keys(updates).length === 0) {
+                return res.status(400).json({ error: 'No updatable fields were provided.' });
+            }
 
-        const updated = await Parcel.findByIdAndUpdate(
-            req.params.id,
-            { $set: updates },
-            { new: true, runValidators: true }
-        );
+            updated = await Parcel.findByIdAndUpdate(
+                req.params.id,
+                { $set: updates },
+                { new: true, runValidators: true }
+            );
+        }
 
         if (!updated) {
             return res.status(404).json({ error: 'That parcel could not be found.' });
