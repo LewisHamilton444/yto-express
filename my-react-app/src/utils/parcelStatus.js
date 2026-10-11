@@ -64,6 +64,15 @@ export function normalizeParcelStatus(rawStatus) {
 export const isDeliveredStatus = (status) =>
   String(status ?? '').trim().toLowerCase() === 'delivered';
 
+// Parcels whose journey is over — no rider is carrying them any more, so the
+// live maps hide them and Rider Reports counts them as closed. Case-insensitive:
+// stored statuses are Title-case ('Delivered'), older rows may be lowercase.
+// 'failed' is the legacy end state from before the failed-delivery flow; the
+// new 'Failed Attempt' is NOT finished (the rider tries again).
+const FINISHED_STATUSES = ['delivered', 'returned', 'failed', 'returned to seller'];
+export const isFinishedParcelStatus = (status) =>
+  FINISHED_STATUSES.includes(String(status ?? '').trim().toLowerCase());
+
 export const isReturnFamilyStatus = (status) =>
   /return/i.test(String(status ?? ''));
 

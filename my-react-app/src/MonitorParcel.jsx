@@ -4,6 +4,7 @@ import { CITY_COORDS } from './luzonCityCoords';
 import { LOGISTICS_HUBS, haversineKm } from './hubGeofenceData';
 import { ridersApi, parcelsApi, parcelLocationsApi } from './services/api';
 import { getFreshPing, formatLivePosition, LIVE_REFRESH_MS } from './utils/riderGps';
+import { isFinishedParcelStatus } from './utils/parcelStatus';
 import useSSE from './services/useSSE';
 import { VehicleIcon } from './components/ui/vehicleIcons';
 import Tooltip from './components/ui/Tooltip';
@@ -125,7 +126,7 @@ export default function MonitorGeofenceBoundary() {
 
       // Active parcels with coordinates prioritization
       const activeParcels = safeParcels
-        .filter(p => !['delivered', 'returned', 'failed'].includes(String(p.status || '').toLowerCase()))
+        .filter(p => !isFinishedParcelStatus(p.status))
         .map((p, i) => {
           const tn = (p.trackingNumber || p.trackingId || '').toUpperCase();
           const fix = locMap[tn];

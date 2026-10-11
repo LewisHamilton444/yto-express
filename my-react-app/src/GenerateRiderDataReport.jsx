@@ -18,6 +18,7 @@ import { ArrowLeft, ArrowRight, CheckCircle2, XCircle, Hash, User, Mail, Phone, 
 import EmptyState from './components/ui/EmptyState';
 import TableSkeleton from './components/ui/TableSkeleton';
 import { takeSearchHandoff, onSearchHandoff } from './utils/searchHandoff';
+import { isFinishedParcelStatus } from './utils/parcelStatus';
 import ModalHeader from './components/ui/ModalHeader';
 
 const RIDER_EXPORT_COLUMNS = [
@@ -75,7 +76,6 @@ const DUTY_BADGE = {
 // is the one real signal we have for whether someone is actively working
 // right now.
 const HELD_STATUSES   = ['pending', 'in-transit'];
-const CLOSED_STATUSES = ['delivered', 'returned', 'failed'];
 const ARCHIVE_AFTER_DAYS = 7;
 
 const norm = (v) => String(v ?? '').trim().toLowerCase();
@@ -153,7 +153,7 @@ export default function GenerateRiderDataReport() {
   }, [selectedRider]);
 
   const getHeldParcels   = (riderObj) => parcels.filter(p => HELD_STATUSES.includes(p.status) && belongsToRider(p, riderObj));
-  const getClosedParcels = (riderObj) => parcels.filter(p => CLOSED_STATUSES.includes(p.status) && belongsToRider(p, riderObj));
+  const getClosedParcels = (riderObj) => parcels.filter(p => isFinishedParcelStatus(p.status) && belongsToRider(p, riderObj));
   const isOnDuty         = (riderObj) => getHeldParcels(riderObj).length > 0;
   // Duty state now blends the real Android duty toggle (riderObj.isOnDuty,
   // synced live via the bridge) with the held-parcel signal: a rider who

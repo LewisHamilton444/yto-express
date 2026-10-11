@@ -10,6 +10,7 @@ import { ridersApi, parcelsApi, parcelLocationsApi } from './services/api';
 import Tooltip from './components/ui/Tooltip';
 import useSSE from './services/useSSE';
 import { getFreshPing, LIVE_REFRESH_MS } from './utils/riderGps';
+import { isFinishedParcelStatus } from './utils/parcelStatus';
 
 const TILE_LAYERS = {
   street: { url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', attribution: '© OpenStreetMap contributors' },
@@ -314,7 +315,7 @@ export default function LiveRiderMap({
         .filter(Boolean);
 
       const activeParcels = safeParcels
-        .filter(p => !['delivered', 'returned', 'failed'].includes(p.status))
+        .filter(p => !isFinishedParcelStatus(p.status))
         .map((p, i) => {
           // Real telemetry first (per-parcel tracking), city coords as fallback.
           const fix = telemetryByParcel[p.trackingNumber];
