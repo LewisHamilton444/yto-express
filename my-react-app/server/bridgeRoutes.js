@@ -26,6 +26,7 @@ const Parcel         = require('./models/Parcel');
 const ParcelLocation = require('./models/ParcelLocation');
 const Issue          = require('./models/Issue');
 const AdminNotification = require('./models/AdminNotification');
+const { logAudit }     = require('./utils/auditLog');
 
 // ── Shared-secret gate (fail CLOSED) ────────────────────────────────────
 // These routes accept writes from another backend, not from the admin UI, so
@@ -54,6 +55,31 @@ router.use((req, res, next) => {
 // past this point.
 function logBridgeError(route, err, payload) {
   console.error(`[Bridge:${route}] ${err.message}`, JSON.stringify(payload));
+}
+
+// Audit (SH-09): parcel changes that arrive from the rider app are logged with
+// source 'rider_app' so the Audit Trail can tell them apart from admin-panel
+// changes. The actor is the rider's registrationId when the app sends one.
+function auditRiderAppParcelChange(req, trackingNumber, before, after, riderId) {
+  const actor = { id: riderId || '', email: '', role: 'rider_app' };
+  if (String(before.status || '') !== String(after.status || '')) {
+    logAudit(req, {
+      action: 'parcel_status_changed',
+      target: trackingNumber,
+      details: { from: before.status || '', to: after.status || '' },
+      actor,
+      source: 'rider_app',
+    });
+  }
+  if (String(before.riderId || '') !== String(after.riderId || '')) {
+    logAudit(req, {
+      action: 'rider_assigned',
+      target: trackingNumber,
+      details: { from: String(before.riderId || ''), to: String(after.riderId || '') },
+      actor,
+      source: 'rider_app',
+    });
+  }
 }
 
 function statusForError(err) {
@@ -534,8 +560,10 @@ router.post('/sync-parcel', async (req, res) => {
     const existing = await Parcel.findOne({ trackingNumber });
     let doc, created;
     if (existing) {
+      const before = { status: existing.status, riderId: existing.riderId };
       Object.assign(existing, update);
       await existing.save();
+      auditRiderAppParcelChange(req, existing.trackingNumber, before, existing, String(body.riderId || existing.riderId || ''));
       doc = existing;
       created = false;
     } else {
@@ -868,6 +896,7 @@ router.post('/receive-status', async (req, res) => {
       return res.status(400).json({ success: false, error: `Invalid status: ${status}. Allowed: ${allowedStatuses.join(', ')}` });
     }
 
+    const before = { status: parcel.status, riderId: parcel.riderId };
     parcel.status = status;
     if (podPhoto) parcel.podPhoto = podPhoto;
     // Last-known rider position (Android sends the POD fix when available);
@@ -883,6 +912,7 @@ router.post('/receive-status', async (req, res) => {
       status: status,
     });
     await parcel.save();
+    auditRiderAppParcelChange(req, parcel.trackingNumber, before, parcel, riderId || String(parcel.riderId || ''));
 
     // Increment rider completed deliveries on live delivery transition
     if (status === 'Delivered') {

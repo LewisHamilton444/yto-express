@@ -32,15 +32,24 @@ const TITLE_CASE_MAP = {
   // Set only by Hub Receiving (HubParcelReceiving.jsx)
   'received at hub':    'Received at Hub',
   'returned to hub':    'Returned to Hub',
-  'failed':             'Failed',
+  // Failed-delivery flow. Older 'failed' / 'attempted' values show as
+  // "Failed Attempt" too, so there is only one label for a failed delivery.
+  'failed':             'Failed Attempt',
+  'failed attempt':     'Failed Attempt',
+  'received at hub (returned)': 'Received at Hub (Returned)',
+  'returned to seller': 'Returned to Seller',
   // Legacy web aliases kept writable on the mobile side
   'confirmed':          'Confirmed',
   'processing':         'Confirmed',
   'shipping':           'In Transit',
   'to ship':            'Pending',
   'toship':             'Pending',
-  'attempted':          'Failed',
+  'attempted':          'Failed Attempt',
 };
+
+// A parcel gets at most this many delivery attempts. Must match
+// MAX_DELIVERY_ATTEMPTS in server/utils/deliveryAttempts.js.
+export const MAX_DELIVERY_ATTEMPTS = 3;
 
 // Case-insensitive + separator-insensitive lookup: 'In-Transit', 'IN TRANSIT'
 // and 'in transit' all normalize to 'In Transit'.

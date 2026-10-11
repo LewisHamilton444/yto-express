@@ -901,6 +901,53 @@ html, body, #root {
 }
 .ed-caption strong { color: var(--yto-brand-purple); }
 
+/* Top failed delivery reasons — a short ranked list under the status ring in
+   Parcel Operations (shown only once a rider has reported a failed attempt).
+   One series, one colour. */
+.ed-fail-reasons {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--yto-border-soft);
+}
+.ed-fail-title {
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--yto-brand-purple);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.ed-fail-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(40px, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+  font-size: 11.5px;
+}
+.ed-fail-name {
+  color: #374151;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ed-fail-track {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--yto-border-soft);
+  overflow: hidden;
+}
+.ed-fail-track i {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--yto-brand-orange);
+}
+.ed-fail-count {
+  color: var(--yto-brand-purple);
+  font-variant-numeric: tabular-nums;
+}
+
 /* Card footer actions — flat controls that size to their label. They used to
    be a bare flex row inside a 1fr rail with min-width 120px, which forced the
    three buttons to wrap inside their own card and float outside it. */

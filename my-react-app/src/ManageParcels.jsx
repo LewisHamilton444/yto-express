@@ -19,7 +19,9 @@ import {
   Check, CheckCircle2, CircleDot, FileDown, FileText, Package, X, XCircle,
   Hash, User, Users, Store, MapPin, Weight, Truck, Activity,
 } from 'lucide-react';
-import { normalizeParcelStatus } from './utils/parcelStatus';
+import { normalizeParcelStatus, MAX_DELIVERY_ATTEMPTS } from './utils/parcelStatus';
+import { useToast } from './components/ui/useToast';
+import useSSE from './services/useSSE';
 import { takeSearchHandoff, onSearchHandoff } from './utils/searchHandoff';
 import { resolveCityCoords } from './luzonCityCoords';
 
@@ -55,7 +57,16 @@ import { resolveCityCoords } from './luzonCityCoords';
 // but real /api/parcels records only ever carry pending/in-transit/delivered/
 // returned/failed (see ProcessParcelInformation.jsx's status options) — those
 // two extra values were added to represent that real vocabulary faithfully.
-const STATUSES = ['Pending', 'Picked Up', 'In Transit', 'Out for Delivery', 'Delivered', 'Returned', 'Failed'];
+// The last four are the failed-delivery flow (older 'Failed' rows display as
+// "Failed Attempt" via normalizeParcelStatus).
+const STATUSES = [
+  'Pending', 'Picked Up', 'In Transit', 'Out for Delivery', 'Delivered', 'Returned',
+  'Failed Attempt', 'Returned to Hub', 'Received at Hub (Returned)', 'Returned to Seller',
+];
+
+// Office roles that may send a parcel out again or return it to the seller
+// (same as the server's OFFICE group).
+const OFFICE_ROLES = ['super_admin', 'staff'];
 
 // Status normalization is centralized in utils/parcelStatus.js — it maps both
 // the legacy lowercase-hyphenated vocabulary AND the mobile backend's
@@ -190,6 +201,8 @@ function normalizeParcel(raw, riderNameById) {
     riderLat: Number.isFinite(Number(raw.riderLat)) && raw.riderLat !== null && raw.riderLat !== undefined && String(raw.riderLat) !== '' ? Number(raw.riderLat) : null,
     riderLng: Number.isFinite(Number(raw.riderLng)) && raw.riderLng !== null && raw.riderLng !== undefined && String(raw.riderLng) !== '' ? Number(raw.riderLng) : null,
     riderGpsAt: raw.updatedAt || raw.createdAt || null,
+    // Failed delivery tries reported by the rider app, oldest first.
+    deliveryAttempts: Array.isArray(raw.deliveryAttempts) ? raw.deliveryAttempts : [],
   };
 
   // Real per-scan history when the backend recorded any events. When it
@@ -367,6 +380,162 @@ function Timeline({ events }) {
   );
 }
 
+// ── Failed delivery attempts ────────────────────────────────────────────────
+
+// "Attempt 2/3" pill shown next to the status once a delivery has failed.
+function AttemptsBadge({ count }) {
+  if (!count) return null;
+  const isLast = count >= MAX_DELIVERY_ATTEMPTS;
+  return (
+    <span
+      title={`${count} of ${MAX_DELIVERY_ATTEMPTS} delivery attempts used`}
+      style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 6, background: isLast ? '#fee2e2' : '#fff3eb', color: isLast ? '#991b1b' : '#f37021', border: `1px solid ${isLast ? '#fecaca' : '#fbd5bd'}`, whiteSpace: 'nowrap' }}
+    >
+      Attempt {count}/{MAX_DELIVERY_ATTEMPTS}
+    </span>
+  );
+}
+
+function fmtDateTime(value) {
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+
+const attemptActionBtn = (primary) => ({
+  padding: '8px 14px', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+  border: primary ? 'none' : '1.5px solid #390955',
+  background: primary ? '#f37021' : 'white',
+  color: primary ? 'white' : '#390955',
+});
+
+// Lists every failed attempt and, for office roles, the next step the
+// parcel's status allows (same rules the server checks).
+function DeliveryAttemptsSection({ parcel, riders, role, onChanged }) {
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  const [riderId, setRiderId] = useState('');
+  const [confirmReturn, setConfirmReturn] = useState(false);
+
+  const attempts = parcel.deliveryAttempts;
+  const riderName = (id) => (riders.find((r) => r.riderId === id) || {}).riderName || id || '—';
+
+  const isOffice = OFFICE_ROLES.includes(role);
+  const canRedeliver = isOffice
+    && ['Failed Attempt', 'Returned to Hub', 'Received at Hub (Returned)'].includes(parcel.status)
+    && attempts.length < MAX_DELIVERY_ATTEMPTS;
+  const canReturnToSeller = isOffice && parcel.status === 'Received at Hub (Returned)';
+  const waitingForHub = parcel.status === 'Returned to Hub';
+
+  // Nothing to show for a parcel that never failed and is not in the return flow.
+  if (attempts.length === 0 && !canRedeliver && !canReturnToSeller && !waitingForHub) return null;
+
+  const runAction = async (path, body, successText) => {
+    setBusy(true);
+    try {
+      const res = await apiFetch(`/parcels/${parcel._id}/${path}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body || {}),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Unable to update this parcel. Please try again.');
+      toast(successText, 'success');
+      setConfirmReturn(false);
+      onChanged();
+    } catch (err) {
+      toast(err.message || 'Unable to update this parcel. Please try again.', 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div style={{ background: '#faf8fd', border: '1.5px solid #ede8f8', borderRadius: 10, padding: '14px 16px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+        <div style={{ fontSize: 10, fontWeight: 800, color: '#390955', textTransform: 'uppercase', letterSpacing: 0.7 }}>Delivery Attempts</div>
+        <AttemptsBadge count={attempts.length} />
+      </div>
+
+      {attempts.length === 0 ? (
+        <p style={{ margin: 0, fontSize: 12, color: '#888' }}>No failed delivery attempts recorded.</p>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {attempts.map((a) => (
+            <div key={a.attemptNumber} style={{ background: 'white', border: '1px solid #ede8f8', borderRadius: 8, padding: '10px 12px', display: 'flex', gap: 12 }}>
+              <div style={{ width: 26, height: 26, borderRadius: '50%', background: '#390955', color: 'white', fontSize: 12, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{a.attemptNumber}</div>
+              <div style={{ flex: 1, minWidth: 0, fontSize: 12, color: '#555', lineHeight: 1.6 }}>
+                <div style={{ fontWeight: 800, color: '#1a1a1a' }}>{a.reason}</div>
+                {a.notes && <div style={{ color: '#374151' }}>“{a.notes}”</div>}
+                <div>Rider: <strong style={{ color: '#1a1a1a' }}>{riderName(a.riderId)}</strong> · {fmtDateTime(a.attemptedAt)}</div>
+                <div>
+                  Location:{' '}
+                  {a.lat !== null && a.lat !== undefined && a.lng !== null && a.lng !== undefined ? (
+                    <a href={`https://www.google.com/maps?q=${a.lat},${a.lng}`} target="_blank" rel="noopener noreferrer" style={{ color: '#f37021', fontWeight: 700 }}>
+                      {Number(a.lat).toFixed(5)}, {Number(a.lng).toFixed(5)}
+                    </a>
+                  ) : 'Not provided'}
+                </div>
+              </div>
+              {/^https?:\/\//i.test(a.photoUrl || '') && (
+                <a href={a.photoUrl} target="_blank" rel="noopener noreferrer" title="Open photo" style={{ flexShrink: 0 }}>
+                  <img src={a.photoUrl} alt={`Attempt ${a.attemptNumber} photo`} style={{ width: 64, height: 64, objectFit: 'cover', borderRadius: 6, border: '1px solid #e0d5f0' }} />
+                </a>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {waitingForHub && (
+        <p style={{ margin: '10px 0 0', fontSize: 12, color: '#991b1b', fontWeight: 600 }}>
+          Waiting for the hub to confirm this parcel has arrived back.
+        </p>
+      )}
+
+      {(canRedeliver || canReturnToSeller) && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 12, paddingTop: 12, borderTop: '1px solid #ede8f8' }}>
+          {canRedeliver && (
+            <>
+              <select
+                aria-label="Rider for the next delivery"
+                value={riderId}
+                onChange={(e) => setRiderId(e.target.value)}
+                disabled={busy}
+                style={{ padding: '7px 10px', border: '1.5px solid #e0d5f0', borderRadius: 8, fontSize: 12, fontFamily: 'inherit', background: 'white', color: '#1a1a1a' }}
+              >
+                <option value="">Keep current rider</option>
+                {riders.map((r) => <option key={r.riderId} value={r.riderId}>{r.riderName}</option>)}
+              </select>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => runAction('redeliver', riderId ? { riderId } : {}, `${parcel.id} is out for delivery again.`)}
+                style={{ ...attemptActionBtn(true), opacity: busy ? 0.6 : 1 }}
+              >
+                Re-deliver
+              </button>
+            </>
+          )}
+          {canReturnToSeller && (confirmReturn ? (
+            <>
+              <span style={{ fontSize: 12, color: '#555' }}>Return this parcel to the seller?</span>
+              <button type="button" disabled={busy} onClick={() => runAction('return-to-seller', {}, `${parcel.id} was returned to the seller.`)} style={{ ...attemptActionBtn(true), opacity: busy ? 0.6 : 1 }}>
+                Yes, return it
+              </button>
+              <button type="button" disabled={busy} onClick={() => setConfirmReturn(false)} style={attemptActionBtn(false)}>Cancel</button>
+            </>
+          ) : (
+            <button type="button" disabled={busy} onClick={() => setConfirmReturn(true)} style={attemptActionBtn(false)}>
+              Return to Seller
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Consolidated Parcel Modal (3 tabs, replaces the 3 legacy screens) ──────
 
 const TABS = [
@@ -381,7 +550,7 @@ const tabPillStyle = (active) => ({
   fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
 });
 
-function ParcelModal({ parcel, onClose, allParcels }) {
+function ParcelModal({ parcel, onClose, allParcels, riders = [], role, onChanged }) {
   const [activeTab, setActiveTab] = useState('details');
   const [exportFmt, setExportFmt] = useState('pdf');
 
@@ -559,6 +728,8 @@ function ParcelModal({ parcel, onClose, allParcels }) {
                   <div style={{ fontSize: 12, fontWeight: 600, color: '#390955' }}>{parcel.instructions}</div>
                 </div>
               </div>
+
+              <DeliveryAttemptsSection parcel={parcel} riders={riders} role={role} onChanged={onChanged} />
             </div>
           )}
 
@@ -741,7 +912,7 @@ function AssignRiderButton({ parcel, riders, onAssign }) {
 
 // ── Main Component ──────────────────────────────────────────────────────────
 
-export default function ManageParcels() {
+export default function ManageParcels({ currentUser }) {
   const [parcels, setParcels]           = useState([]);
   const [riders, setRiders]             = useState([]); // [{ riderId, riderName }] from GET /api/riders
   const [loading, setLoading]           = useState(true);
@@ -797,6 +968,20 @@ export default function ManageParcels() {
   }, [flashActionError]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // Reload when a parcel changes elsewhere (rider app failed attempt, hub
+  // confirmation, another admin) so the list and badges stay current.
+  const { on } = useSSE();
+  useEffect(() => {
+    const unsub1 = on('parcel-updated', () => loadData(true));
+    const unsub2 = on('parcel-synced', () => loadData(true));
+    return () => { unsub1(); unsub2(); };
+  }, [on, loadData]);
+
+  // Keep an open details window in step with the reloaded list.
+  useEffect(() => {
+    setViewParcel((open) => (open ? parcels.find((p) => p._id === open._id) || open : open));
+  }, [parcels]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -885,7 +1070,17 @@ export default function ManageParcels() {
         .mp-table-wrap table { width:100%; min-width:1080px; border-collapse:collapse; font-size:13px; }
       `}</style>
 
-      {viewParcel && <ParcelModal key={viewParcel.id} parcel={viewParcel} onClose={() => setViewParcel(null)} allParcels={parcels} />}
+      {viewParcel && (
+        <ParcelModal
+          key={viewParcel.id}
+          parcel={viewParcel}
+          onClose={() => setViewParcel(null)}
+          allParcels={parcels}
+          riders={riders}
+          role={currentUser?.role}
+          onChanged={() => loadData(true)}
+        />
+      )}
 
       {/* Header — shared PageHeader pattern with refresh action */}
       <PageHeader
@@ -1009,7 +1204,10 @@ export default function ManageParcels() {
                         {p.assignedRider || 'Unassigned'}
                       </span>
                     </td>
-                    <td style={{ padding: '12px 16px', whiteSpace: 'nowrap', borderBottom: '1px solid #f3f0f8' }}><StatusBadge status={p.status} /></td>
+                    <td style={{ padding: '12px 16px', whiteSpace: 'nowrap', borderBottom: '1px solid #f3f0f8' }}>
+                      <StatusBadge status={p.status} />
+                      <AttemptsBadge count={p.deliveryAttempts.length} />
+                    </td>
                     <td style={{ padding: '12px 16px', textAlign: 'right', borderBottom: '1px solid #f3f0f8' }}>
                       <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
                         <button onClick={() => setViewParcel(p)} className="mp-view-btn" title="View Details"

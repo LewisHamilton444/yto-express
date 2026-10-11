@@ -240,6 +240,7 @@ const getMenuSections = (role) => [
       }] : []),
       ...(role === 'super_admin' ? [{ label: 'Archives', key: 'settings' }] : []),
       { label: 'Activity Log', key: 'activity-log' },
+      ...(role === 'super_admin' ? [{ label: 'Audit Trail', key: 'audit-trail' }] : []),
     ],
   }] : []),
 ];
@@ -326,6 +327,11 @@ const icons = {
 icons['hub-parcels'] = icons.parcel;
 icons['manage-parcels'] = icons.parcel;
 icons['parcel-location'] = icons.gps;
+icons['audit-trail'] = (
+  <svg className="ad-sidebar-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/>
+  </svg>
+);
 icons['geofence'] = (
   <svg className="ad-sidebar-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
     <circle cx="12" cy="12" r="2"/><path d="M16.24 7.76a6 6 0 0 1 0 8.49"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
@@ -659,6 +665,22 @@ export default function AnalyticsDashboard({
     fetchDashboardData();
   }, [fetchDashboardData]);
 
+  // A rider reported a failed delivery: tell the admin and refresh the
+  // numbers (status ring + failed reasons).
+  useEffect(() => {
+    if (!onSSE) return undefined;
+    return onSSE('parcel-updated', (data) => {
+      if (!data || data.action !== 'failed-attempt') return;
+      toast(
+        data.status === 'Returned to Hub'
+          ? `Parcel #${data.trackingNumber} failed its last delivery attempt and is going back to the hub.`
+          : `Delivery attempt ${data.attemptNumber} failed for parcel #${data.trackingNumber}: ${data.reason}.`,
+        'error'
+      );
+      fetchDashboardData(true);
+    });
+  }, [onSSE, toast, fetchDashboardData]);
+
   // Stats endpoint responses have drifted before (missing/renamed fields) and
   // used to crash the dashboard via unconditional `.toFixed()` on undefined —
   // every nested field is guarded so a partial payload falls back to the
@@ -840,6 +862,23 @@ export default function AnalyticsDashboard({
     }
     return rows;
   }, [parcels]);
+
+  // ── Most common failed delivery reasons ───────────────────────────────
+  // Counts every attempt in parcel.deliveryAttempts (written by the rider
+  // app's failed-attempt route). Top 4, most common first.
+  const failedReasons = useMemo(() => {
+    const counts = new Map();
+    parcels.forEach((p) => {
+      (Array.isArray(p.deliveryAttempts) ? p.deliveryAttempts : []).forEach((a) => {
+        if (a && a.reason) counts.set(a.reason, (counts.get(a.reason) || 0) + 1);
+      });
+    });
+    return [...counts.entries()]
+      .map(([reason, count]) => ({ reason, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 4);
+  }, [parcels]);
+  const failedReasonMax = failedReasons.length > 0 ? failedReasons[0].count : 0;
 
   // Whole-number shares that add up to exactly 100. Rounding each slice on its
   // own produced a legend of 25+23+20+18+15 = 101, which reads as an error on a
@@ -1246,6 +1285,20 @@ export default function AnalyticsDashboard({
                             ))}
                           </div>
                         </div>
+                        {failedReasons.length > 0 && (
+                          <div className="ed-fail-reasons">
+                            <h3 className="ed-fail-title">Top failed delivery reasons</h3>
+                            {failedReasons.map((row) => (
+                              <div className="ed-fail-row" key={row.reason}>
+                                <span className="ed-fail-name">{row.reason}</span>
+                                <span className="ed-fail-track" aria-hidden="true">
+                                  <i style={{ width: `${Math.round((row.count / failedReasonMax) * 100)}%` }} />
+                                </span>
+                                <strong className="ed-fail-count">{row.count}</strong>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                         {collectedFees > 0 && (
                           <p className="ed-caption">
                             Delivery fees collected: <strong>₱{collectedFees.toFixed(2)}</strong> from {completedFeeParcels.length} completed {completedFeeParcels.length === 1 ? 'delivery' : 'deliveries'}.

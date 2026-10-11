@@ -15,7 +15,7 @@ require('dotenv').config({ path: path.join(__dirname, '.env') });
 // ── Settings ────────────────────────────────────────────────────────────────
 // Local test:  'http://localhost:3001'
 // Live site:   'https://yto-express-backend.onrender.com'
-const BASE_URL = 'http://localhost:3001';
+const BASE_URL = 'https://yto-express-backend.onrender.com';
 const LOOP = true;               // true = start the routes again when they finish
 const PING_EVERY_MS = 3000;      // one ping every 3 seconds
 const POINTS_PER_ROUTE = 28;     // points along each route

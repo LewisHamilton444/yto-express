@@ -6,3 +6,6 @@ dist
 my-react-app/dist
 __MACOSX/
 my-react-app/server/.env
+
+# Database backups (SH-08) — never commit production data
+backups/

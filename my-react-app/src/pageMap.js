@@ -11,6 +11,7 @@ import MonitorRiderStatus from './MonitorRiderStatus';
 import GenerateRiderDataReport from './GenerateRiderDataReport';
 import CustomerList from './CustomerList';
 import ActivityLog from './ActivityLog';
+import AuditTrail from './AuditTrail';
 import AppNotifications from './AppNotifications';
 import ManageAccounts from './ManageAccounts';
 import HubParcelReceiving from './HubParcelReceiving';
@@ -31,6 +32,7 @@ export const PAGE_MAP = {
   'rider-report':        GenerateRiderDataReport,
   'customer-list':       CustomerList,
   'activity-log':        ActivityLog,
+  'audit-trail':         AuditTrail,
   'app-notifications':   AppNotifications,
   'manage-accounts':     ManageAccounts,
   'hub-parcels':         HubParcelReceiving,

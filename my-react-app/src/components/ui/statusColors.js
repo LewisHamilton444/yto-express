@@ -13,6 +13,12 @@ export const PARCEL_STATUS_COLORS = {
   'Delivered':        { bg: '#d1fae5', color: '#065f46' },
   'Returned':         { bg: '#f3f4f6', color: '#6b7280' },
   'Failed':           { bg: '#fee2e2', color: '#991b1b' },
+  // Failed-delivery flow (POST /api/parcels/.../failed-attempt and the
+  // office/hub steps after it).
+  'Failed Attempt':             { bg: '#ffedd5', color: '#9a3412' },
+  'Returned to Hub':            { bg: '#fee2e2', color: '#991b1b' },
+  'Received at Hub (Returned)': { bg: '#ede9fe', color: '#4c1d95' },
+  'Returned to Seller':         { bg: '#f3f4f6', color: '#6b7280' },
 };
 
 // Account category badging shared by admin views (CustomerList, ManageIssues, ...).
@@ -46,6 +52,9 @@ export const STATUS_HINTS = {
   'ARCHIVED':             'Archived — no longer in the active roster',
   'Received at Hub':      'Parcel received and logged at the hub',
   'Returned to Hub':      'Parcel returned and logged at the hub',
+  'Failed Attempt':             'The rider could not deliver it — it will be tried again',
+  'Received at Hub (Returned)': 'Back at the hub after its last failed delivery',
+  'Returned to Seller':         'Sent back to the seller after failed deliveries',
 };
 
 export const RIDER_STATUS_BADGE = {

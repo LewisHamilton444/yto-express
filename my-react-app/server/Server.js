@@ -46,9 +46,13 @@ app.use(helmet({
     strictTransportSecurity: { maxAge: 15552000 },
 }));
 
-// CORS (2026 audit M1): no wildcard. Same-origin and localhost dev origins are
-// always allowed; production origins come from CORS_ORIGIN (comma-separated)
-// and any *.onrender.com host. Disallowed origins get no ACAO header at all.
+// CORS (2026 audit M1, tightened by SH-05): no wildcard. Same-origin and
+// localhost dev origins are always allowed; production origins must be listed
+// EXACTLY in CORS_ORIGIN (comma-separated, e.g.
+// CORS_ORIGIN=https://yto-express-web.onrender.com). The old "any
+// *.onrender.com host" rule was removed — anyone can create an onrender.com
+// site, so it let attacker pages call this API from a browser. Disallowed
+// origins get no ACAO header at all.
 //
 // BUGFIX 2026-09-22 — this predicate previously had signature (origin) => bool.
 // cors@2.8.6 treats a FUNCTION origin as the async-decision contract
@@ -67,7 +71,7 @@ const isAllowedCorsOrigin = (origin, callback) => {
     if (!origin) return callback(null, true); // same-origin requests, curl, native clients
     try {
         const { hostname } = new URL(origin);
-        if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname.endsWith('.onrender.com')) {
+        if (hostname === 'localhost' || hostname === '127.0.0.1') {
             return callback(null, origin);
         }
     } catch { return callback(null, false); }
@@ -177,6 +181,12 @@ const Account         = require('./models/Account');
 const Issue           = require('./models/Issue');
 const AdminNotification = require('./models/AdminNotification');
 const sseBroadcaster  = require('./utils/sseBroadcaster');
+const AuditLog        = require('./models/AuditLog');
+const { logAudit }    = require('./utils/auditLog');
+const {
+    MAX_DELIVERY_ATTEMPTS, FAILED_ATTEMPT_REASONS, NOTES_MAX_LENGTH, STATUS: DELIVERY_STATUS,
+    FAILED_ATTEMPT_ALLOWED_FROM, REDELIVER_ALLOWED_FROM,
+} = require('./utils/deliveryAttempts');
 
 // ── JWT AUTHENTICATION MIDDLEWARE ───────────────────────────────────────
 // No fallback: a missing JWT_SECRET must be a loud startup failure, never a
@@ -1093,8 +1103,12 @@ app.get('/api/parcels', authenticateToken, async (req, res) => {
 // may NOT be applied from (lower-case); mirrored by the buttons on
 // HubParcelReceiving.jsx so the screen never offers a refused action.
 const HUB_STATUS_BLOCKED_FROM = {
-    'Received at Hub': ['received at hub', 'returned', 'returned to hub', 'delivered', 'failed', 'cancelled', 'canceled'],
-    'Returned to Hub': ['returned', 'returned to hub', 'delivered', 'cancelled', 'canceled'],
+    // The failed-delivery statuses are listed too, so the hub buttons can never
+    // overwrite a parcel that is in the return flow (see /received-returned).
+    'Received at Hub': ['received at hub', 'returned', 'returned to hub', 'delivered', 'failed', 'cancelled', 'canceled',
+        'failed attempt', 'received at hub (returned)', 'returned to seller'],
+    'Returned to Hub': ['returned', 'returned to hub', 'delivered', 'cancelled', 'canceled',
+        'received at hub (returned)', 'returned to seller'],
 };
 
 // Applies a hub status change. The timeline entry is appended here with $push
@@ -1108,11 +1122,11 @@ async function applyHubStatus(parcelId, body) {
     if (extraFields.length > 0 || !Object.prototype.hasOwnProperty.call(HUB_STATUS_BLOCKED_FROM, status)) {
         return { code: 403, error: 'Hub accounts can only mark parcels as Received at Hub or Returned to Hub.' };
     }
-    const current = await Parcel.findById(parcelId, 'status');
+    const current = await Parcel.findById(parcelId, 'status riderId trackingNumber');
     if (!current) return { code: 404, error: 'That parcel could not be found.' };
     const currentStatus = String(current.status || '').trim().toLowerCase();
     if (HUB_STATUS_BLOCKED_FROM[status].includes(currentStatus)) {
-        return { code: 409, error: `This parcel is "${current.status}" and cannot be marked as ${status}.` };
+        return { code: 409, error: `This parcel is "${current.status}" and cannot be marked as ${status}.`, before: current };
     }
     const updated = await Parcel.findOneAndUpdate(
         { _id: parcelId, status: current.status },
@@ -1122,13 +1136,14 @@ async function applyHubStatus(parcelId, body) {
         },
         { new: true, runValidators: true }
     );
-    if (!updated) return { code: 409, error: 'This parcel was just updated by someone else. Refresh and try again.' };
-    return { updated };
+    if (!updated) return { code: 409, error: 'This parcel was just updated by someone else. Refresh and try again.', before: current };
+    return { updated, before: current };
 }
 
 app.put('/api/parcels/:id', authenticateToken, requireRole(...ANY_ROLE), async (req, res) => {
     try {
         let updated;
+        let before; // the parcel's status/rider before this change, for the audit log
         // Hub accounts always take the hub path. A super admin using the Hub
         // Receiving screen sends the same status-only body and gets the same
         // rule and server-written timeline entry.
@@ -1137,23 +1152,50 @@ app.put('/api/parcels/:id', authenticateToken, requireRole(...ANY_ROLE), async (
             && Object.prototype.hasOwnProperty.call(HUB_STATUS_BLOCKED_FROM, req.body.status);
         if (req.user.role === 'hub_receiver' || isHubStatusOnly) {
             const result = await applyHubStatus(req.params.id, req.body);
-            if (result.error) return res.status(result.code).json({ error: result.error });
+            if (result.error) {
+                logAudit(req, {
+                    action: 'parcel_status_changed',
+                    target: result.before ? result.before.trackingNumber : req.params.id,
+                    result: 'failure',
+                    details: { from: result.before ? result.before.status : '', to: String(req.body.status || ''), reason: result.error },
+                });
+                return res.status(result.code).json({ error: result.error });
+            }
             updated = result.updated;
+            before = result.before;
         } else {
             const updates = pickEditable(req.body, PARCEL_EDITABLE_FIELDS);
             if (Object.keys(updates).length === 0) {
                 return res.status(400).json({ error: 'No updatable fields were provided.' });
             }
 
-            updated = await Parcel.findByIdAndUpdate(
-                req.params.id,
-                { $set: updates },
-                { new: true, runValidators: true }
-            );
+            before = await Parcel.findById(req.params.id, 'status riderId trackingNumber');
+            if (before) {
+                updated = await Parcel.findByIdAndUpdate(
+                    req.params.id,
+                    { $set: updates },
+                    { new: true, runValidators: true }
+                );
+            }
         }
 
         if (!updated) {
             return res.status(404).json({ error: 'That parcel could not be found.' });
+        }
+
+        if (String(before.status || '') !== String(updated.status || '')) {
+            logAudit(req, {
+                action: 'parcel_status_changed',
+                target: updated.trackingNumber,
+                details: { from: before.status || '', to: updated.status || '' },
+            });
+        }
+        if (String(before.riderId || '') !== String(updated.riderId || '')) {
+            logAudit(req, {
+                action: 'rider_assigned',
+                target: updated.trackingNumber,
+                details: { from: String(before.riderId || ''), to: String(updated.riderId || '') },
+            });
         }
 
         if (req.body.status && updated.trackingNumber) {
@@ -1184,6 +1226,284 @@ app.delete('/api/parcels/:id', authenticateToken, requireRole(...SUPER_ONLY), as
         // parcel map keeps showing a marker for a shipment that no longer exists.
         await ParcelLocation.deleteOne({ parcelId: deletedParcel.trackingNumber });
         res.json({ message: "Parcel deleted!" });
+    } catch (error) {
+        sendServerError(res, error, `${req.method} ${req.path}`);
+    }
+});
+
+// ── FAILED DELIVERY ATTEMPTS ────────────────────────────────────────────
+// The rules (max attempts, reasons, which status may follow which) live in
+// utils/deliveryAttempts.js. deliveryAttempts is NOT in PARCEL_EDITABLE_FIELDS,
+// so these routes are the only way it can change.
+
+// Reads an optional coordinate. Returns null when it was not sent, the number
+// when it is valid, or undefined when it was sent but is not a valid value.
+function readCoordinate(value, limit) {
+    if (value === undefined || value === null || value === '') return null;
+    const n = Number(value);
+    if (!Number.isFinite(n) || n < -limit || n > limit) return undefined;
+    return n;
+}
+
+// Rider app reports a failed delivery. No admin login here — the rider app
+// uses the shared bridge key, like the GPS ping route above.
+app.post('/api/parcels/:trackingNumber/failed-attempt', requireBridgeKey, async (req, res) => {
+    try {
+        const body = req.body || {};
+        const trackingNumber = String(req.params.trackingNumber || '').trim();
+
+        // 1. Check what the rider sent.
+        const riderId = typeof body.riderId === 'string' ? body.riderId.trim() : '';
+        if (!riderId || riderId.length > 60) {
+            return res.status(400).json({ error: '"riderId" is required (up to 60 characters).' });
+        }
+        if (!FAILED_ATTEMPT_REASONS.includes(body.reason)) {
+            return res.status(400).json({ error: `"reason" must be one of: ${FAILED_ATTEMPT_REASONS.join(', ')}.` });
+        }
+        if (body.notes !== undefined && body.notes !== null && typeof body.notes !== 'string') {
+            return res.status(400).json({ error: '"notes" must be text.' });
+        }
+        const notes = String(body.notes || '').trim();
+        if (notes.length > NOTES_MAX_LENGTH) {
+            return res.status(400).json({ error: `"notes" can be at most ${NOTES_MAX_LENGTH} characters.` });
+        }
+        const lat = readCoordinate(body.lat, 90);
+        const lng = readCoordinate(body.lng, 180);
+        if (lat === undefined || lng === undefined || (lat === null) !== (lng === null)) {
+            return res.status(400).json({ error: '"lat" and "lng" must be sent together as valid numbers.' });
+        }
+        // Only web links are accepted, so the admin panel never renders a
+        // javascript: or other unsafe link as the photo.
+        const photoUrl = typeof body.photoUrl === 'string' ? body.photoUrl.trim() : '';
+        if (photoUrl && (!/^https?:\/\/\S+$/i.test(photoUrl) || photoUrl.length > 2000)) {
+            return res.status(400).json({ error: '"photoUrl" must be a web link starting with http:// or https://.' });
+        }
+        let attemptedAt = new Date();
+        if (body.timestamp) {
+            attemptedAt = new Date(body.timestamp);
+            if (Number.isNaN(attemptedAt.getTime())) {
+                return res.status(400).json({ error: '"timestamp" must be a valid date (for example 2026-10-11T09:30:00Z).' });
+            }
+        }
+
+        // 2. Check the parcel.
+        const parcel = await Parcel.findOne({ trackingNumber }, 'trackingNumber status riderId destination deliveryAttempts');
+        if (!parcel) {
+            return res.status(404).json({ error: 'That parcel could not be found.' });
+        }
+        const usedAttempts = parcel.deliveryAttempts.length;
+        if (usedAttempts >= MAX_DELIVERY_ATTEMPTS) {
+            return res.status(400).json({ error: `This parcel already has ${MAX_DELIVERY_ATTEMPTS} failed delivery attempts. No more attempts can be recorded.` });
+        }
+        if (!FAILED_ATTEMPT_ALLOWED_FROM.includes(parcel.status)) {
+            return res.status(400).json({ error: `This parcel is "${parcel.status}". A failed attempt can only be recorded while it is Out for Delivery or after an earlier failed attempt.` });
+        }
+
+        // 3. Save the attempt. The 3rd failure sends the parcel back to the hub.
+        const attemptNumber = usedAttempts + 1;
+        const isLastAttempt = attemptNumber >= MAX_DELIVERY_ATTEMPTS;
+        const newStatus = isLastAttempt ? DELIVERY_STATUS.RETURNED_TO_HUB : DELIVERY_STATUS.FAILED_ATTEMPT;
+        const eventText = isLastAttempt
+            ? `Delivery attempt ${attemptNumber} of ${MAX_DELIVERY_ATTEMPTS} failed (${body.reason}). Parcel is going back to the hub.`
+            : `Delivery attempt ${attemptNumber} of ${MAX_DELIVERY_ATTEMPTS} failed: ${body.reason}`;
+
+        const setFields = { status: newStatus };
+        if (lat !== null) { setFields.riderLat = lat; setFields.riderLng = lng; }
+
+        // The filter repeats the checks above (same status, same number of
+        // attempts), so two reports sent at the same moment cannot both pass.
+        // Parcels saved before this feature have no deliveryAttempts field at
+        // all, which $size: 0 does not match — hence the $exists case.
+        const sameAttemptCount = usedAttempts === 0
+            ? { $or: [{ deliveryAttempts: { $size: 0 } }, { deliveryAttempts: { $exists: false } }] }
+            : { deliveryAttempts: { $size: usedAttempts } };
+        const updated = await Parcel.findOneAndUpdate(
+            { _id: parcel._id, status: parcel.status, ...sameAttemptCount },
+            {
+                $set: setFields,
+                $push: {
+                    deliveryAttempts: { attemptNumber, reason: body.reason, notes, riderId, lat, lng, photoUrl, attemptedAt },
+                    events: { time: attemptedAt.toISOString(), event: eventText, location: parcel.destination || '', status: newStatus },
+                },
+            },
+            { new: true, runValidators: true }
+        );
+        if (!updated) {
+            return res.status(409).json({ error: 'This parcel was just updated. Please try again.' });
+        }
+
+        // 4. Record it and tell everyone. None of these make the rider wait.
+        logAudit(req, {
+            action: 'delivery_attempt_failed',
+            target: updated.trackingNumber,
+            details: { from: parcel.status, to: newStatus, attemptNumber, reason: body.reason },
+            actor: { id: riderId, email: '', role: 'rider_app' },
+            source: 'rider_app',
+        });
+
+        AdminNotification.create({
+            role: 'admin',
+            title: isLastAttempt ? 'Parcel going back to the hub' : 'Delivery attempt failed',
+            message: `${updated.trackingNumber}: attempt ${attemptNumber} of ${MAX_DELIVERY_ATTEMPTS} failed (${body.reason}).`,
+            type: 'delivery_failed',
+            relatedId: updated.trackingNumber,
+            source: 'rider-app',
+        }).then((doc) => {
+            sseBroadcaster.broadcast('notification-synced', {
+                _id: doc._id, role: doc.role, title: doc.title, message: doc.message,
+                type: doc.type, relatedId: doc.relatedId, createdAt: doc.createdAt,
+            });
+        }).catch(e => console.warn('[FailedAttempt] Could not save admin notification:', e.message));
+
+        sseBroadcaster.broadcast('parcel-updated', {
+            trackingNumber: updated.trackingNumber,
+            status: newStatus,
+            action: 'failed-attempt',
+            attemptNumber,
+            reason: body.reason,
+            timestamp: new Date().toISOString(),
+        });
+
+        BridgeClient.sendStatus(updated.trackingNumber, newStatus)
+            .catch(e => console.warn('[Bridge→Android] sendStatus failed:', e.message));
+
+        res.status(201).json({
+            message: isLastAttempt
+                ? `Attempt ${attemptNumber} of ${MAX_DELIVERY_ATTEMPTS} recorded. The parcel is now going back to the hub.`
+                : `Attempt ${attemptNumber} of ${MAX_DELIVERY_ATTEMPTS} recorded.`,
+            trackingNumber: updated.trackingNumber,
+            status: updated.status,
+            attemptNumber,
+            attemptsLeft: MAX_DELIVERY_ATTEMPTS - attemptNumber,
+            maxAttempts: MAX_DELIVERY_ATTEMPTS,
+        });
+    } catch (error) {
+        sendServerError(res, error, `${req.method} ${req.path}`);
+    }
+});
+
+// Shared by the three office steps below: checks the parcel's current status,
+// moves it to the new one, adds a timeline entry, then logs, tells the mobile
+// side and refreshes open admin screens — the same follow-up PUT /api/parcels
+// does. `check` can add one more rule (returns an error message or '').
+async function moveParcelInReturnFlow(req, res, { allowedFrom, newStatus, actionLabel, location, eventText, check, extraSet = {} }) {
+    const parcel = await Parcel.findById(req.params.id, 'trackingNumber status riderId deliveryAttempts');
+    if (!parcel) {
+        return res.status(404).json({ error: 'That parcel could not be found.' });
+    }
+
+    let problem = '';
+    if (!allowedFrom.includes(parcel.status)) {
+        problem = `This parcel is "${parcel.status}" and cannot be ${actionLabel}.`;
+    } else if (check) {
+        problem = check(parcel);
+    }
+    if (problem) {
+        logAudit(req, {
+            action: 'parcel_status_changed',
+            target: parcel.trackingNumber,
+            result: 'failure',
+            details: { from: parcel.status, to: newStatus, reason: problem },
+        });
+        return res.status(400).json({ error: problem });
+    }
+
+    // Guarded on the status we just checked: if someone else changed the
+    // parcel a moment ago, nothing is saved.
+    const updated = await Parcel.findOneAndUpdate(
+        { _id: parcel._id, status: parcel.status },
+        {
+            $set: { status: newStatus, ...extraSet },
+            $push: { events: { time: new Date().toISOString(), event: eventText(parcel), location, status: newStatus } },
+        },
+        { new: true, runValidators: true }
+    );
+    if (!updated) {
+        return res.status(409).json({ error: 'This parcel was just updated by someone else. Refresh and try again.' });
+    }
+
+    logAudit(req, {
+        action: 'parcel_status_changed',
+        target: updated.trackingNumber,
+        details: { from: parcel.status, to: newStatus },
+    });
+    if (String(parcel.riderId || '') !== String(updated.riderId || '')) {
+        logAudit(req, {
+            action: 'rider_assigned',
+            target: updated.trackingNumber,
+            details: { from: String(parcel.riderId || ''), to: String(updated.riderId || '') },
+        });
+    }
+
+    BridgeClient.sendStatus(updated.trackingNumber, newStatus)
+        .catch(e => console.warn('[Bridge→Android] sendStatus failed:', e.message));
+
+    sseBroadcaster.broadcast('parcel-updated', {
+        trackingNumber: updated.trackingNumber,
+        status: newStatus,
+        action: 'admin-update',
+        timestamp: new Date().toISOString(),
+    });
+
+    return res.json(updated);
+}
+
+// Hub confirms a parcel sent back after its last failed attempt has arrived.
+app.post('/api/parcels/:id/received-returned', authenticateToken, requireRole(...ANY_ROLE), async (req, res) => {
+    try {
+        await moveParcelInReturnFlow(req, res, {
+            allowedFrom: [DELIVERY_STATUS.RETURNED_TO_HUB],
+            newStatus: DELIVERY_STATUS.RECEIVED_RETURNED,
+            actionLabel: 'confirmed as received back at the hub',
+            location: 'Hub',
+            eventText: () => 'Returned parcel received at the hub',
+        });
+    } catch (error) {
+        sendServerError(res, error, `${req.method} ${req.path}`);
+    }
+});
+
+// Office sends the parcel out again, optionally with a different rider.
+app.post('/api/parcels/:id/redeliver', authenticateToken, requireRole(...OFFICE), async (req, res) => {
+    try {
+        const extraSet = {};
+        const riderId = typeof req.body?.riderId === 'string' ? req.body.riderId.trim() : '';
+        if (riderId) {
+            const riderQuery = [{ registrationId: riderId }];
+            if (mongoose.isValidObjectId(riderId)) riderQuery.push({ _id: riderId });
+            const rider = await Rider.findOne({ $or: riderQuery }, 'registrationId');
+            if (!rider) {
+                return res.status(400).json({ error: 'That rider could not be found. Please pick the rider again.' });
+            }
+            extraSet.riderId = riderId;
+        }
+
+        await moveParcelInReturnFlow(req, res, {
+            allowedFrom: REDELIVER_ALLOWED_FROM,
+            newStatus: DELIVERY_STATUS.OUT_FOR_DELIVERY,
+            actionLabel: 'sent out for delivery again',
+            location: 'Hub',
+            extraSet,
+            check: (parcel) => (parcel.deliveryAttempts.length >= MAX_DELIVERY_ATTEMPTS
+                ? `This parcel already had ${MAX_DELIVERY_ATTEMPTS} failed delivery attempts. It can only be returned to the seller.`
+                : ''),
+            eventText: (parcel) => `Sent out for delivery again (attempt ${parcel.deliveryAttempts.length + 1} of ${MAX_DELIVERY_ATTEMPTS})`,
+        });
+    } catch (error) {
+        sendServerError(res, error, `${req.method} ${req.path}`);
+    }
+});
+
+// Office closes the return: the parcel goes back to the seller.
+app.post('/api/parcels/:id/return-to-seller', authenticateToken, requireRole(...OFFICE), async (req, res) => {
+    try {
+        await moveParcelInReturnFlow(req, res, {
+            allowedFrom: [DELIVERY_STATUS.RECEIVED_RETURNED],
+            newStatus: DELIVERY_STATUS.RETURNED_TO_SELLER,
+            actionLabel: 'returned to the seller',
+            location: 'Hub',
+            eventText: () => 'Parcel returned to the seller',
+        });
     } catch (error) {
         sendServerError(res, error, `${req.method} ${req.path}`);
     }
@@ -1322,6 +1642,11 @@ app.post('/api/accounts', authenticateToken, requireRole('super_admin'), async (
             changedAt: new Date(),
         }];
         await newAccount.save();
+        logAudit(req, {
+            action: 'account_created',
+            target: newAccount.email,
+            details: { role: newAccount.role },
+        });
         const result = newAccount.toObject();
         delete result.password;
         res.status(201).json(result);
@@ -1342,8 +1667,9 @@ app.put('/api/accounts/:id', authenticateToken, requireRole('super_admin'), asyn
             if (passwordError) {
                 return res.status(400).json({ error: passwordError });
             }
-            const salt = await bcrypt.genSalt(10);
-            updateData.password = await bcrypt.hash(updateData.password, salt);
+            // Left as plain text on purpose: account.save() below runs the
+            // Account model's pre('save') hook, which hashes it. Hashing here
+            // too stored a hash-of-a-hash and locked the account out.
         } else {
             delete updateData.password;
         }
@@ -1351,17 +1677,34 @@ app.put('/api/accounts/:id', authenticateToken, requireRole('super_admin'), asyn
         const account = await Account.findById(req.params.id);
         if (!account) return res.status(404).json({ error: 'Account not found' });
 
+        const oldRole = account.role;
+        const roleChanging = Boolean(updateData.role) && updateData.role !== oldRole;
+        const auditRoleRefused = (reason) => logAudit(req, {
+            action: 'role_changed',
+            target: account.email,
+            result: 'failure',
+            details: { from: oldRole, to: updateData.role, reason },
+        });
+
         // 2026 audit C2: nobody may promote/demote themselves.
-        if (updateData.role && String(req.user.id) === String(account._id) && updateData.role !== account.role) {
+        if (roleChanging && String(req.user.id) === String(account._id)) {
+            auditRoleRefused('cannot change own role');
             return res.status(400).json({ error: 'You cannot change your own role.' });
         }
         // The last standing Super Admin can never be demoted or disabled.
         if (account.role === 'super_admin' && updateData.role && updateData.role !== 'super_admin') {
             const activeSupers = await Account.countDocuments({ role: 'super_admin', status: 'Active' });
             if (activeSupers <= 1) {
+                auditRoleRefused('last active Super Admin');
                 return res.status(400).json({ error: 'The last active Super Admin cannot be demoted.' });
             }
         }
+
+        // Audit records only the NAMES of changed fields, never their values
+        // (so a new password is never written to the log).
+        const changedFields = Object.keys(updateData).filter(
+            (k) => k === 'password' || String(account[k] ?? '') !== String(updateData[k] ?? '')
+        );
 
         Object.assign(account, updateData);
         account.statusHistory = account.statusHistory || [];
@@ -1372,6 +1715,18 @@ app.put('/api/accounts/:id', authenticateToken, requireRole('super_admin'), asyn
             changedAt: new Date(),
         });
         await account.save();
+        logAudit(req, {
+            action: 'account_updated',
+            target: account.email,
+            details: { fields: changedFields },
+        });
+        if (roleChanging) {
+            logAudit(req, {
+                action: 'role_changed',
+                target: account.email,
+                details: { from: oldRole, to: account.role },
+            });
+        }
         const result = account.toObject();
         delete result.password;
         res.json(result);
@@ -1396,6 +1751,10 @@ app.patch('/api/accounts/:id/status', authenticateToken, requireRole('super_admi
             changedAt: new Date(),
         });
         await account.save();
+        logAudit(req, {
+            action: account.status === 'Active' ? 'account_activated' : 'account_deactivated',
+            target: account.email,
+        });
         const result = account.toObject();
         delete result.password;
         res.json(result);
@@ -1412,17 +1771,35 @@ app.post('/api/accounts/login', loginLimiter, async (req, res) => {
         if (typeof email !== 'string' || typeof password !== 'string') {
             return res.status(400).json({ error: 'Please enter your email and password.' });
         }
-        const account = await Account.findOne({ email: email.toLowerCase().trim() });
+        const attemptedEmail = email.toLowerCase().trim();
+        // Failed attempts record only the email that was tried and why —
+        // never the password.
+        const auditLoginFailure = (reason, acct) => logAudit(req, {
+            action: 'login_failure',
+            target: attemptedEmail,
+            result: 'failure',
+            details: { reason },
+            actor: { id: acct ? acct._id : '', email: attemptedEmail, role: acct ? acct.role : 'anonymous' },
+        });
+        const account = await Account.findOne({ email: attemptedEmail });
         if (!account) {
+            auditLoginFailure('unknown email');
             return res.status(401).json({ error: 'Invalid email or password.' });
         }
         const isMatch = await account.comparePassword(password);
         if (!isMatch) {
+            auditLoginFailure('wrong password', account);
             return res.status(401).json({ error: 'Invalid email or password.' });
         }
         if (account.status === 'Deactivated') {
+            auditLoginFailure('account deactivated', account);
             return res.status(403).json({ error: 'This account has been deactivated. Contact your Super Admin.' });
         }
+        logAudit(req, {
+            action: 'login_success',
+            target: account.email,
+            actor: { id: account._id, email: account.email, role: account.role },
+        });
         const result = account.toObject();
         delete result.password;
 
@@ -1712,6 +2089,12 @@ app.delete('/api/admin/reset-database', authenticateToken, requireRole(...SUPER_
     }
 
     if (req.body?.confirm !== 'RESET') {
+        logAudit(req, {
+            action: 'database_reset',
+            target: 'sellers, riders',
+            result: 'failure',
+            details: { reason: 'missing or incorrect confirmation phrase' },
+        });
         return res.status(400).json({ error: 'Missing or incorrect confirmation phrase.' });
     }
     try {
@@ -1719,6 +2102,11 @@ app.delete('/api/admin/reset-database', authenticateToken, requireRole(...SUPER_
             Seller.deleteMany({}),
             Rider.deleteMany({}),
         ]);
+        logAudit(req, {
+            action: 'database_reset',
+            target: 'sellers, riders',
+            details: { sellersDeleted: sellersResult.deletedCount, ridersDeleted: ridersResult.deletedCount },
+        });
         res.json({
             success: true,
             deleted: {
@@ -1726,6 +2114,28 @@ app.delete('/api/admin/reset-database', authenticateToken, requireRole(...SUPER_
                 riders: ridersResult.deletedCount,
             },
         });
+    } catch (error) {
+        sendServerError(res, error, `${req.method} ${req.path}`);
+    }
+});
+
+// ── SECURITY AUDIT TRAIL (SH-09) ──
+// Super Admin only. Newest first, paginated (limit capped at 200), with
+// optional exact-match filters. Filter values are forced to strings so a
+// query-operator object can never reach the database query.
+app.get('/api/audit-logs', authenticateToken, requireRole('super_admin'), async (req, res) => {
+    try {
+        const limit = Math.min(Math.max(parseInt(req.query.limit) || 50, 1), 200);
+        const page = Math.max(parseInt(req.query.page) || 1, 1);
+        const filter = {};
+        ['action', 'result', 'source'].forEach((key) => {
+            if (typeof req.query[key] === 'string' && req.query[key]) filter[key] = req.query[key];
+        });
+        const [logs, total] = await Promise.all([
+            AuditLog.find(filter).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit).lean(),
+            AuditLog.countDocuments(filter),
+        ]);
+        res.json({ logs, total, page, limit });
     } catch (error) {
         sendServerError(res, error, `${req.method} ${req.path}`);
     }

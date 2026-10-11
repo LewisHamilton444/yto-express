@@ -8,6 +8,7 @@ import TableSkeleton from './components/ui/TableSkeleton';
 import EmptyState from './components/ui/EmptyState';
 import { PARCEL_STATUS_COLORS } from './components/ui/statusColors';
 import { takeSearchHandoff, onSearchHandoff } from './utils/searchHandoff';
+import useSSE from './services/useSSE';
 
 // Hub receiving adds two statuses on top of the shared parcel-status
 // vocabulary — this is the only screen that ever sets them.
@@ -23,6 +24,8 @@ export default function HubParcelReceiving() {
   const [search,     setSearch]     = useState(() => takeSearchHandoff('hub-parcels'));
   const [updatingId, setUpdatingId] = useState(null);
   const [confirmReturn, setConfirmReturn] = useState(null);
+  // true = show only parcels sent back after their last failed delivery.
+  const [onlyReturns, setOnlyReturns] = useState(false);
 
   // A parcel picked in the header search while this page is already open.
   useEffect(() => onSearchHandoff('hub-parcels', setSearch), []);
@@ -30,8 +33,9 @@ export default function HubParcelReceiving() {
   const toast = useToast();
   const flash = useCallback((msg, type = 'success') => toast(msg, type === 'error' ? 'error' : 'success'), [toast]);
 
-  const fetchParcels = useCallback(async () => {
-    setLoading(true);
+  // quiet = reload without the loading skeleton (used for live updates).
+  const fetchParcels = useCallback(async (quiet = false) => {
+    if (!quiet) setLoading(true);
     try {
       const data = await parcelsApi.list();
       setParcels(Array.isArray(data) ? data : []);
@@ -45,6 +49,36 @@ export default function HubParcelReceiving() {
   useEffect(() => {
     fetchParcels();
   }, [fetchParcels]);
+
+  // A rider's 3rd failed attempt (or another screen) changes a parcel — reload
+  // so it appears here without a manual refresh.
+  const { on } = useSSE();
+  useEffect(() => {
+    const unsub1 = on('parcel-updated', () => fetchParcels(true));
+    const unsub2 = on('parcel-synced', () => fetchParcels(true));
+    return () => { unsub1(); unsub2(); };
+  }, [on, fetchParcels]);
+
+  // Hub confirms a parcel sent back after its last failed delivery has arrived.
+  const confirmReturnedReceived = async (parcel) => {
+    setUpdatingId(parcel._id);
+    try {
+      const res = await apiFetch(`/parcels/${parcel._id}/received-returned`, { method: 'POST' });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        if (res.status === 400 || res.status === 409) fetchParcels();
+        throw new Error(body.error || 'Unable to confirm this parcel. Please try again.');
+      }
+      setParcels(prev => prev.map(p => (p._id === body._id ? body : p)));
+      flash(`${parcel.trackingNumber} is confirmed back at the hub.`, 'success');
+    } catch (err) {
+      flash(err.message || 'Unable to confirm this parcel. Please try again.', 'error');
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
+  const waitingReturns = parcels.filter(p => p.status === 'Returned to Hub').length;
 
   const markStatus = async (parcel, status) => {
     setUpdatingId(parcel._id);
@@ -72,12 +106,12 @@ export default function HubParcelReceiving() {
     }
   };
 
-  const filtered = parcels.filter(p =>
+  const filtered = parcels.filter(p => (!onlyReturns || p.status === 'Returned to Hub') && (
     p.trackingNumber?.toLowerCase().includes(search.toLowerCase()) ||
     p.senderName?.toLowerCase().includes(search.toLowerCase()) ||
     p.receiverName?.toLowerCase().includes(search.toLowerCase()) ||
     p.status?.toLowerCase().includes(search.toLowerCase())
-  );
+  ));
 
   return (
     <div style={{ flex: 1, overflowY: 'auto', backgroundColor: '#f9f7ff', fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" }}>
@@ -93,7 +127,16 @@ export default function HubParcelReceiving() {
         <div style={{ background: 'white', borderRadius: '12px', border: '1px solid #e8e0f0', overflow: 'hidden' }}>
           <div style={{ padding: '16px 20px', borderBottom: '1.5px solid #f0eaf8', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
             <p style={{ fontSize: '11px', color: '#888', margin: 0 }}>{filtered.length} of {parcels.length} parcels</p>
-            <div style={{ position: 'relative', flexShrink: 0 }}>
+            <div style={{ position: 'relative', flexShrink: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <button
+                type="button"
+                aria-pressed={onlyReturns}
+                onClick={() => setOnlyReturns(v => !v)}
+                title="Parcels sent back after their last failed delivery"
+                style={{ padding: '7px 12px', borderRadius: '8px', border: `1.5px solid ${onlyReturns ? '#f37021' : '#e0d5f0'}`, background: onlyReturns ? '#f37021' : '#faf9ff', color: onlyReturns ? 'white' : '#390955', fontSize: '12px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}
+              >
+                Waiting returns ({waitingReturns})
+              </button>
               <input
                 type="text"
                 placeholder="Search parcels..."
@@ -142,13 +185,17 @@ export default function HubParcelReceiving() {
                   const alreadyReceived = st === 'received at hub';
                   const alreadyReturned = st === 'returned' || st === 'returned to hub';
                   const closed = st === 'delivered' || st === 'cancelled' || st === 'canceled';
+                  // Parcels in the failed-delivery return flow are moved by
+                  // their own steps, never by the two buttons below.
+                  const inReturnFlow = st === 'received at hub (returned)' || st === 'returned to seller';
+                  const waitingReturn = st === 'returned to hub';
                   const busy = updatingId === p._id;
                   // Same rule the server enforces (HUB_STATUS_BLOCKED_FROM):
                   // Received only while a parcel is still on the way; Returned
                   // is a confirmed reversal, but never for a delivered or
                   // cancelled parcel (a failed delivery can still come back).
-                  const receivedDisabled = busy || alreadyReceived || alreadyReturned || closed || st === 'failed';
-                  const returnedDisabled  = busy || alreadyReturned || closed;
+                  const receivedDisabled = busy || alreadyReceived || alreadyReturned || closed || inReturnFlow || st === 'failed' || st === 'failed attempt';
+                  const returnedDisabled  = busy || alreadyReturned || closed || inReturnFlow;
                   return (
                   <tr key={p._id} className="hub-row" style={{ background: 'white' }}>
                     <td style={{ padding: '12px 16px', fontFamily: 'monospace', color: '#390955', fontWeight: 700, whiteSpace: 'nowrap', borderBottom: '1px solid #f3f0f8', position: 'sticky', left: 0, zIndex: 5, background: 'white', borderRight: '1px solid #f3f0f8', boxShadow: '2px 0 5px -2px rgba(0,0,0,0.06)' }}>{p.trackingNumber}</td>
@@ -158,6 +205,17 @@ export default function HubParcelReceiving() {
                     <td style={{ padding: '12px 16px', whiteSpace: 'nowrap', borderBottom: '1px solid #f3f0f8' }}><StatusBadge status={p.status} colorMap={HUB_STATUS_COLORS} /></td>
                     <td style={{ padding: '12px 16px', whiteSpace: 'nowrap', borderBottom: '1px solid #f3f0f8', textAlign: 'right' }}>
                       <div className="hub-action" style={{ display: 'inline-flex', gap: '6px' }}>
+                        {waitingReturn && (
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => confirmReturnedReceived(p)}
+                            title="Confirm this returned parcel has arrived at the hub"
+                            style={{ padding: '5px 10px', borderRadius: '6px', border: 'none', cursor: busy ? 'not-allowed' : 'pointer', background: '#f37021', color: 'white', fontSize: '11px', fontWeight: 700, opacity: busy ? 0.45 : 1, transition: 'all 0.15s ease', whiteSpace: 'nowrap' }}
+                          >
+                            Confirm Received
+                          </button>
+                        )}
                         <button
                           type="button"
                           disabled={receivedDisabled}

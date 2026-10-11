@@ -1,4 +1,19 @@
 const mongoose = require('mongoose');
+const { MAX_DELIVERY_ATTEMPTS, FAILED_ATTEMPT_REASONS, NOTES_MAX_LENGTH } = require('../utils/deliveryAttempts');
+
+// One failed delivery try by a rider. Written only by
+// POST /api/parcels/:trackingNumber/failed-attempt — never through the
+// generic PUT /api/parcels/:id (it is not in PARCEL_EDITABLE_FIELDS).
+const deliveryAttemptSchema = new mongoose.Schema({
+    attemptNumber: { type: Number, required: true, min: 1, max: MAX_DELIVERY_ATTEMPTS },
+    reason: { type: String, required: true, enum: FAILED_ATTEMPT_REASONS },
+    notes: { type: String, default: '', maxlength: NOTES_MAX_LENGTH },
+    riderId: { type: String, default: '' },
+    lat: { type: Number, default: null },
+    lng: { type: Number, default: null },
+    photoUrl: { type: String, default: '' },
+    attemptedAt: { type: Date, default: Date.now },
+}, { _id: false });
 
 const parcelSchema = new mongoose.Schema({
     trackingNumber: { type: String, required: true, unique: true },
@@ -63,7 +78,9 @@ const parcelSchema = new mongoose.Schema({
     // radiusMeters: 100 }. Mixed type — absent when delivery coordinates were
     // not supplied.
     trackingGeofence: { type: mongoose.Schema.Types.Mixed },
-    events: [{ 
+    // Failed delivery tries, oldest first. At most MAX_DELIVERY_ATTEMPTS.
+    deliveryAttempts: { type: [deliveryAttemptSchema], default: [] },
+    events: [{
         time: String, 
         event: String, 
         location: String, 
