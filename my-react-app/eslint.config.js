@@ -10,7 +10,7 @@ export default defineConfig([
   // was flooding it with false "require/module/process is not defined"
   // errors. Excluded here rather than reconfigured for Node, since it isn't
   // meant to be linted by the frontend's tooling at all.
-  globalIgnores(['dist', 'server']),
+  globalIgnores(['dist', 'server', 'test-results', 'playwright-report']),
   {
     files: ['**/*.{js,jsx}'],
     extends: [
@@ -39,5 +39,10 @@ export default defineConfig([
       'react-hooks/rules-of-hooks': 'error',
       'react-hooks/exhaustive-deps': 'warn',
     },
+  },
+  // Playwright tests and their config run in Node, not the browser.
+  {
+    files: ['e2e/**/*.js', 'playwright.config.js'],
+    languageOptions: { globals: { ...globals.node, ...globals.browser } },
   },
 ])

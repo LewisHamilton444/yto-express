@@ -35,11 +35,12 @@ function nearestHub(lat, lng) {
 
 // A rotated "nose" triangle points the way while the badge + emoji stay
 // upright and readable, regardless of heading.
-function buildRiderIcon(L, vehicleType, bearing, selected) {
+// riderId only feeds the invisible data-testid used by the Playwright e2e tests.
+function buildRiderIcon(L, vehicleType, bearing, selected, riderId = '') {
   const size = selected ? 40 : 32;
   const bg = selected ? '#f37021' : '#390955';
   const html = `
-    <div style="position:relative;width:${size}px;height:${size}px;transform:rotate(${bearing}deg);">
+    <div data-testid="map-rider-${riderId}" style="position:relative;width:${size}px;height:${size}px;transform:rotate(${bearing}deg);">
       <div style="position:absolute;top:-7px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-bottom:9px solid ${bg};"></div>
       <div style="width:${size}px;height:${size}px;border-radius:50%;background:${bg};border:2.5px solid white;box-shadow:0 3px 10px rgba(0,0,0,0.35);display:flex;align-items:center;justify-content:center;transform:rotate(${-bearing}deg);">
         <img src="${vehicleGlyphSvg(vehicleType, 'white')}" alt="" width="${selected ? 18 : 14}" height="${selected ? 18 : 14}" style="display:block;" />
@@ -47,7 +48,24 @@ function buildRiderIcon(L, vehicleType, bearing, selected) {
     </div>
   `;
   return L.divIcon({ className: '', html, iconSize: [size, size], iconAnchor: [size / 2, size / 2], popupAnchor: [0, -size / 2 - 6] });
-}function buildRiderPopupHtml(rider) {  const hub = LOGISTICS_HUBS.find(h => h.hubId === rider.destinationHubId);  // Position-source honesty: a real GPS fix (from the app's status-update  // telemetry) vs. the city-derived fallback.  const gpsLine = rider.hasRealGps    ? '<span style="color:#16a34a;font-weight:700;">● Live GPS</span><br/>'    : '<span style="color:#b45309;font-weight:700;">● Approximate (city-level)</span><br/>';  return `    <div style="font-family:sans-serif;font-size:12px;line-height:1.8;min-width:180px;">      <b style="color:#390955;font-size:13px;">${rider.fullName}</b><br/>      <span style="color:#9b82b2;font-size:11px;font-family:monospace;">${rider.riderId}</span><br/>      <span style="color:#555;">${vehicleTypeLabel(rider.vehicleType)} · ${rider.vehicleType}</span><br/>      ${gpsLine}      <span style="color:#888;">${rider.city || 'Luzon'}</span><br/>      <span style="color:#f37021;">${hub ? hub.hubName : '—'}</span>    </div>  `;}
+}function buildRiderPopupHtml(rider) {
+  const hub = LOGISTICS_HUBS.find(h => h.hubId === rider.destinationHubId);
+  // Position-source honesty: a real GPS fix (from the app's status-update
+  // telemetry) vs. the city-derived fallback.
+  const gpsLine = rider.hasRealGps
+    ? '<span style="color:#16a34a;font-weight:700;">● Live GPS</span><br/>'
+    : '<span style="color:#b45309;font-weight:700;">● Approximate (city-level)</span><br/>';
+  return `
+    <div style="font-family:sans-serif;font-size:12px;line-height:1.8;min-width:180px;">
+      <b style="color:#390955;font-size:13px;">${rider.fullName}</b><br/>
+      <span style="color:#9b82b2;font-size:11px;font-family:monospace;">${rider.riderId}</span><br/>
+      <span style="color:#555;">${vehicleTypeLabel(rider.vehicleType)} · ${rider.vehicleType}</span><br/>
+      ${gpsLine}
+      <span style="color:#888;">${rider.city || 'Luzon'}</span><br/>
+      <span style="color:#f37021;">${hub ? hub.hubName : '—'}</span>
+    </div>
+  `;
+}
 
 // Returns the cached route for a rider when its points haven't changed, so
 // React effects that depend on `rider.route` don't re-run on every refresh.
@@ -75,7 +93,7 @@ function AnimatedRiderMarker({ L, map, rider, isSelected, onSelect }) {
     routeLineRef.current = line;
 
     const marker = L.marker([rider.lat, rider.lng], {
-      icon: buildRiderIcon(L, rider.vehicleType, 0, false),
+      icon: buildRiderIcon(L, rider.vehicleType, 0, false, rider.riderId),
       zIndexOffset: 1000,
     })
       .bindPopup(buildRiderPopupHtml(rider))
@@ -99,7 +117,7 @@ function AnimatedRiderMarker({ L, map, rider, isSelected, onSelect }) {
   const handleFrame = useCallback((state) => {
     if (markerRef.current) {
       markerRef.current.setLatLng([state.lat, state.lng]);
-      markerRef.current.setIcon(buildRiderIcon(L, rider.vehicleType, state.bearing, isSelected));
+      markerRef.current.setIcon(buildRiderIcon(L, rider.vehicleType, state.bearing, isSelected, rider.riderId));
     }
     if (routeLineRef.current) {
       routeLineRef.current.setStyle({
@@ -136,7 +154,7 @@ function LiveGpsMarker({ L, map, rider, isSelected, onSelect }) {
   useEffect(() => {
     if (!L || !map) return undefined;
     const marker = L.marker([rider.lat, rider.lng], {
-      icon: buildRiderIcon(L, rider.vehicleType, bearingRef.current, false),
+      icon: buildRiderIcon(L, rider.vehicleType, bearingRef.current, false, rider.riderId),
       zIndexOffset: 1000,
     })
       .bindPopup(buildRiderPopupHtml(rider))
@@ -154,7 +172,7 @@ function LiveGpsMarker({ L, map, rider, isSelected, onSelect }) {
     const marker = markerRef.current;
     if (!marker) return undefined;
     if (rider.heading != null) bearingRef.current = rider.heading;
-    marker.setIcon(buildRiderIcon(L, rider.vehicleType, bearingRef.current, isSelected));
+    marker.setIcon(buildRiderIcon(L, rider.vehicleType, bearingRef.current, isSelected, rider.riderId));
     marker.setPopupContent(buildRiderPopupHtml(rider));
 
     const from = marker.getLatLng();
@@ -655,7 +673,9 @@ export default function LiveRiderMap({
                 {x.shape === 'line'   && <div style={{ width: 14, height: 3, background: x.color, borderRadius: 2, flexShrink: 0 }} />}
                 {x.label}
               </div>
-            ))}            <div style={{ fontSize: 9, opacity: 0.7, color: '#b45309' }}>              Riders without live GPS pings show city-level positions — real positions stream in from app status updates.            </div>
+            ))}            <div style={{ fontSize: 9, opacity: 0.7, color: '#b45309' }}>
+              Riders without live GPS pings show city-level positions — real positions stream in from app status updates.
+            </div>
           </div>
         </div>
 

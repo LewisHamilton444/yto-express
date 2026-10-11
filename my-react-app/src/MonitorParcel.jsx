@@ -366,7 +366,8 @@ export default function MonitorGeofenceBoundary() {
           />
         </div>
 
-        {/* Enhanced Active Riders Container */}
+        {/* Enhanced Active Riders Container. The data-testid attributes in the
+            table below are invisible hooks for the Playwright tests in e2e/. */}
         <SectionCard
           noPadding
           icon={Bike}
@@ -563,7 +564,7 @@ export default function MonitorGeofenceBoundary() {
                         {/* 1. Rider ID */}
                         <DataTable.Cell sticky>
                           <div className="flex items-center gap-1.5">
-                            <span className="font-mono font-bold text-xs text-[#f37021]">
+                            <span data-testid={`rider-id-${r.id}`} className="font-mono font-bold text-xs text-[#f37021]">
                               {r.id}
                             </span>
                             <button
@@ -591,7 +592,7 @@ export default function MonitorGeofenceBoundary() {
                         <DataTable.Cell>
                           <div className="flex flex-col gap-0.5">
                             <span className="text-slate-700 text-xs font-semibold">{r.vehicle}</span>
-                            <span className={`inline-flex items-center gap-1 text-[10px] font-semibold ${r.hasRealGps ? 'text-emerald-700' : 'text-amber-700'}`}>
+                            <span data-testid={`rider-signal-${r.id}`} className={`inline-flex items-center gap-1 text-[10px] font-semibold ${r.hasRealGps ? 'text-emerald-700' : 'text-amber-700'}`}>
                               <span className={`w-1.5 h-1.5 rounded-full ${r.hasRealGps ? 'bg-emerald-500' : 'bg-amber-500'}`} />
                               {r.hasRealGps ? 'Live GPS Ping' : 'Approximate'}
                             </span>
@@ -600,7 +601,7 @@ export default function MonitorGeofenceBoundary() {
 
                         {/* 4. Current Location */}
                         <DataTable.Cell>
-                          <span className="text-slate-700 text-xs font-medium">
+                          <span data-testid={`rider-location-${r.id}`} className="text-slate-700 text-xs font-medium">
                             {r.livePosition || [r.barangay, r.city, r.province].filter(Boolean).join(', ') || '—'}
                           </span>
                         </DataTable.Cell>
@@ -632,12 +633,12 @@ export default function MonitorGeofenceBoundary() {
                         {/* 6. Hub Proximity & Boundary */}
                         <DataTable.Cell>
                           <div className="flex flex-col gap-0.5">
-                            <div>
+                            <div data-testid={`rider-boundary-${r.id}`}>
                               <Badge tone={isInsideHubGeofence ? 'purple' : 'amber'}>
                                 {isInsideHubGeofence ? 'Inside Geofence' : 'In Transit'}
                               </Badge>
                             </div>
-                            <span className="text-[10px] font-mono text-slate-500">
+                            <span data-testid={`rider-distance-${r.id}`} className="text-[10px] font-mono text-slate-500">
                               {distToHub < 1 ? `${Math.round(distToHub * 1000)} m to hub` : `${distToHub.toFixed(1)} km to hub`}
                             </span>
                           </div>

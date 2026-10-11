@@ -655,8 +655,14 @@ app.post('/api/riders/:registrationId/location', requireBridgeKey, async (req, r
             lastLocation.heading = ((heading % 360) + 360) % 360;
         }
         // Use the phone's timestamp when it is a real date, otherwise server time.
+        // A timestamp more than 1 minute in the future is ignored (server time
+        // is used instead): a wrong phone clock could otherwise keep a rider
+        // showing "Live" long after the pings stop. Past timestamps are kept,
+        // so a delayed ping correctly shows as stale.
+        const MAX_FUTURE_SKEW_MS = 60 * 1000;
         const sentAt = new Date(req.body.timestamp);
-        if (req.body.timestamp && !Number.isNaN(sentAt.getTime())) {
+        if (req.body.timestamp && !Number.isNaN(sentAt.getTime())
+            && sentAt.getTime() <= Date.now() + MAX_FUTURE_SKEW_MS) {
             lastLocation.recordedAt = sentAt;
         }
 
