@@ -5,6 +5,7 @@ import { FileText, X, Store, Bike, ShieldCheck, XCircle, CheckCircle2 } from 'lu
 import { LEDGER_MODAL_CARD, LEDGER_MODAL_OVERLAY, LEDGER_MODAL_TINT, initialsOf } from '../ledger';
 import '../LedgerPage.css';
 import LedgerStatus from '../components/ui/LedgerStatus';
+import { extractLocationFromAddress } from '../sellerRiderData';
 import './ReviewModal.css';
 
 const clean = (v) => {
@@ -45,16 +46,29 @@ const ReviewModal = ({ item, type, onClose, onApprove, onReject }) => {
   const raw = item.raw || {};
   const isRider = type === 'rider';
   const submitted = formatSubmitted(item.submittedAt);
-  const storeName = clean(item.storeName || item.businessName);
+  const storeName = clean(item.storeName || raw.storeName);
   const pick = (...vals) => vals.map(clean).find(Boolean) || '';
+
+  const vehicleTypeVal = pick(item.vehicleType, raw.vehicleType, raw.vehicleModel, item.vehicle?.type);
+  const plateVal = pick(item.plateNumber, raw.vehiclePlate, raw.vehiclePlateNumber, item.vehicle?.plate);
+
+  const fullAddress = pick(
+    item.address,
+    raw.warehouseAddress,
+    raw.address?.street,
+    typeof raw.address === 'string' ? raw.address : '',
+    raw.assignedHub
+  );
+  const loc = extractLocationFromAddress(fullAddress);
 
   // Same grouped layout as the Seller Directory "View Details" modal.
   const groups = [
     {
-      title: 'Identification',
+      title: 'Identification & Credentials',
       rows: [
-        { label: 'ID Type', value: pick(item.governmentId?.type, raw.idType) },
-        { label: 'Government ID No.', value: pick(item.governmentId?.number, raw.idNumber) },
+        { label: 'ID Type', value: pick(item.governmentId?.type, raw.idType) || (isRider ? "Driver's License" : '') },
+        { label: isRider ? "Driver's License No." : 'Government ID / Permit No.', value: pick(item.governmentId?.number, raw.idNumber, raw.licenseNumber, raw.governmentIdNumber, raw.driverLicenseNumber) },
+        ...(isRider ? [{ label: 'Employment Classification', value: (raw.riderType || item.raw?.riderType || item.riderType) === 'COMPANY' ? 'Company Fleet Rider' : 'Partner Rider' }] : []),
       ],
     },
     {
@@ -65,28 +79,28 @@ const ReviewModal = ({ item, type, onClose, onApprove, onReject }) => {
       ],
     },
     {
-      title: isRider ? 'Hub Address' : 'Address',
+      title: isRider ? 'Hub / Service Address' : 'Address',
       rows: [
-        { label: 'Street', value: pick(item.address, raw.address?.street, typeof raw.address === 'string' ? raw.address : ''), wrap: true },
-        { label: 'City', value: pick(raw.city, raw.address?.city) },
-        { label: 'State / Province', value: pick(raw.state, raw.address?.state) },
-        { label: 'Postal Code', value: pick(raw.postalCode, raw.address?.postalCode) },
-        { label: 'Country', value: pick(raw.country, raw.address?.country) },
+        { label: 'Street', value: fullAddress, wrap: true },
+        { label: 'City', value: pick(raw.city, raw.address?.city, loc.city) },
+        { label: 'State / Province', value: pick(raw.state, raw.province, raw.address?.state, loc.province) },
+        { label: 'Postal Code', value: pick(raw.postalCode, raw.address?.postalCode, loc.postalCode) },
+        { label: 'Country', value: pick(raw.country, raw.address?.country, loc.country) },
       ],
     },
     isRider
       ? {
           title: 'Vehicle',
           rows: [
-            { label: 'Vehicle Type', value: pick(item.vehicleType, raw.vehicleType, item.vehicle?.type) || 'Motorcycle' },
-            { label: 'Plate Number', value: pick(item.plateNumber, raw.vehiclePlate, item.vehicle?.plate) },
+            { label: 'Vehicle Type', value: vehicleTypeVal },
+            { label: 'Plate Number', value: plateVal },
           ],
         }
       : {
           title: 'Store & Operations',
           rows: [
-            { label: 'Store Name', value: storeName || 'Personal Merchant' },
-            { label: 'Warehouse Address', value: pick(raw.warehouseAddress), wrap: true },
+            { label: 'Store Name', value: storeName },
+            { label: 'Warehouse Address', value: pick(raw.warehouseAddress, fullAddress), wrap: true },
             { label: 'Operating Hours', value: pick(raw.operatingHours) },
             { label: 'Registration Date', value: submitted },
           ],
@@ -124,7 +138,7 @@ const ReviewModal = ({ item, type, onClose, onApprove, onReject }) => {
         {isRider ? <Bike size={15} aria-hidden="true" /> : <Store size={15} aria-hidden="true" />}
         <span>
           <strong>Review {isRider ? 'Rider' : 'Seller'} Application</strong>
-          {' · '}Submitted via mobile app{submitted ? ` · ${submitted}` : ''}
+          {submitted ? ` · ${submitted}` : ''}
         </span>
       </div>
 
@@ -151,24 +165,26 @@ const ReviewModal = ({ item, type, onClose, onApprove, onReject }) => {
             <h4>Verification &amp; Documents</h4>
             {item.documents && item.documents.length > 0 ? (
               <div className="rv-docs">
-                {item.documents.map((doc) => {
+                {item.documents.map((doc, idx) => {
                   const src = doc.url || doc.dataUrl || '';
-                  const canPreview = isImageFile(doc.fileName) && !!src;
+                  const label = doc.label || doc.name || `Document #${idx + 1}`;
+                  const fileName = doc.fileName || (src ? src.split('/').pop().split('?')[0] : '') || label;
+                  const canPreview = Boolean(src);
                   const Tag = canPreview ? 'button' : 'div';
                   return (
                     <Tag
-                      key={doc.fileName}
+                      key={doc.fileName || doc.name || doc.url || idx}
                       type={canPreview ? 'button' : undefined}
                       className={`rv-doc${canPreview ? ' is-clickable' : ''}`}
-                      onClick={canPreview ? () => setZoomDoc(doc) : undefined}
-                      title={canPreview ? 'Click to enlarge' : undefined}
+                      onClick={canPreview ? () => setZoomDoc({ ...doc, label, fileName, src }) : undefined}
+                      title={canPreview ? 'Click to enlarge document' : undefined}
                     >
-                      {canPreview
-                        ? <img src={src} alt={doc.label} className="rv-doc-thumb" />
+                      {canPreview && src
+                        ? <img src={src} alt={label} className="rv-doc-thumb" />
                         : <span className="rv-doc-icon"><FileText size={18} aria-hidden="true" /></span>}
                       <span className="rv-doc-text">
-                        <span className="rv-doc-label">{doc.label}</span>
-                        <span className="rv-doc-file">{doc.fileName}</span>
+                        <span className="rv-doc-label">{label}</span>
+                        <span className="rv-doc-file">{fileName}</span>
                       </span>
                     </Tag>
                   );
@@ -176,8 +192,8 @@ const ReviewModal = ({ item, type, onClose, onApprove, onReject }) => {
               </div>
             ) : (
               <div className="rv-note">
-                <ShieldCheck size={16} aria-hidden="true" />
-                <span>Submitted directly from the mobile app. Phone &amp; email authenticated via OTP verification.</span>
+                <FileText size={16} aria-hidden="true" />
+                <span>No supporting documents uploaded for this application.</span>
               </div>
             )}
           </section>
@@ -226,22 +242,22 @@ const ReviewModal = ({ item, type, onClose, onApprove, onReject }) => {
           style={{ position: 'fixed', inset: 0, background: 'rgba(10,2,16,0.88)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999, padding: 24 }}
           role="dialog"
           aria-modal="true"
-          aria-label={zoomDoc.label}
+          aria-label={zoomDoc.label || zoomDoc.name || 'Document'}
         >
           <button
             onClick={() => setZoomDoc(null)}
             aria-label="Close document preview"
-            style={{ position: 'absolute', top: 18, right: 22, background: 'none', border: 'none', color: 'white', fontSize: 28, lineHeight: 1, cursor: 'pointer' }}
+            style={{ position: 'absolute', top: 18, right: 22, width: '30px', height: '30px', borderRadius: 'var(--yto-radius-button, 8px)', background: 'none', border: 'none', color: 'white', fontSize: 28, lineHeight: 1, cursor: 'pointer' }}
           >
             &times;
           </button>
           <div style={{ maxWidth: '92vw', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
             <img
-              src={zoomDoc.url || zoomDoc.dataUrl}
-              alt={zoomDoc.label}
+              src={zoomDoc.src || zoomDoc.url || zoomDoc.dataUrl}
+              alt={zoomDoc.label || zoomDoc.name || 'Document'}
               style={{ maxWidth: '92vw', maxHeight: '80vh', borderRadius: 10, boxShadow: '0 24px 70px rgba(0,0,0,0.55)', objectFit: 'contain', background: 'white' }}
             />
-            <div style={{ color: 'rgba(255,255,255,0.85)', fontSize: 12, fontWeight: 600 }}>{zoomDoc.label} — {zoomDoc.fileName}</div>
+            <div style={{ color: 'rgba(255,255,255,0.85)', fontSize: 13, fontWeight: 600 }}>{zoomDoc.label || zoomDoc.name || 'Document'} {zoomDoc.fileName ? `— ${zoomDoc.fileName}` : ''}</div>
           </div>
         </div>
       )}

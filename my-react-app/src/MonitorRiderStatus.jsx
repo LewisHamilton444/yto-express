@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { normalizeRider, RIDER_STATUS } from './sellerRiderData';
-import { ridersApi } from './services/api';
+import { ridersApi, apiFetch } from './services/api';
+import { isFinishedParcelStatus } from './utils/parcelStatus';
 import { VehicleIcon } from './components/ui/vehicleIcons';
 import { vehicleGlyphSvg } from './components/ui/vehicleIconUtils';
-import { Archive, RotateCcw } from 'lucide-react';
+import { Archive, RotateCcw, FileText } from 'lucide-react';
 import PageHeader from './components/ui/PageHeader';
 import RefreshButton from './components/ui/RefreshButton';
 import FilterBar from './components/ui/FilterBar';
@@ -17,6 +18,7 @@ import useSSE from './services/useSSE';
 // service area). Positions here are approximate city-level references only.
 import { CITY_COORDS } from './luzonCityCoords';
 import ModalHeader from './components/ui/ModalHeader';
+import PhotoAvatar from './components/ui/PhotoAvatar';
 
 
 function MapView({ lat, lng, vehicle, uniqueId }) {
@@ -24,6 +26,7 @@ function MapView({ lat, lng, vehicle, uniqueId }) {
   const mapInstanceRef = useRef(null);
   const markerRef = useRef(null);
 
+  // Initialize Leaflet map once on mount
   useEffect(() => {
     if (!containerRef.current) return;
 
@@ -37,6 +40,7 @@ function MapView({ lat, lng, vehicle, uniqueId }) {
 
     const initLeaflet = () => {
       if (!window.L || !containerRef.current || mapInstanceRef.current) return;
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
       const L = window.L;
       const map = L.map(containerRef.current, {
         zoomControl: true,
@@ -67,9 +71,18 @@ function MapView({ lat, lng, vehicle, uniqueId }) {
       if (mapInstanceRef.current) {
         mapInstanceRef.current.remove();
         mapInstanceRef.current = null;
+        markerRef.current = null;
       }
     };
-  }, [lat, lng, vehicle]);
+  }, []); // Run once
+
+  // Smoothly pan marker and map when coordinates stream without remounting Leaflet
+  useEffect(() => {
+    if (mapInstanceRef.current && markerRef.current && Number.isFinite(lat) && Number.isFinite(lng)) {
+      markerRef.current.setLatLng([lat, lng]);
+      mapInstanceRef.current.panTo([lat, lng], { animate: true });
+    }
+  }, [lat, lng]);
 
   return <div ref={containerRef} id={`map-${uniqueId}`} style={{ width: '100%', height: '150px', borderRadius: '8px', border: '1px solid #e2e8f0', marginTop: '12px' }} />;
 }
@@ -82,6 +95,7 @@ export default function MonitorRiderStatus() {
   const [lastUpdated, setLastUpdated] = useState('');
   const [selectedRider, setSelectedRider] = useState(null);
   const [riderTab, setRiderTab] = useState('details');
+  const [zoomDoc, setZoomDoc] = useState(null);
   const [riderTimeline, setRiderTimeline] = useState([]);
   const [timelineLoading, setTimelineLoading] = useState(false);
 
@@ -90,17 +104,67 @@ export default function MonitorRiderStatus() {
   const [dutyFilter, setDutyFilter] = useState('all');
   const [vehicleFilter, setVehicleFilter] = useState('all');
 
+  // Step state, held parcels, and live streaming GPS pings
+  const stepStateRef = useRef({});
+  const parcelByRiderRef = useRef({});
+  const heldParcelsByRiderRef = useRef({});
+  const livePingsRef = useRef({});
+
   const attachLiveGps = useCallback((normalizedRiders) => normalizedRiders.map((r, index) => {
     const coords = CITY_COORDS[r.location.city];
+    const rId = String(r.riderId || '').trim();
+    const rMongoId = String(r._id || '').trim();
+    const heldTracking = parcelByRiderRef.current[rId] || (rMongoId ? parcelByRiderRef.current[rMongoId] : null);
+    const heldParcel = heldParcelsByRiderRef.current[rId] || (rMongoId ? heldParcelsByRiderRef.current[rMongoId] : null);
+
+    // 1. Live SSE GPS ping from mobile app
+    const ping = livePingsRef.current[rId] || (rMongoId ? livePingsRef.current[rMongoId] : null);
+
+    // 2. Real GPS fix stored on Rider.lastLocation in MongoDB
+    const lastLoc = r.lastLocation || r.raw?.lastLocation;
+    const hasLastLoc = lastLoc && Number.isFinite(Number(lastLoc.lat)) && Number.isFinite(Number(lastLoc.lng))
+      && !(Number(lastLoc.lat) === 0 && Number(lastLoc.lng) === 0);
+
+    // 3. Active parcel telemetry or delivery destination
+    const heldRiderLat = Number(heldParcel?.riderLat ?? heldParcel?.telemetry?.riderLat);
+    const heldRiderLng = Number(heldParcel?.riderLng ?? heldParcel?.telemetry?.riderLng);
+    const hasHeldFix = Number.isFinite(heldRiderLat) && Number.isFinite(heldRiderLng) && !(heldRiderLat === 0 && heldRiderLng === 0);
+
+    let lat = null;
+    let lng = null;
+    let hasRealGps = false;
+
+    if (ping && Number.isFinite(Number(ping.lat)) && Number.isFinite(Number(ping.lng))) {
+      lat = Number(ping.lat);
+      lng = Number(ping.lng);
+      hasRealGps = true;
+    } else if (hasLastLoc) {
+      lat = Number(lastLoc.lat);
+      lng = Number(lastLoc.lng);
+      hasRealGps = true;
+    } else if (hasHeldFix) {
+      lat = heldRiderLat;
+      lng = heldRiderLng;
+      hasRealGps = true;
+    } else if (heldParcel && Number.isFinite(Number(heldParcel.destLat)) && Number.isFinite(Number(heldParcel.destLng))) {
+      lat = Number(heldParcel.destLat);
+      lng = Number(heldParcel.destLng);
+      hasRealGps = true;
+    } else if (coords) {
+      lat = coords.lat + (index * 0.0015);
+      lng = coords.lng + (index * 0.0015);
+      hasRealGps = false;
+    }
+
     return {
       ...r,
+      // D-13: true while the app says this rider stepped away from a doorstep
+      steppedAway: !!heldTracking && stepStateRef.current[heldTracking] === 'departed',
       liveGps: {
-        latitude:  coords ? coords.lat + (index * 0.0015) : null,
-        longitude: coords ? coords.lng + (index * 0.0015) : null,
+        latitude: lat,
+        longitude: lng,
+        hasRealGps,
         city: r.location.city || 'Unknown',
-        // Duty state comes from the rider's real Android profile toggle
-        // (bridge sync-duty-status). Moving/idle is not sent by the app yet,
-        // so no such claim is made here.
         isOnline: r.isOnDuty === true || r.raw?.isOnDuty === true,
       },
     };
@@ -109,6 +173,26 @@ export default function MonitorRiderStatus() {
   const fetchRiders = useCallback(async (isManual = false) => {
     try {
       if (isManual) setIsRefreshing(true);
+      try {
+        const parcels = await apiFetch('/parcels');
+        const map = {};
+        const heldMap = {};
+        if (Array.isArray(parcels)) {
+          for (const p of parcels) {
+            if (!p || !p.riderId || isFinishedParcelStatus(p.status)) continue;
+            const pid = String(p.riderId).trim();
+            if (!map[pid]) {
+              map[pid] = p.trackingNumber;
+              heldMap[pid] = p;
+            }
+          }
+        }
+        parcelByRiderRef.current = map;
+        heldParcelsByRiderRef.current = heldMap;
+      } catch {
+        parcelByRiderRef.current = {};
+        heldParcelsByRiderRef.current = {};
+      }
       const data = await ridersApi.list();
 
       if (Array.isArray(data) && data.length > 0) {
@@ -208,9 +292,43 @@ export default function MonitorRiderStatus() {
     const unsubUser = onSSE('user-synced', (ev) => {
       if (!ev || ev.role === 'rider') fetchRiders();
     });
+    // Record the doorstep step before refreshing, so the rebuilt list
+    // shows (and clears) the indicator without waiting for the 15s poll.
+    const unsubStep = onSSE('courier-step', (payload) => {
+      const trackingNumber = payload && payload.trackingNumber;
+      if (trackingNumber && (payload.event === 'departed' || payload.event === 'returned')) {
+        stepStateRef.current[trackingNumber] = payload.event;
+      }
+      fetchRiders();
+    });
+    const unsubPing = onSSE('rider-ping', (payload) => {
+      if (payload && (payload.riderId || payload.registrationId)) {
+        const id = String(payload.riderId || payload.registrationId);
+        const lat = payload.lat ?? payload.latitude;
+        const lng = payload.lng ?? payload.longitude;
+        if (lat != null && lng != null) {
+          livePingsRef.current[id] = { lat: Number(lat), lng: Number(lng), ts: Date.now() };
+          fetchRiders();
+        }
+      }
+    });
+    const unsubLoc = onSSE('location-synced', (payload) => {
+      if (payload && (payload.riderId || payload.registrationId || payload.id)) {
+        const id = String(payload.riderId || payload.registrationId || payload.id);
+        const lat = payload.lat ?? payload.latitude;
+        const lng = payload.lng ?? payload.longitude;
+        if (lat != null && lng != null) {
+          livePingsRef.current[id] = { lat: Number(lat), lng: Number(lng), ts: Date.now() };
+          fetchRiders();
+        }
+      }
+    });
     return () => {
       if (typeof unsubDuty === 'function') unsubDuty();
       if (typeof unsubUser === 'function') unsubUser();
+      if (typeof unsubStep === 'function') unsubStep();
+      if (typeof unsubPing === 'function') unsubPing();
+      if (typeof unsubLoc === 'function') unsubLoc();
     };
   }, [onSSE, fetchRiders]);
 
@@ -220,7 +338,7 @@ export default function MonitorRiderStatus() {
 
 
   return (
-    <div style={{ flex: 1, padding: '24px 30px 48px', minHeight: '100vh', background: '#f0ecf7', fontFamily: "'DM Sans', sans-serif", color: '#390955', overflowY: 'auto' }}>
+    <div style={{ flex: 1, padding: '24px 30px 48px', minHeight: '100vh', background: '#f0ecf7', fontFamily: "'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif", color: '#390955', overflowY: 'auto' }}>
       <style>{`@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(1.4)}}`}</style>
 
       <PageHeader
@@ -307,7 +425,7 @@ export default function MonitorRiderStatus() {
               <button
                 type="button"
                 onClick={handleResetFilters}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-lg transition-colors cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-white text-[#475569] text-xs font-bold border border-[#cbd5e1] hover:brightness-105 active:scale-95 transition-all cursor-pointer"
               >
                 <RotateCcw size={11} aria-hidden="true" />
                 <span>Reset</span>
@@ -343,11 +461,30 @@ export default function MonitorRiderStatus() {
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '12px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: '#f0eaf8', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#390955' }}>
-                        <VehicleIcon type={r.vehicleType} size={19} />
-                      </div>
+                      {/* D-16: the rider's own photo when the app synced one,
+                          otherwise the vehicle glyph exactly as before. */}
+                      {r.profilePhotoUrl ? (
+                        <PhotoAvatar photo={r.profilePhotoUrl} name={r.fullName} style={{ width: '36px', height: '36px', flexShrink: 0 }} />
+                      ) : (
+                        <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: '#f0eaf8', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#390955' }}>
+                          <VehicleIcon type={r.vehicleType} size={19} />
+                        </div>
+                      )}
                       <div>
-                        <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: '#1a1a1a' }}>{r.fullName}</h4>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: '#1a1a1a' }}>{r.fullName}</h4>
+                          {/* D-13: the same doorstep state the map badge shows,
+                              in words, so an operator scanning the roster sees
+                              who is currently away from a waiting customer. */}
+                          {r.steppedAway && (
+                            <span
+                              data-testid={`rider-stepped-away-${r.riderId}`}
+                              style={{ fontSize: '10px', fontWeight: 700, background: '#fef3c7', color: '#b45309', border: '1px solid #fcd34d', padding: '2px 7px', borderRadius: 6, whiteSpace: 'nowrap' }}
+                            >
+                              Stepped away
+                            </span>
+                          )}
+                        </div>
                         <p style={{ margin: 0, fontSize: '11px', color: '#888' }}>{r.riderId} · {r.vehicleType}</p>
                       </div>
                     </div>
@@ -382,12 +519,24 @@ export default function MonitorRiderStatus() {
                       <span style={{ color: '#888' }}>Hub Address:</span>
                       <span style={{ fontWeight: 600, color: '#390955', fontSize: '11px', textAlign: 'right', maxWidth: '60%' }}>{r.assignedHub || r.raw?.assignedHub || r.raw?.assignedHubAddress || r.raw?.address || (r.location?.city ? `${r.location.city} Sorting Hub` : '—')}</span>
                     </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: '#888' }}>Approx. Location:</span>
-                      <span style={{ fontFamily: 'monospace', fontWeight: 600, fontSize: '11px' }}>
-                        {r.liveGps.latitude != null && r.liveGps.longitude != null
-                          ? `${Number(r.liveGps.latitude).toFixed(4)}, ${Number(r.liveGps.longitude).toFixed(4)} (city-level)`
-                          : 'Location unavailable'}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ color: '#888' }}>{r.liveGps.hasRealGps ? 'Live Location:' : 'Approx. Location:'}</span>
+                      <span style={{ fontFamily: 'monospace', fontWeight: 600, fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        {r.liveGps.latitude != null && r.liveGps.longitude != null ? (
+                          <>
+                            {r.liveGps.hasRealGps && (
+                              <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#10b981', display: 'inline-block' }} />
+                            )}
+                            <span style={{ color: r.liveGps.hasRealGps ? '#065f46' : '#555' }}>
+                              {`${Number(r.liveGps.latitude).toFixed(4)}, ${Number(r.liveGps.longitude).toFixed(4)}`}
+                            </span>
+                            <span style={{ fontSize: '10px', color: r.liveGps.hasRealGps ? '#10b981' : '#888' }}>
+                              {r.liveGps.hasRealGps ? '(Live GPS)' : '(city-level)'}
+                            </span>
+                          </>
+                        ) : (
+                          'Location unavailable'
+                        )}
                       </span>
                     </div>
                   </div>
@@ -410,7 +559,7 @@ export default function MonitorRiderStatus() {
           maxWidth={480}
           padding={0}
           onBackdropClick={() => setSelectedRider(null)}
-          cardStyle={{ borderRadius: 12, overflow: 'hidden', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)' }}
+          cardStyle={{ overflow: 'hidden', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)' }}
         >
           {/* Header */}
           <ModalHeader
@@ -426,7 +575,7 @@ export default function MonitorRiderStatus() {
             {[{ key: 'details', label: 'Details' }, { key: 'timeline', label: 'Timeline' }].map(tab => (
               <button key={tab.key} onClick={() => setRiderTab(tab.key)} style={{
                 flex: 1, padding: '12px 0', border: 'none', cursor: 'pointer',
-                fontSize: 13, fontWeight: 600, transition: 'all 0.2s',
+                fontSize: 13, fontWeight: 700, transition: 'all 0.2s',
                 background: riderTab === tab.key ? '#faf7fd' : 'transparent',
                 color: riderTab === tab.key ? '#390955' : '#7b6d8d',
                 borderBottom: riderTab === tab.key ? '2px solid #390955' : '2px solid transparent',
@@ -443,10 +592,17 @@ export default function MonitorRiderStatus() {
                   { label: 'Full Name', value: selectedRider.fullName },
                   { label: 'Email Address', value: selectedRider.email || '—' },
                   { label: 'Phone Number', value: selectedRider.phone || '—' },
-                  { label: 'Vehicle Info', value: `${selectedRider.vehicleType}${selectedRider.vehiclePlateNumber ? ` (${selectedRider.vehiclePlateNumber})` : ''}` },
+                  { label: 'Vehicle Info', value: selectedRider.vehicleType ? `${selectedRider.vehicleType}${selectedRider.vehiclePlateNumber ? ` (${selectedRider.vehiclePlateNumber})` : ''}` : 'No vehicle registered yet' },
                   { label: 'Plate Number', value: selectedRider.vehiclePlateNumber || '—' },
                   { label: 'License Number', value: selectedRider.driverLicenseNumber || '—' },
-                  { label: 'Hub Address', value: selectedRider.assignedHub || selectedRider.raw?.assignedHub || selectedRider.raw?.assignedHubAddress || selectedRider.raw?.address || (selectedRider.location?.city ? `${selectedRider.location.city} Sorting Hub` : 'Pulilan Sorting Hub') },
+                  { label: 'Employment Classification', value: selectedRider.riderType === 'COMPANY' ? 'Company Fleet Rider' : (selectedRider.riderType === 'PARTNER' ? 'Partner Rider' : (selectedRider.riderType || 'Standard Courier')) },
+                  { label: 'Hub Address', value: selectedRider.assignedHub || selectedRider.raw?.assignedHub || selectedRider.raw?.assignedHubAddress || selectedRider.raw?.address || (selectedRider.location?.city ? `${selectedRider.location.city} Sorting Hub` : 'Unassigned') },
+                  {
+                    label: 'GPS Coordinates',
+                    value: selectedRider.liveGps?.latitude != null && selectedRider.liveGps?.longitude != null
+                      ? `${Number(selectedRider.liveGps.latitude).toFixed(4)}, ${Number(selectedRider.liveGps.longitude).toFixed(4)} ${selectedRider.liveGps.hasRealGps ? '(Live GPS)' : '(city-level)'}`
+                      : 'Unavailable',
+                  },
                   { label: 'Duty Status', value: selectedRider.liveGps?.isOnline ? 'On Duty' : 'Off Duty', badge: true, color: selectedRider.liveGps?.isOnline ? { bg: '#e6f9ed', color: '#1e7e34' } : { bg: '#f5f5f5', color: '#888888' } },
                   { label: 'Account Status', value: selectedRider.status, badge: true, color: selectedRider.status === 'Active' ? { bg: '#d1fae5', color: '#065f46' } : { bg: '#fee2e2', color: '#991b1b' } },
                   { label: 'Deliveries Completed', value: selectedRider.performance?.deliveriesCount ?? 0 },
@@ -462,6 +618,45 @@ export default function MonitorRiderStatus() {
                     )}
                   </div>
                 ))}
+
+                {/* Rider Verification Documents */}
+                <div style={{ marginTop: 14 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: '#390955', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.4px' }}>
+                    Verification Documents
+                  </div>
+                  {((selectedRider.documents && selectedRider.documents.length > 0) || (selectedRider.raw?.documents && selectedRider.raw.documents.length > 0)) ? (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))', gap: 8 }}>
+                      {(selectedRider.documents?.length ? selectedRider.documents : selectedRider.raw?.documents).map((doc, idx) => {
+                        const src = doc.url || doc.dataUrl || '';
+                        const label = doc.label || doc.name || `Document #${idx + 1}`;
+                        return (
+                          <div
+                            key={idx}
+                            onClick={() => src && setZoomDoc({ src, label })}
+                            style={{
+                              border: '1px solid #ede6f7', borderRadius: 8, padding: 8,
+                              background: '#faf7fd', cursor: src ? 'pointer' : 'default',
+                              display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center'
+                            }}
+                          >
+                            {src ? (
+                              <img src={src} alt={label} style={{ width: '100%', height: 70, objectFit: 'cover', borderRadius: 5, marginBottom: 5 }} />
+                            ) : (
+                              <div style={{ width: '100%', height: 70, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f3eef8', borderRadius: 5, marginBottom: 5 }}>
+                                <FileText size={20} color="#7b6d8d" />
+                              </div>
+                            )}
+                            <span style={{ fontSize: 10, fontWeight: 600, color: '#390955', lineHeight: 1.2 }}>{label}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: 12, color: '#888', fontStyle: 'italic', padding: '4px 0' }}>
+                      No verification documents attached to this rider account.
+                    </div>
+                  )}
+                </div>
               </>
             )}
 
@@ -499,6 +694,33 @@ export default function MonitorRiderStatus() {
             )}
           </div>
         </Modal>
+      )}
+
+      {/* Zoomed document preview */}
+      {zoomDoc && (
+        <div
+          onClick={() => setZoomDoc(null)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(10,2,16,0.88)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999, padding: 24 }}
+          role="dialog"
+          aria-modal="true"
+          aria-label={zoomDoc.label}
+        >
+          <button
+            onClick={() => setZoomDoc(null)}
+            aria-label="Close preview"
+            style={{ position: 'absolute', top: 18, right: 22, width: '30px', height: '30px', borderRadius: 'var(--yto-radius-button, 8px)', background: 'none', border: 'none', color: 'white', fontSize: 28, lineHeight: 1, cursor: 'pointer' }}
+          >
+            &times;
+          </button>
+          <div style={{ maxWidth: '92vw', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+            <img
+              src={zoomDoc.src}
+              alt={zoomDoc.label}
+              style={{ maxWidth: '92vw', maxHeight: '80vh', borderRadius: 10, boxShadow: '0 24px 70px rgba(0,0,0,0.55)', objectFit: 'contain', background: 'white' }}
+            />
+            <div style={{ color: 'rgba(255,255,255,0.85)', fontSize: 13, fontWeight: 600 }}>{zoomDoc.label}</div>
+          </div>
+        </div>
       )}
     </div>
   );

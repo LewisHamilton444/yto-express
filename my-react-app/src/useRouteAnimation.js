@@ -37,9 +37,10 @@ function bearingDeg(a, b) {
 // `speedKmh` is the label-facing speed (what you'd show in a "Moving • 35
 // km/h" tooltip). `simSpeedMultiplier` separately controls how fast the
 // on-screen marker actually travels, since a real 30 km/h over tens of real
-// kilometers would take minutes to visibly move on a dashboard — it's a
-// presentation concern, not the reported speed.
-export function useRouteAnimation(route, { speedKmh = 30, simSpeedMultiplier = 500 } = {}, onUpdate) {
+// `speedKmh` is the reported courier speed (e.g. 35 km/h).
+// `simSpeedMultiplier` scales visualization pace to a calm, observable speed (default 18x).
+// When the courier reaches the destination, it holds at the destination stop (does NOT reverse).
+export function useRouteAnimation(route, { speedKmh = 30, simSpeedMultiplier = 18, startProgress = 0, loop = false } = {}, onUpdate) {
   const onUpdateRef = useRef(onUpdate);
   useEffect(() => { onUpdateRef.current = onUpdate; }, [onUpdate]);
 
@@ -47,26 +48,45 @@ export function useRouteAnimation(route, { speedKmh = 30, simSpeedMultiplier = 5
     if (!route || route.length < 2) return undefined;
 
     const segments = [];
+    let totalDistKm = 0;
     for (let i = 0; i < route.length - 1; i++) {
       const a = route[i], b = route[i + 1];
-      segments.push({ a, b, distKm: haversineKm(a.lat, a.lng, b.lat, b.lng), bearing: bearingDeg(a, b) });
+      const dist = haversineKm(a.lat, a.lng, b.lat, b.lng);
+      totalDistKm += dist;
+      segments.push({ a, b, distKm: dist, bearing: bearingDeg(a, b) });
     }
 
     let segmentIndex = 0;
     let segmentProgress = 0;
-    let direction = 1; // 1 = forward along route, -1 = reversing back to start
+
+    // Initialize progress along route based on courier's active delivery progress
+    const clampedStart = Math.max(0, Math.min(0.98, Number(startProgress) || 0));
+    if (clampedStart > 0 && totalDistKm > 0) {
+      const targetDist = clampedStart * totalDistKm;
+      let accum = 0;
+      for (let i = 0; i < segments.length; i++) {
+        if (accum + segments[i].distKm >= targetDist) {
+          segmentIndex = i;
+          segmentProgress = segments[i].distKm > 0 ? (targetDist - accum) / segments[i].distKm : 0;
+          break;
+        }
+        accum += segments[i].distKm;
+      }
+    }
+
     let lastTs = null;
     let rafId = null;
+    let completed = false;
 
     const tick = (ts) => {
       if (lastTs == null) lastTs = ts;
-      const dtSec = (ts - lastTs) / 1000;
+      const dtSec = Math.min((ts - lastTs) / 1000, 0.1); // Cap step delta to prevent jumps
       lastTs = ts;
 
       const seg = segments[segmentIndex];
-      if (seg && seg.distKm > 0) {
+      if (seg && seg.distKm > 0 && !completed) {
         const kmPerSec = (speedKmh * simSpeedMultiplier) / 3600;
-        segmentProgress += (kmPerSec * dtSec / seg.distKm) * direction;
+        segmentProgress += (kmPerSec * dtSec) / seg.distKm;
 
         if (segmentProgress >= 1) {
           if (segmentIndex < segments.length - 1) {
@@ -74,15 +94,12 @@ export function useRouteAnimation(route, { speedKmh = 30, simSpeedMultiplier = 5
             segmentProgress = 0;
           } else {
             segmentProgress = 1;
-            direction = -1; // reached the end — head back
-          }
-        } else if (segmentProgress <= 0) {
-          if (segmentIndex > 0) {
-            segmentIndex -= 1;
-            segmentProgress = 1;
-          } else {
-            segmentProgress = 0;
-            direction = 1; // back at the start — head out again
+            if (loop) {
+              segmentIndex = 0;
+              segmentProgress = 0;
+            } else {
+              completed = true; // Hold at destination point
+            }
           }
         }
       }
@@ -91,17 +108,16 @@ export function useRouteAnimation(route, { speedKmh = 30, simSpeedMultiplier = 5
       if (current) {
         const lat = current.a.lat + (current.b.lat - current.a.lat) * segmentProgress;
         const lng = current.a.lng + (current.b.lng - current.a.lng) * segmentProgress;
-        const bearing = direction >= 0 ? current.bearing : (current.bearing + 180) % 360;
-        onUpdateRef.current?.({ lat, lng, bearing, speedKmh, direction });
+        const bearing = current.bearing;
+        onUpdateRef.current?.({ lat, lng, bearing, speedKmh, progress: segmentProgress, isArrived: completed });
       }
 
-      rafId = requestAnimationFrame(tick);
+      if (!completed || loop) {
+        rafId = requestAnimationFrame(tick);
+      }
     };
 
     rafId = requestAnimationFrame(tick);
     return () => { if (rafId) cancelAnimationFrame(rafId); };
-    // route/speedKmh define the whole animation; onUpdate is read via a ref
-    // above specifically so a fresh inline callback each render doesn't
-    // restart the animation loop.
-  }, [route, speedKmh, simSpeedMultiplier]);
+  }, [route, speedKmh, simSpeedMultiplier, startProgress, loop]);
 }

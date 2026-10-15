@@ -9,6 +9,9 @@ import Badge from './components/ui/Badge';
 import PaginationControls from './PaginationControls';
 import FilterBar from './components/ui/FilterBar';
 import RefreshButton from './components/ui/RefreshButton';
+import Modal from './components/ui/Modal';
+import ModalHeader from './components/ui/ModalHeader';
+import { useToast } from './components/ui/useToast';
 import ExportDropdown from './components/ui/ExportDropdown';
 import StatCard from './components/ui/StatCard';
 import { exportToCSV, exportToExcel, exportToWord, exportToPDF } from './exportUtils';
@@ -16,8 +19,24 @@ import useSSE from './services/useSSE';
 import {
   Search, Copy, Check, CheckCheck, Bell,
   Package, Truck, AlertTriangle, UserCheck, Calendar,
-  X, CheckCircle2,
+  X, CheckCircle2, Send,
 } from 'lucide-react';
+
+// D-5 / G-8: the announcement composer's options. The values are the exact
+// words the app understands; the labels are what an operator reads.
+const BROADCAST_AUDIENCES = [
+  { value: 'all',      label: 'Everyone (customers, sellers, riders)' },
+  { value: 'customer', label: 'Customers' },
+  { value: 'seller',   label: 'Sellers' },
+  { value: 'rider',    label: 'Riders' },
+];
+
+const BROADCAST_TYPES = [
+  { value: 'system_alert',   label: 'Service notice' },
+  { value: 'delivery_update', label: 'Delivery update' },
+  { value: 'order_update',   label: 'Order update' },
+  { value: 'security_alert', label: 'Account alert' },
+];
 
 const ROLE_TONE = {
   customer: { label: 'Customer', tone: 'blue' },
@@ -90,6 +109,12 @@ export default function AppNotifications() {
   const [rowsPerPage,   setRowsPerPage]   = useState(15);
   const [copiedId,      setCopiedId]      = useState(null);
   const [lastUpdated, setLastUpdated]     = useState('');
+  // D-5 / G-8 announcement composer.
+  const [composerOpen, setComposerOpen]   = useState(false);
+  const [sending,      setSending]        = useState(false);
+  const [sendError,    setSendError]      = useState('');
+  const [draft, setDraft] = useState({ title: '', message: '', audience: 'all', type: 'system_alert' });
+  const toast = useToast();
 
   // Server is the source of truth for read state: PATCH /api/notifications/:id/read
   const [readIds, setReadIds] = useState([]);
@@ -98,7 +123,7 @@ export default function AppNotifications() {
   }, [notifications, readIds]);
 
   const orderEventsCount = useMemo(() => {
-    return notifications.filter(n => ['order_update', 'new_order'].includes(n.type)).length;
+    return notifications.filter(n => ['order_update', 'new_order', 'task_claim_lost', 'task_withdrawn'].includes(n.type)).length;
   }, [notifications]);
 
   const systemEventsCount = useMemo(() => {
@@ -190,7 +215,7 @@ export default function AppNotifications() {
       // Segment filter
       if (activeSegment === 'unread' && !isUnread) return false;
       if (activeSegment === 'read' && isUnread) return false;
-      if (activeSegment === 'orders' && !['order_update', 'new_order'].includes(n.type)) return false;
+      if (activeSegment === 'orders' && !['order_update', 'new_order', 'task_claim_lost', 'task_withdrawn'].includes(n.type)) return false;
       if (activeSegment === 'system' && !(['system_alert', 'system', 'security'].includes(n.type) || (n.relatedId && n.relatedId.startsWith('TICK-')))) return false;
 
       // Dropdown filters
@@ -258,6 +283,39 @@ export default function AppNotifications() {
     { id: 'system', label: 'System & Issues', count: systemEventsCount },
   ];
 
+  // Sends the composed announcement to the app's notification inbox. The
+  // plain-language error copy is fixed here rather than echoing whatever the
+  // server said, matching how the other write actions on this page behave.
+  const sendAnnouncement = async () => {
+    const title = draft.title.trim();
+    const message = draft.message.trim();
+    if (!title || !message) {
+      setSendError('Add a title and a message before sending.');
+      return;
+    }
+    setSending(true);
+    setSendError('');
+    try {
+      const res = await apiFetch('/notifications/broadcast', {
+        method: 'POST',
+        body: JSON.stringify({ title, message, audience: draft.audience, type: draft.type }),
+      });
+      const delivered = res && res.data && Number.isFinite(Number(res.data.delivered))
+        ? Number(res.data.delivered)
+        : 0;
+      toast(`Announcement sent to ${delivered} account${delivered === 1 ? '' : 's'}.`, 'success');
+      setComposerOpen(false);
+      setDraft({ title: '', message: '', audience: 'all', type: 'system_alert' });
+      fetchNotifications();
+    } catch {
+      // A refused or unreachable bridge means nothing was delivered; say so
+      // rather than leaving the operator to guess.
+      setSendError('Could not send the announcement. Nothing was delivered — please try again.');
+    } finally {
+      setSending(false);
+    }
+  };
+
   return (
     <div className="yto-page-container w-full space-y-6">
       <PageHeader
@@ -271,9 +329,114 @@ export default function AppNotifications() {
               onClick={fetchNotifications}
               isRefreshing={loading}
             />
+            {/* D-5 / G-8: the portal can now originate a message. */}
+            <button
+              type="button"
+              onClick={() => { setSendError(''); setComposerOpen(true); }}
+              aria-label="Send an announcement to the app"
+              className="inline-flex items-center gap-2 rounded-lg bg-brand-purple px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-brand-purple-dark focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple"
+            >
+              <Send size={14} aria-hidden="true" />
+              Send announcement
+            </button>
           </div>
         }
       />
+
+      {composerOpen && (
+        <Modal
+          label="Send an announcement to the app"
+          maxWidth={520}
+          padding={0}
+          onBackdropClick={() => { if (!sending) setComposerOpen(false); }}
+        >
+          <ModalHeader title="Send an announcement" icon={Bell} onClose={() => setComposerOpen(false)} />
+          <div style={{ padding: '24px' }}>
+          <div className="mb-5">
+              <p className="mt-1 text-xs text-brand-muted">
+                This appears in the mobile app for the people you pick. It is not an email or a text message.
+              </p>
+          </div>
+
+          <div className="mt-5 space-y-4">
+            <label className="block">
+              <span className="text-[11px] font-bold uppercase tracking-wide text-brand-muted">Title</span>
+              <input
+                type="text"
+                value={draft.title}
+                maxLength={120}
+                onChange={(e) => setDraft({ ...draft, title: e.target.value })}
+                placeholder="e.g. Hub closed on Monday"
+                className="mt-1 w-full rounded-lg border border-brand-purple-200 px-3 py-2 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple"
+              />
+            </label>
+
+            <label className="block">
+              <span className="text-[11px] font-bold uppercase tracking-wide text-brand-muted">Message</span>
+              <textarea
+                value={draft.message}
+                maxLength={1000}
+                rows={4}
+                onChange={(e) => setDraft({ ...draft, message: e.target.value })}
+                placeholder="Write the message in plain words."
+                className="mt-1 w-full rounded-lg border border-brand-purple-200 px-3 py-2 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple"
+              />
+            </label>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <label className="block">
+                <span className="text-[11px] font-bold uppercase tracking-wide text-brand-muted">Who gets it</span>
+                <select
+                  value={draft.audience}
+                  onChange={(e) => setDraft({ ...draft, audience: e.target.value })}
+                  className="mt-1 w-full rounded-lg border border-brand-purple-200 px-3 py-2 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple"
+                >
+                  {BROADCAST_AUDIENCES.map((a) => (
+                    <option key={a.value} value={a.value}>{a.label}</option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="block">
+                <span className="text-[11px] font-bold uppercase tracking-wide text-brand-muted">Kind of message</span>
+                <select
+                  value={draft.type}
+                  onChange={(e) => setDraft({ ...draft, type: e.target.value })}
+                  className="mt-1 w-full rounded-lg border border-brand-purple-200 px-3 py-2 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-purple"
+                >
+                  {BROADCAST_TYPES.map((t) => (
+                    <option key={t.value} value={t.value}>{t.label}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            {sendError && (
+              <p className="rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-700" role="alert">{sendError}</p>
+            )}
+          </div>
+
+          <div className="mt-6 flex justify-end gap-2">
+            <button
+              type="button"
+              disabled={sending}
+              onClick={() => setComposerOpen(false)}
+              className="rounded-lg border border-brand-purple-200 px-4 py-2 text-xs font-bold text-brand-purple disabled:opacity-60"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={sending}
+              onClick={sendAnnouncement}
+              className="rounded-lg bg-brand-purple px-4 py-2 text-xs font-bold text-white disabled:opacity-60"
+            >
+              {sending ? 'Sending...' : 'Send now'}
+            </button>
+          </div>
+          </div>
+        </Modal>
+      )}
 
       {/* KPI Overview Summary Strip */}
       <StatCard.Grid cols={4} className="mb-6">
@@ -321,7 +484,7 @@ export default function AppNotifications() {
             {unreadCount > 0 && (
               <button
                 onClick={markAllRead}
-                className="h-[32px] px-3.5 bg-[#390955] text-white rounded-lg text-xs font-bold hover:brightness-110 transition-all cursor-pointer shadow-2xs inline-flex items-center gap-1.5"
+                className="h-[32px] px-3.5 bg-[#390955] text-white rounded-lg text-xs font-bold hover:brightness-110 transition-all cursor-pointer inline-flex items-center gap-1.5"
               >
                 <CheckCheck size={13} aria-hidden="true" /> Mark {unreadCount} as seen
               </button>
@@ -432,7 +595,7 @@ export default function AppNotifications() {
             {hasActiveFilters && (
               <button
                 onClick={handleClearFilters}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white text-[#475569] text-xs font-bold border border-[#cbd5e1] hover:brightness-105 active:scale-95 transition-all shadow-xs cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white text-[#475569] text-xs font-bold border border-[#cbd5e1] hover:brightness-105 active:scale-95 transition-all cursor-pointer"
               >
                 <X size={13} aria-hidden="true" /> Clear Filters
               </button>
@@ -457,7 +620,7 @@ export default function AppNotifications() {
                 action={
                   <button
                     onClick={() => setActiveSegment('all')}
-                    className="h-[34px] px-4 bg-[#390955] text-white text-xs font-bold rounded-lg hover:brightness-110 cursor-pointer shadow-sm"
+                    className="h-[34px] px-4 bg-[#390955] text-white text-xs font-bold rounded-lg hover:brightness-110 cursor-pointer"
                   >
                     View All Notifications
                   </button>
@@ -476,7 +639,7 @@ export default function AppNotifications() {
                   hasActiveFilters ? (
                     <button
                       onClick={handleClearFilters}
-                      className="h-[34px] px-4 bg-[#390955] text-white text-xs font-bold rounded-lg hover:brightness-110 cursor-pointer shadow-sm"
+                      className="h-[34px] px-4 bg-[#390955] text-white text-xs font-bold rounded-lg hover:brightness-110 cursor-pointer"
                     >
                       Clear Filters
                     </button>
@@ -530,7 +693,7 @@ export default function AppNotifications() {
                           <button
                             type="button"
                             onClick={(e) => handleCopyRef(e, n.relatedId)}
-                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold text-[#390955] bg-white border border-[#dcd3e8] hover:bg-[#f0eaf8] transition-colors cursor-pointer"
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold text-[#390955] bg-white border border-[#dcd3e8] hover:bg-[#f0eaf8] transition-colors cursor-pointer"
                             title="Copy reference ID"
                           >
                             {copiedId === n.relatedId ? (
@@ -565,7 +728,7 @@ export default function AppNotifications() {
                             e.stopPropagation();
                             markOneRead(n._id);
                           }}
-                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold text-[#390955] bg-white border border-[#390955]/30 hover:bg-[#390955] hover:text-white transition-all cursor-pointer shadow-2xs"
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold text-[#390955] bg-white border border-[#390955]/30 hover:bg-[#390955] hover:text-white transition-all cursor-pointer"
                           title="Mark this alert as acknowledged"
                         >
                           <Check size={11} /> Mark Seen

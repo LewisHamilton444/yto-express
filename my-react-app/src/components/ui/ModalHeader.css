@@ -68,24 +68,23 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
+  width: 30px;
+  height: 30px;
   flex-shrink: 0;
-  border-radius: 10px;
-  border: 1px solid #e5e7eb;
-  background: #ffffff;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
   color: #6b7280;
   cursor: pointer;
   transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 .mh-close:hover:not(:disabled) {
   background: #f9fafb;
-  border-color: #d1d5db;
   color: #111827;
 }
 .mh-close:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3px rgba(57, 9, 85, 0.18);
+  outline: 2px solid #f37021;
+  outline-offset: 2px;
 }
 .mh-close:disabled {
   opacity: 0.45;

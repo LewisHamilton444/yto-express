@@ -4,9 +4,10 @@
 //     a local mock API server, never deployed, never touches real MongoDB.
 //   - src/services/api.js (VITE_DEMO_MODE=1, opt-in, build-time only):
 //     transparently fills an empty real API response on a live deployment
-//     that has no records yet (pre-launch UAT), paired with the visible
-//     "Demo Data" banner in AnalyticsDashboard.jsx so it's never mistaken
-//     for real records. Off by default — a plain build never activates it.
+//     that has no records yet (pre-launch UAT). The former "Demo Data"
+//     banner in AnalyticsDashboard.jsx was removed (2026-10-14); the
+//     fallback itself is unchanged. Off by default — a plain build never
+//     activates it.
 //     See AGENTS2.md §7 (the Web app is REAL-only outside this opt-in flag).
 //
 // Pure and isomorphic on purpose: no Node built-ins (fs/http/path), no
@@ -42,7 +43,7 @@ function daysAgoISO(days, extraMs = 0) { return new Date(Date.now() - days * 864
 
 const PARCEL_STATUSES  = ['Delivered', 'In Transit', 'Pending', 'Out for Delivery', 'Cancelled'];
 const RIDER_STATUSES   = ['Active', 'On Delivery', 'Idle', 'Offline'];
-const ISSUE_STATUSES   = ['Open', 'Under Investigation', 'Resolved', 'Closed'];
+const ISSUE_STATUSES   = ['Open', 'Under Investigation', 'Resolved', 'Rejected', 'Closed'];
 const ISSUE_CATEGORIES = [
   'Damaged Package', 'Delayed Delivery', 'Wrong Item Received', 'Lost Package',
   'Courier Behavior', 'Incorrect Address', 'Billing / Payment Issue', 'Other',
@@ -158,6 +159,12 @@ function makeSellers(n) {
       accountNumber: pad(9200000000 + i * 317, 10),
       fullName: SELLER_OWNERS[i - 1] || `Owner ${i}`,
       storeName: STORE_NAMES[i - 1] || `QA Store ${i}`,
+      // D-16: the first seller carries the photo the app syncs, so the Seller
+      // Directory's photo-over-initials path is reachable in the mock portal.
+      // The rest stay blank, which is the normal case and must keep rendering
+      // the initials avatar.
+      profilePhotoUrl: i === 1 ? SELLER_PROFILE_PHOTO : '',
+      coverPhotoUrl: '',
       warehouseAddress: `${loc.address}, ${loc.city}`,
       operatingHours: '8:00 AM - 6:00 PM, Mon-Sat',
       idType: pick(ID_TYPES),
@@ -201,12 +208,32 @@ function makeCustomers(n) {
   return out;
 }
 
+// ── Return-handover evidence images (D-19) ──────────────────────────────
+// Tiny but genuinely valid PNGs (a signature stroke on white; a boxed parcel
+// with sealing tape), inlined as data URLs exactly the way the app uploads
+// them. They exist so the mock portal can prove the Return Handover panel
+// renders real images, and so nothing here depends on a file path or a
+// network fetch that a preview build would not have.
+// A small real PNG avatar for the demo seller (see makeSellers). Same inline
+// data-URL transport the app uses for a synced profile photo.
+const SELLER_PROFILE_PHOTO = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAIAAAAlC+aJAAAAkUlEQVR42u3YwRFAQBAEwP0KQxgCkYfA/fj5iIBS5Ti3umoCmP7tbKzz1nQCAAAAAAAAAAAAIBdg6MajfB1wUv0hRrzfvqwhqrQvaIha7UsZomL7IobfA262v28AAAAAAABwSjQOaP4azbAHMiyyDJs4w1fCYwvgSpapfy4AAAAAAAAAAAAAAAAAmQFGPUAmwA5rZb78CUH0GwAAAABJRU5ErkJggg==';
+
+const RETURN_SIGNATURE_PHOTO = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAKAAAAAwCAIAAAAZy+Y5AAAAhElEQVR42u3cqw0AIAxAwQ6BZP81YQHCRxBoci/YVnACR7TzSqnzY+TJyLAADNg9Anb1gI0ANvIHsBIFGLAAC7AAC7AACzBgARZgARZgARZgwAIswAIswAIswAIMWIAFWIAFWIAFGLAAC7AAKw/w8kOJnW8lLDldAhgwYMDyBguwAOtGHeCfqJfjHG4RAAAAAElFTkSuQmCC';
+const RETURN_CONDITION_PHOTO = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAKAAAAB4CAIAAAD6wG44AAABHUlEQVR42u3RUQ0AEABFUbl8iSWAML5lkEEeHZgNO9st8N4JMSZ9XHABYAEWYAEWYAEWYMACLMACLMACrAPAvZZrGy3vdOcowIABAwYMGDBgwIABAwYMGDBgwIABAwYMGDBgwIABAwYMGDBgwIABAwYMGDBgwIABAwYMGDBgwIABAwYMGDBgwIABAwYMGDBgwIABAwYMGDBgwIABAwYMGDBgwIABAwYMGDBgwIABAwYMGDBgwIABAwYMGDBgwIABAwYMGDBgwIABAwYMGDBgwIABAwYMGDBgwIABAwYMGDBgwIABAwYMGDBgwIABAwYMGDBgwIABAwYMGDDgdWA9EWDAAizAAizAAizAgAVYgAVYgLXVBFqlMhJvJazbAAAAAElFTkSuQmCC';
+
 // ── Parcels (linked to sellers, customers, riders) ──────────────────────
 function makeParcels(n, riders, sellers, customers) {
   const activeRiders = riders.filter((r) => r.status !== 'Pending');
   const out = [];
   for (let i = 1; i <= n; i++) {
-    const status = pick(PARCEL_STATUSES);
+    // The pick still runs for i === 1 so the shared pseudo-random sequence
+    // that every later row draws from is unchanged; only the resulting status
+    // is overridden. Parcel 1 is the dataset's one completed return handover
+    // (D-19) — it makes the Return Handover panel reachable in the mock
+    // portal, using the same returnFlow subdocument shape the app writes and
+    // GET /api/parcels reads.
+    const pickedStatus = pick(PARCEL_STATUSES);
+    const status = i === 1 ? 'Returned' : pickedStatus;
     const daysAgo = Math.floor(rnd() * 12) + 1;
     const seller = sellers[(i - 1) % sellers.length];
     const customer = customers[(i - 1) % customers.length];
@@ -240,6 +267,13 @@ function makeParcels(n, riders, sellers, customers) {
       const cancelAt = daysAgoISO(daysAgo, 5400000);
       events.push({ time: cancelAt, event: 'Cancelled by merchant', location: origin, status: 'Cancelled' });
       updatedAt = cancelAt;
+    }
+    if (status === 'Returned') {
+      const returningAt = daysAgoISO(daysAgo, 18000000);
+      events.push({ time: returningAt, event: 'Returning to merchant', location: 'Pulilan Main Hub', status: 'Returning' });
+      const returnedAt = daysAgoISO(daysAgo, 21600000);
+      events.push({ time: returnedAt, event: 'Handed back to merchant', location: origin, status: 'Returned' });
+      updatedAt = returnedAt;
     }
 
     const paymentMode = pick(['COD', 'Prepaid']);
@@ -275,6 +309,21 @@ function makeParcels(n, riders, sellers, customers) {
       estimatedDeliveryDate: daysAgoISO(daysAgo - 2),
       actualDeliveryDate: status === 'Delivered' ? updatedAt : null,
       qrPayload: `YTOQR1|${trackingNumber}|${seller.registrationId}|${customer.customerId}`,
+      // The merchant-handover evidence a rider captures in the app on the
+      // return leg. Empty string, never null, because that is what the mobile
+      // Shipment subdocument stores and what the bridge forwards.
+      returnFlow: status === 'Returned'
+        ? {
+          signerName: seller.fullName,
+          signerRole: 'SELLER',
+          signerPhone: seller.phone,
+          completedAt: updatedAt,
+          signaturePhoto: RETURN_SIGNATURE_PHOTO,
+          conditionPhoto: RETURN_CONDITION_PHOTO,
+          latitude: COORDS[origin] ? COORDS[origin][0] : null,
+          longitude: COORDS[origin] ? COORDS[origin][1] : null,
+        }
+        : null,
       sellerEnterpriseId: seller.registrationId,
       customerEnterpriseId: customer.customerId,
       riderLat: rider && status !== 'Cancelled' ? destCoord[0] + (rnd() - 0.5) * 0.02 : null,

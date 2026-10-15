@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { setAuthToken, getAuthToken } from './services/api';
+import { setAuthToken, getAuthToken, apiFetch } from './services/api';
 import { ToastProvider } from './components/ui/ToastContext';
 import ErrorBoundary from './components/ui/ErrorBoundary';
 import { PAGE_MAP } from './pageMap';
@@ -58,6 +58,16 @@ function App() {
     window.addEventListener('yto:auth_expired', onAuthExpired);
     return () => window.removeEventListener('yto:auth_expired', onAuthExpired);
   }, []);
+
+  // I-6: nudge the App-to-Web reconciler once per portal load so an operator
+  // sees app-side changes without waiting for the server's 60s loop. The
+  // endpoint is super_admin-gated (any other role would just get a 403), and a
+  // failure here changes nothing the operator needs to know about — the loop
+  // keeps running server-side.
+  useEffect(() => {
+    if (currentUser?.role !== 'super_admin') return;
+    apiFetch('/bridge/reconcile', { method: 'POST' }).catch(() => {});
+  }, [currentUser]);
 
   useEffect(() => {
     if (currentUser && (window.location.hash || '').replace(/^#\/?/, '') !== activePage) {

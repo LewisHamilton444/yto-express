@@ -232,10 +232,10 @@ export default function ManageAccounts() {
     table:       { width: '100%', borderCollapse: 'collapse', fontSize: '13px' },
     th:          { padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#64748b', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', textTransform: 'uppercase', fontSize: '11px', letterSpacing: '0.05em' },
     td:          { padding: '14px 16px', color: '#390955', borderBottom: '1px solid #f3edfb', verticalAlign: 'middle' },
-    btnPrimary:  { padding: '9px 18px', borderRadius: '9px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', background: '#f37021', color: 'white', border: 'none', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: '6px' },
-    btnOutline:  { padding: '7px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', background: 'white', color: '#390955', border: '1.5px solid #e4d8f2', fontFamily: 'inherit' },
-    btnDanger:   { padding: '7px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', background: '#fee2e2', color: '#991b1b', border: '1px solid #fca5a5', fontFamily: 'inherit' },
-    btnSuccess:  { padding: '7px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', background: '#d1fae5', color: '#065f46', border: '1px solid #6ee7b7', fontFamily: 'inherit' },
+    btnPrimary:  { padding: '10px 22px', borderRadius: 'var(--yto-radius-button, 8px)', fontSize: '13px', fontWeight: 700, cursor: 'pointer', background: '#f37021', color: 'white', border: 'none', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: '6px' },
+    btnOutline:  { padding: '6px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', background: 'white', color: '#390955', border: '1.5px solid #e4d8f2', fontFamily: 'inherit' },
+    btnDanger:   { padding: '6px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', background: '#fee2e2', color: '#991b1b', border: '1px solid #fca5a5', fontFamily: 'inherit' },
+    btnSuccess:  { padding: '6px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', background: '#d1fae5', color: '#065f46', border: '1px solid #6ee7b7', fontFamily: 'inherit' },
     label:       { fontSize: '11px', fontWeight: 700, color: '#7b6d8d', textTransform: 'uppercase', letterSpacing: '0.6px', display: 'block', marginBottom: '6px' },
   };
 
@@ -501,7 +501,7 @@ export default function ManageAccounts() {
 
       {/* Add / Edit Modal */}
       {showModal && (
-        <Modal tint="rgba(26,6,40,0.55)" blur={false} maxWidth={480} padding={0} cardStyle={{ borderRadius: 12, overflow: 'hidden', boxShadow: '0 20px 40px rgba(0,0,0,0.18)' }}>
+        <Modal tint="rgba(26,6,40,0.55)" blur={false} maxWidth={480} padding={0} cardStyle={{ overflow: 'hidden', boxShadow: '0 20px 40px rgba(0,0,0,0.18)' }}>
             <ModalHeader title={editingAccount ? 'Edit Account' : 'Add New Account'} icon={editingAccount ? User : Users} onClose={() => setShowModal(false)} />
             <form onSubmit={handleSave} style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
@@ -524,7 +524,7 @@ export default function ManageAccounts() {
                   <label style={s.label}>{editingAccount ? 'New Password (leave blank to keep current)' : 'Password *'}</label>
                   <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                     <input style={{ ...s.input, paddingRight: '40px' }} type={showFormPass ? 'text' : 'password'} name="password" value={formData.password} onChange={handleFormChange} placeholder={editingAccount ? 'Leave blank to keep current' : 'Enter password'} required={!editingAccount} />
-                    <button type="button" onClick={() => setShowFormPass(p => !p)} style={{ position: 'absolute', right: '12px', background: 'none', border: 'none', cursor: 'pointer', color: '#a890c0' }}>
+                    <button type="button" onClick={() => setShowFormPass(p => !p)} style={{ position: 'absolute', right: '12px', width: '28px', height: '28px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: 0, background: 'none', border: 'none', borderRadius: 'var(--yto-radius-button, 8px)', cursor: 'pointer', color: '#a890c0' }}>
                       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                         {showFormPass ? <><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></> : <><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></>}
                       </svg>
@@ -549,7 +549,7 @@ export default function ManageAccounts() {
 
       {/* Deactivate Confirm Modal */}
       {showDeactivateConfirm && (
-        <Modal tint="rgba(26,6,40,0.55)" blur={false} maxWidth={400} padding={0} cardStyle={{ borderRadius: 12, overflow: 'hidden', boxShadow: '0 20px 40px rgba(0,0,0,0.18)' }}>
+        <Modal tint="rgba(26,6,40,0.55)" blur={false} maxWidth={400} padding={0} cardStyle={{ overflow: 'hidden', boxShadow: '0 20px 40px rgba(0,0,0,0.18)' }}>
             <ModalHeader title="Deactivate Account" icon={Shield} tone="danger" onClose={() => setShowDeactivateConfirm(null)} />
             <div style={{ padding: '24px' }}>
               <p style={{ fontSize: '14px', color: '#390955', lineHeight: 1.6, marginBottom: '8px' }}>
@@ -560,7 +560,7 @@ export default function ManageAccounts() {
               </p>
               <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
                 <button style={s.btnOutline} onClick={() => setShowDeactivateConfirm(null)}>Cancel</button>
-                <button style={{ ...s.btnDanger, padding: '9px 18px', fontSize: '13px' }} onClick={() => confirmToggle(showDeactivateConfirm)}>Yes, Deactivate</button>
+                <button style={{ ...s.btnDanger, padding: '10px 22px', fontSize: '13px' }} onClick={() => confirmToggle(showDeactivateConfirm)}>Yes, Deactivate</button>
               </div>
             </div>
         </Modal>

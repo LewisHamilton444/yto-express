@@ -4,7 +4,7 @@ import {
   ClipboardList, Download, FileSpreadsheet,
   Users, PackageSearch, AlertTriangle,
 } from 'lucide-react';
-import { apiFetch, parcelsApi, ridersApi, isDemoMode } from './services/api';
+import { apiFetch, parcelsApi, ridersApi } from './services/api';
 import { exportToCSV } from './exportUtils';
 import { barHeightPercent, niceAxisMax, axisTicks } from './utils/barHeight';
 import useSSE from './services/useSSE';
@@ -21,6 +21,7 @@ import yto_logo from './yto_express_logo.png';
 // App.jsx uses for hash validation — so there is exactly one key -> component
 // source of truth for the whole portal.
 import { PAGE_MAP } from './pageMap';
+import Logout from './Logout';
 import PeakAlertBanner                   from "./PeakAlertBanner";
 import GlobalHeader                      from "./GlobalHeader";
 import ListSkeleton from "./components/ui/ListSkeleton";
@@ -38,14 +39,14 @@ function mapSellerToPendingItem(seller) {
     fullName: seller.fullName || '—',
     contactNumber: seller.phone || '—',
     email: seller.email || '—',
-    storeName: seller.storeName || '—',
+    storeName: seller.storeName || '',
     governmentId: {
-      type: seller.idType || 'National ID',
-      number: seller.idNumber || '—',
+      type: seller.idType || '',
+      number: seller.idNumber || '',
     },
     address: typeof seller.address === 'string' ? seller.address : (seller.address?.street || '—'),
-    businessName: seller.storeName || seller.fullName || '—',
-    businessType: 'Retail',
+    businessName: seller.storeName || '',
+    businessType: seller.businessType || seller.raw?.businessType || '',
     submittedAt: seller.createdAt || new Date().toISOString(),
     status: seller.status || 'Pending Verification',
     documents: Array.isArray(seller.documents) ? seller.documents : [],
@@ -60,11 +61,11 @@ function mapRiderToPendingItem(rider) {
     fullName: rider.riderName || '—',
     contactNumber: rider.phone || '—',
     email: rider.email || '—',
-    vehicleType: rider.vehicleType || 'Motorcycle',
+    vehicleType: rider.vehicleType || rider.vehicleModel || '',
     plateNumber: rider.vehiclePlate || '—',
     governmentId: {
-      type: rider.idType || "Driver's License",
-      number: rider.idNumber || '—',
+      type: rider.idType || (rider.licenseNumber ? "Driver's License" : ''),
+      number: rider.idNumber || rider.licenseNumber || '',
     },
     address: typeof rider.address === 'string' ? rider.address : (rider.address?.street || '—'),
     submittedAt: rider.createdAt || new Date().toISOString(),
@@ -447,6 +448,9 @@ export default function AnalyticsDashboard({
     try { return localStorage.getItem('yto_sidebar_collapsed') === '1'; } catch { return false; }
   });
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  // Logout is a dialog over the current page (not a route), so confirming or
+  // dismissing it always lands back where the user already was.
+  const [logoutOpen, setLogoutOpen] = useState(false);
   // Which parent group's children are shown as a flyout next to the icon rail
   // (collapsed mode only). Closed on mouse-leave or navigation.
   const [railFlyout, setRailFlyout] = useState(null);
@@ -490,13 +494,25 @@ export default function AnalyticsDashboard({
       if (sellersRes.ok) {
         const data = await sellersRes.json();
         if (Array.isArray(data)) {
-          setPendingSellers(data.map(mapSellerToPendingItem));
+          const realSellers = data.filter(s => {
+            const name = String(s.fullName || s.name || '').toLowerCase();
+            const email = String(s.email || '').toLowerCase();
+            const store = String(s.storeName || '').toLowerCase();
+            return !name.includes('test') && !email.includes('test') && !email.includes('demo') && !store.includes('test');
+          });
+          setPendingSellers(realSellers.map(mapSellerToPendingItem));
         }
       }
       if (ridersRes.ok) {
         const data = await ridersRes.json();
         if (Array.isArray(data)) {
-          setPendingRiders(data.map(mapRiderToPendingItem));
+          const realRiders = data.filter(r => {
+            const name = String(r.riderName || '').toLowerCase();
+            const email = String(r.email || '').toLowerCase();
+            const id = String(r.registrationId || '').toLowerCase();
+            return !name.includes('test') && !email.includes('test') && !email.includes('demo') && !id.includes('test') && !name.includes('qa manual');
+          });
+          setPendingRiders(realRiders.map(mapRiderToPendingItem));
         }
       }
     } catch (e) {
@@ -505,7 +521,22 @@ export default function AnalyticsDashboard({
   }, []);
 
   const toast = useToast();
-  const [trackingReports, setTrackingReports] = useState([]);
+  const [trackingReports, setTrackingReports] = useState(() => {
+    try {
+      const saved = localStorage.getItem('yto_tracking_reports_ledger');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('yto_tracking_reports_ledger', JSON.stringify(trackingReports));
+    } catch (e) {
+      console.warn('Failed to persist tracking reports ledger:', e);
+    }
+  }, [trackingReports]);
 
   // Real-time SSE connection — auto-refreshes data when bridge events arrive
   const { connected: sseConnected, on: onSSE } = useSSE();
@@ -526,6 +557,12 @@ export default function AnalyticsDashboard({
         fetchPendingRegistrations();
         if (data && data.email) {
           toast(`Account status updated for ${data.email}.`, 'success');
+        }
+      });
+      const unsubVerification = onSSE('verification-synced', (data) => {
+        fetchPendingRegistrations();
+        if (data && data.email) {
+          toast(`Verification documents received from ${data.email}.`, 'info');
         }
       });
       const unsubParcel = onSSE('parcel-synced', (data) => {
@@ -551,6 +588,7 @@ export default function AnalyticsDashboard({
       return () => {
         if (typeof unsubUser === 'function') unsubUser();
         if (typeof unsubApproval === 'function') unsubApproval();
+        if (typeof unsubVerification === 'function') unsubVerification();
         if (typeof unsubParcel === 'function') unsubParcel();
         if (typeof unsubIssue === 'function') unsubIssue();
         if (typeof unsubDuty === 'function') unsubDuty();
@@ -587,9 +625,8 @@ export default function AnalyticsDashboard({
 
   // The one rule for "can this role open that page": the router uses it to
   // render (or refuse) a page, and the header search and notification bell use
-  // it so they never offer a link that lands on a blank screen. Logout is
-  // reachable from the header rather than the sidebar, hence exempt.
-  const canOpenPage = (key) => key === 'logout' || currentUser?.role === 'super_admin' || visibleMenuItems.some(
+  // it so they never offer a link that lands on a blank screen.
+  const canOpenPage = (key) => currentUser?.role === 'super_admin' || visibleMenuItems.some(
     (item) => item.key === key || item.children?.some((c) => c.key === key),
   );
 
@@ -643,8 +680,15 @@ export default function AnalyticsDashboard({
         apiFetch('/dashboard/stats').catch(() => null),
       ]);
 
+      const realRiders = (Array.isArray(ridersData) ? ridersData : []).filter(r => {
+        const name = String(r.riderName || '').toLowerCase();
+        const email = String(r.email || '').toLowerCase();
+        const id = String(r.registrationId || '').toLowerCase();
+        return !name.includes('test') && !email.includes('test') && !id.includes('test') && !name.includes('qa manual');
+      });
+
       setParcels(Array.isArray(parcelsData) ? parcelsData : []);
-      setRiders(Array.isArray(ridersData) ? ridersData : []);
+      setRiders(realRiders);
 
       if (statsRes && statsRes.ok) {
         const data = await statsRes.json();
@@ -697,7 +741,7 @@ export default function AnalyticsDashboard({
     ? dashboardStats.deliverySuccessPct.toFixed(1)
     : totalParcels ? ((deliveredCount / totalParcels) * 100).toFixed(1) : '0.0';
   const totalRidersCount  = hasNum(dashboardStats?.totalRiders) ? dashboardStats.totalRiders : riders.length;
-  const activeRidersCount = hasNum(dashboardStats?.activeRidersCount) ? dashboardStats.activeRidersCount : riders.filter(r => r.status === 'Active').length;
+  const activeRidersCount = hasNum(dashboardStats?.activeRidersCount) ? dashboardStats.activeRidersCount : riders.filter(r => r.isOnDuty === true).length;
   const avgRating   = hasNum(dashboardStats?.avgRiderRating)
     ? dashboardStats.avgRiderRating.toFixed(1)
     : riders.length ? (riders.reduce((s, r) => s + (r.rating || 0), 0) / riders.length).toFixed(1) : '0.0';
@@ -726,38 +770,48 @@ export default function AnalyticsDashboard({
   // Riders with no assigned parcels are unranked (successRate null) — they
   // sort below every ranked rider instead of defaulting to a false 100%.
   const ridersWithLiveDeliveries = useMemo(() => {
-    return riders.map(r => {
-      const rName = (r.riderName || '').trim().toLowerCase();
-      const rId = String(r._id || '');
-      const regId = (r.registrationId || '').trim();
+    return riders
+      .filter((r) => {
+        const status = String(r.status || '').toLowerCase();
+        const name = String(r.riderName || '').toLowerCase();
+        const email = String(r.email || '').toLowerCase();
+        const id = String(r.registrationId || '').toLowerCase();
+        // Only active approved couriers; exclude test, demo, or unapproved records
+        if (status !== 'active') return false;
+        if (name.includes('test') || email.includes('test') || id.includes('test') || id.includes('demo') || name.includes('qa manual')) return false;
+        return true;
+      })
+      .map((r) => {
+        const rName = (r.riderName || '').trim().toLowerCase();
+        const rId = String(r._id || '');
+        const regId = (r.registrationId || '').trim();
 
-      // Count delivered parcels where this rider was assigned
-      const parcelDeliveries = parcels.filter(p => {
-        if (!isDeliveredStatus(p.status)) return false;
-        const pRiderId = String(p.riderId || '');
-        const pRiderName = String(p.riderName || '').trim().toLowerCase();
-        return (regId && pRiderId === regId) || (rId && pRiderId === rId) || (rName && pRiderName === rName);
-      }).length;
+        // Count delivered parcels where this rider was assigned
+        const parcelDeliveries = parcels.filter(p => {
+          if (!isDeliveredStatus(p.status)) return false;
+          const pRiderId = String(p.riderId || '');
+          const pRiderName = String(p.riderName || '').trim().toLowerCase();
+          return (regId && pRiderId === regId) || (rId && pRiderId === rId) || (rName && pRiderName === rName);
+        }).length;
 
-      // Count total parcels assigned to this rider
-      const totalAssigned = parcels.filter(p => {
-        const pRiderId = String(p.riderId || '');
-        const pRiderName = String(p.riderName || '').trim().toLowerCase();
-        return (regId && pRiderId === regId) || (rId && pRiderId === rId) || (rName && pRiderName === rName);
-      }).length;
+        // Count total parcels assigned to this rider
+        const totalAssigned = parcels.filter(p => {
+          const pRiderId = String(p.riderId || '');
+          const pRiderName = String(p.riderName || '').trim().toLowerCase();
+          return (regId && pRiderId === regId) || (rId && pRiderId === rId) || (rName && pRiderName === rName);
+        }).length;
 
-      const actualDeliveries = Math.max(r.deliveries || 0, parcelDeliveries);
-      const computedSuccessRate = totalAssigned > 0
-        ? Math.round((parcelDeliveries / totalAssigned) * 100)
-        : (hasNum(r.successRate) ? r.successRate : null);
+        const computedSuccessRate = totalAssigned > 0
+          ? Math.round((parcelDeliveries / totalAssigned) * 100)
+          : null;
 
-      return {
-        ...r,
-        deliveries: actualDeliveries,
-        successRate: computedSuccessRate,
-        totalAssigned,
-      };
-    });
+        return {
+          ...r,
+          deliveries: parcelDeliveries,
+          successRate: computedSuccessRate,
+          totalAssigned,
+        };
+      });
   }, [riders, parcels]);
 
   // Ranked riders only — unassigned riders never headline the leaderboard.
@@ -765,7 +819,7 @@ export default function AnalyticsDashboard({
   const topRiders   = [...rankeriders].sort((a, b) => (b.successRate || 0) - (a.successRate || 0)).slice(0, 7);
   const peakRider     = topRiders[0]?.riderName || 'No ranked rider yet';
 
-  const inTransitCount = parcels.filter(p => isInTransitFamilyStatus(p.status)).length;
+  const inTransitCount = parcels.filter(p => normalizeParcelStatus(p.status) === 'In Transit').length;
   const pendingVerificationsCount = pendingSellers.length + pendingRiders.length;
 
   // Delivery-fee revenue (2026-09-11 parity): the mobile app's booking fee
@@ -801,7 +855,7 @@ export default function AnalyticsDashboard({
     {
       key: 'in-transit', label: 'In Transit', icon: Truck, tone: 'orange',
       value: `${inTransitCount}`,
-      sub: totalParcels > 0 ? `${inTransitPct}% of all parcels are on the road` : 'Nothing on the road yet',
+      sub: totalParcels > 0 ? (inTransitCount > 0 ? `${inTransitPct}% of all parcels are in transit` : 'No parcels currently in transit') : 'Nothing in transit yet',
       meter: totalParcels > 0 ? inTransitPct : null,
     },
     {
@@ -915,14 +969,12 @@ export default function AnalyticsDashboard({
     'process-seller': { pendingSellers, setPendingSellers },
     'process-rider':  { pendingRiders,  setPendingRiders  },
     'tracking-info':  { reports: trackingReports, onReportsChange: setTrackingReports },
-    'logout':         { setActivePage: setActiveMenuItem, onLogout, onCancel: () => setActiveMenuItem('dashboard') },
   }[key] || {});
 
   // One router: the active key comes from App.jsx (hash-synced), the component
   // from PAGE_MAP. Pages hidden for the current role render nothing — the same
   // visibility rule the sidebar applies, now also enforced for deep links and
-  // header navigation. Logout is reachable from the header, not the sidebar,
-  // so it is exempt from the sidebar-visibility gate. The manage-accounts and
+  // header navigation. The manage-accounts and
   // hub-parcels role checks the old switch carried inline are subsumed by the
   // gate: those keys only exist in menus built for their roles.
   const renderPage = () => {
@@ -937,6 +989,14 @@ export default function AnalyticsDashboard({
     <div data-yto-typography-floor className={`ad-wrapper ${sidebarCollapsed ? 'ad-sidebar--collapsed' : ''}`}>
       {/* Mobile backdrop — closes the drawer when tapping outside it */}
       {mobileNavOpen && <div className="ad-mobile-backdrop" onClick={() => setMobileNavOpen(false)} aria-hidden="true" />}
+      {/* Logout confirm dialog — floats over the current page */}
+      {logoutOpen && (
+        <Logout
+          currentUser={currentUser}
+          onCancel={() => setLogoutOpen(false)}
+          onLogout={onLogout}
+        />
+      )}
       <button className="ad-nav-hamburger" onClick={() => setMobileNavOpen(true)} aria-label="Open navigation menu">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
       </button>
@@ -1047,25 +1107,8 @@ export default function AnalyticsDashboard({
           canOpen={canOpenPage}
           onNavigate={handleMenuClick}
           onNavigateSettings={goToSettings}
-          onLogoutClick={() => handleMenuClick('logout')}
+          onLogoutClick={() => setLogoutOpen(true)}
         />
-        {isDemoMode && (
-          // Visible on every page (outside the dashboard/renderPage split
-          // below) so fabricated fallback rows — see VITE_DEMO_MODE in
-          // services/api.js — are never mistaken for real records.
-          <div
-            role="status"
-            style={{
-              display: 'flex', alignItems: 'center', gap: 8,
-              background: '#fef3c7', borderBottom: '1px solid #f59e0b',
-              color: '#92400e', fontSize: 13, fontWeight: 600,
-              padding: '8px 20px',
-            }}
-          >
-            <AlertTriangle size={15} aria-hidden="true" />
-            Demo Data — showing sample records because no live data has synced yet. These are not real customers, parcels, or riders.
-          </div>
-        )}
         {activeMenuItem !== 'dashboard' ? (
           <ErrorBoundary
             key={`${activeMenuItem}:${retryNonce}`}

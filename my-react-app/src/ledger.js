@@ -3,7 +3,7 @@
 // and footer stay fixed while only .lp-modal-body scrolls, over a softly
 // blurred backdrop. Pass to <Modal cardStyle overlayStyle blur={false}>.
 export const LEDGER_MODAL_CARD = {
-  borderRadius: 18,
+  borderRadius: 'var(--yto-radius-dialog, 10px)',
   overflow: 'hidden',
   display: 'flex',
   flexDirection: 'column',

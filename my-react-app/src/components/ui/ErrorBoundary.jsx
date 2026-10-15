@@ -58,7 +58,7 @@ export default class ErrorBoundary extends React.Component {
             type="button"
             onClick={this.reset}
             style={{
-              display: 'inline-flex', alignItems: 'center', gap: 7, padding: '10px 18px', borderRadius: 9,
+              display: 'inline-flex', alignItems: 'center', gap: 7, padding: '10px 22px', borderRadius: 'var(--yto-radius-button, 8px)',
               border: 'none', background: '#f37021', color: 'white', fontSize: 13, fontWeight: 700,
               cursor: 'pointer', fontFamily: 'inherit',
             }}
@@ -69,7 +69,7 @@ export default class ErrorBoundary extends React.Component {
             type="button"
             onClick={this.goHome}
             style={{
-              display: 'inline-flex', alignItems: 'center', gap: 7, padding: '10px 18px', borderRadius: 9,
+              display: 'inline-flex', alignItems: 'center', gap: 7, padding: '10px 22px', borderRadius: 'var(--yto-radius-button, 8px)',
               border: '1.5px solid #e0d5f0', background: 'white', color: '#390955', fontSize: 13, fontWeight: 700,
               cursor: 'pointer', fontFamily: 'inherit',
             }}

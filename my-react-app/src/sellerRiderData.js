@@ -55,32 +55,49 @@ function normalizeStatus(rawStatus) {
 // which crashed the page when JSX tried to render it directly.
 export function normalizeSeller(raw = {}) {
   const addr = raw.address && typeof raw.address === 'object' ? raw.address : {};
-  const streetAddr = (typeof raw.address === 'string' && raw.address.trim())
-    ? raw.address
-    : (addr.street || raw.warehouseAddress || '');
+  const addrStr = (typeof raw.address === 'string' && raw.address.trim())
+    ? raw.address.trim()
+    : (typeof raw.warehouseAddress === 'string' && raw.warehouseAddress.trim()
+        ? raw.warehouseAddress.trim()
+        : (addr.street || ''));
+
+  const parsedLoc = extractLocationFromAddress(addrStr);
+  const streetAddr = addr.street || addrStr || '';
+  const city = raw.city || addr.city || parsedLoc.city || '';
+  const state = raw.state || addr.state || parsedLoc.province || '';
+  const postalCode = raw.postalCode || addr.postalCode || parsedLoc.postalCode || '';
+  const country = raw.country || addr.country || parsedLoc.country || '';
+
   return {
     _id: raw._id,
     sellerId: raw.registrationId || raw.sellerId || raw._id || '—',
     fullName: raw.fullName || raw.displayName || raw.companyName || '',
+    // D-16: the app's profile/cover photo, synced over the bridge. Held as
+    // whatever the app stored (https or data URL); '' means show the initials
+    // avatar instead.
+    profilePhotoUrl: raw.profilePhotoUrl || '',
+    coverPhotoUrl: raw.coverPhotoUrl || '',
     storeName: raw.storeName || '',
-    warehouseAddress: raw.warehouseAddress || '',
+    warehouseAddress: raw.warehouseAddress || addrStr || '',
     operatingHours: raw.operatingHours || '',
-    idType: raw.idType || 'National ID',
+    idType: raw.idType || '',
     governmentIdNumber: raw.idNumber || raw.governmentIdNumber || '',
     email: raw.email || '',
     phone: raw.phone || '',
     address: {
       street: streetAddr,
-      city: raw.city || addr.city || '',
-      state: raw.state || addr.state || '',
-      postalCode: raw.postalCode || addr.postalCode || '',
-      country: raw.country || addr.country || '',
+      city,
+      state,
+      postalCode,
+      country,
+      fullAddress: addrStr,
     },
     bankName: raw.bankName || '',
     accountNumber: raw.accountNumber || '',
-    paymentCycle: raw.paymentCycle || 'Weekly',
+    paymentCycle: raw.paymentCycle || '',
     commissionRate: raw.commissionRate ?? 0,
-    status: normalizeStatus(raw.status),
+    documents: Array.isArray(raw.documents) ? raw.documents : [],
+    status: normalizeStatus(raw.status),
     raw: raw,
   };
 }
@@ -103,35 +120,119 @@ function generateAccountNumber() {
   return String(Math.floor(1000000000 + Math.random() * 9000000000));
 }
 
-// ── City extraction from a free-text address ────────────────────────────────
-// Pending registrations only carry a single `address` string (e.g. "45 Mabini
-// Ave, Barangay San Isidro, Pasig City" or "78 Aguinaldo Hwy, Barangay Zapote,
-// Bacoor, Cavite") — the city was never being pulled out of it, so approved
-// riders/sellers were saved with an empty `city`, which is why the CITY column
-// downstream rendered blank. PH addresses conventionally end either with just
-// "<City>" (common for Metro Manila cities, which are usually written without
-// their province) or "<City>, <Province>". We only need to tell those two
-// shapes apart for the province names that actually show up in this app's
-// service area.
-const PH_PROVINCES_NEAR_METRO = new Set([
-  'Metro Manila', 'Cavite', 'Laguna', 'Batangas', 'Rizal', 'Bulacan',
+// ── Location & Address extraction from a free-text address ─────────────────
+export const BULACAN_MUNICIPALITIES = [
+  'Pulilan', 'Malolos', 'Baliuag', 'Baliwag', 'Calumpit', 'Plaridel',
+  'Guiguinto', 'Bocaue', 'Meycauayan', 'Marilao', 'San Jose del Monte',
+  'Santa Maria', 'Angat', 'Norzagaray', 'San Ildefonso', 'San Miguel',
+  'San Rafael', 'Pandi', 'Paombong', 'Hagonoy', 'Bulakan', 'Balagtas',
+  'Obando', 'Bustos', 'Doña Remedios Trinidad', 'Dona Remedios Trinidad'
+];
+
+export const METRO_MANILA_CITIES = [
+  'Manila', 'Quezon City', 'Caloocan', 'Las Piñas', 'Las Pinas', 'Makati',
+  'Malabon', 'Mandaluyong', 'Marikina', 'Muntinlupa', 'Navotas', 'Parañaque',
+  'Paranaque', 'Pasay', 'Pasig', 'San Juan', 'Taguig', 'Valenzuela', 'Pateros'
+];
+
+export const PH_PROVINCES = [
+  'Bulacan', 'Metro Manila', 'Cavite', 'Laguna', 'Batangas', 'Rizal',
   'Pampanga', 'Bataan', 'Zambales', 'Nueva Ecija', 'Tarlac', 'Pangasinan',
-]);
+  'Benguet', 'La Union', 'Ilocos Sur', 'Ilocos Norte', 'Isabela', 'Cagayan',
+  'Quezon', 'Camarines Sur', 'Cebu', 'Iloilo', 'Davao del Sur', 'Misamis Oriental'
+];
 
-function extractCityFromAddress(addrString = '') {
-  if (!addrString || typeof addrString !== 'string') return { city: '', province: '' };
-  const parts = addrString.split(',').map((p) => p.trim()).filter(Boolean);
-  if (parts.length === 0) return { city: '', province: '' };
-
-  const last = parts[parts.length - 1];
-  if (PH_PROVINCES_NEAR_METRO.has(last) && parts.length >= 2) {
-    return { city: parts[parts.length - 2], province: last };
+export function extractLocationFromAddress(addrString = '') {
+  if (!addrString || typeof addrString !== 'string') {
+    return { street: '', city: '', province: '', postalCode: '', country: '' };
   }
-  return { city: last, province: 'Metro Manila' };
+  const cleanStr = addrString.trim();
+  if (!cleanStr) {
+    return { street: '', city: '', province: '', postalCode: '', country: '' };
+  }
+
+  // Postal code detection: 4 consecutive digits at end or preceded by space/comma
+  let postalCode = '';
+  const postalMatch = cleanStr.match(/\b(\d{4})\b/);
+  if (postalMatch) {
+    postalCode = postalMatch[1];
+  }
+
+  // Country: only set if explicitly found
+  const country = /philippines/i.test(cleanStr) ? 'Philippines' : '';
+
+  // Province detection
+  let province = '';
+  for (const prov of PH_PROVINCES) {
+    const regex = new RegExp(`\\b${prov}\\b`, 'i');
+    if (regex.test(cleanStr)) {
+      province = prov;
+      break;
+    }
+  }
+
+  // City detection
+  let city = '';
+  for (const bTown of BULACAN_MUNICIPALITIES) {
+    const regex = new RegExp(`\\b${bTown}\\b`, 'i');
+    if (regex.test(cleanStr)) {
+      city = bTown === 'Baliwag' ? 'Baliuag' : bTown;
+      if (!province) province = 'Bulacan';
+      break;
+    }
+  }
+
+  if (!city) {
+    for (const mmCity of METRO_MANILA_CITIES) {
+      const regex = new RegExp(`\\b${mmCity}\\b`, 'i');
+      if (regex.test(cleanStr)) {
+        city = mmCity;
+        if (!province) province = 'Metro Manila';
+        break;
+      }
+    }
+  }
+
+  // Comma-separated parts fallback if not matched by dictionary
+  const parts = cleanStr.split(',').map((p) => p.trim()).filter(Boolean);
+  if (!city && parts.length >= 2) {
+    const lastPart = parts[parts.length - 1].replace(/\b\d{4}\b/, '').replace(/philippines/i, '').trim();
+    const secondLast = parts[parts.length - 2].trim();
+    if (province && lastPart.toLowerCase().includes(province.toLowerCase())) {
+      city = secondLast;
+    } else if (parts.length >= 3) {
+      city = secondLast;
+      if (!province) province = lastPart;
+    } else {
+      city = lastPart;
+    }
+  } else if (!city && parts.length === 1) {
+    city = parts[0];
+  }
+
+  // If city is in Bulacan, ensure province is Bulacan
+  if (city && BULACAN_MUNICIPALITIES.some((b) => b.toLowerCase() === city.toLowerCase())) {
+    province = 'Bulacan';
+  } else if (city && METRO_MANILA_CITIES.some((m) => m.toLowerCase() === city.toLowerCase())) {
+    if (!province) province = 'Metro Manila';
+  }
+
+  return {
+    street: cleanStr,
+    city: city || '',
+    province: province || (city ? 'Bulacan' : ''),
+    postalCode,
+    country,
+  };
+}
+
+export function extractCityFromAddress(addrString = '') {
+  const loc = extractLocationFromAddress(addrString);
+  return { city: loc.city, province: loc.province };
 }
 
 export function buildSellerPayloadFromPendingRegistration(item) {
-  const { city, province } = extractCityFromAddress(item.address);
+  const loc = extractLocationFromAddress(item.address || item.warehouseAddress || '');
   return {
     registrationId: item.id || generateRegistrationId('SEL'),
     accountNumber: generateAccountNumber(),
@@ -139,66 +240,77 @@ export function buildSellerPayloadFromPendingRegistration(item) {
     storeName: item.storeName || item.businessName || '',
     warehouseAddress: item.warehouseAddress || item.address || '',
     operatingHours: item.operatingHours || '',
-    idType: item.governmentId?.type || 'National ID',
-    idNumber: item.governmentId?.number || '',
+    idType: item.governmentId?.type || item.idType || '',
+    idNumber: item.governmentId?.number || item.idNumber || '',
     email: item.email,
     phone: item.contactNumber || item.phone || '',
-    address: item.address || '',
-    city,
-    state: province,
-    country: 'Philippines',
-    postalCode: '',
-    bankName: '',
-    commissionRate: 10,
-    paymentCycle: 'Weekly',
+    address: item.address || item.warehouseAddress || '',
+    city: loc.city,
+    state: loc.province,
+    country: loc.country || item.country || '',
+    postalCode: loc.postalCode || '',
+    bankName: item.bankName || '',
+    commissionRate: item.commissionRate ?? 0,
+    paymentCycle: item.paymentCycle || '',
+    documents: Array.isArray(item.documents) ? item.documents : (Array.isArray(item.raw?.documents) ? item.raw.documents : []),
     status: SELLER_STATUS.ACTIVE,
   };
 }
 
 export function buildRiderPayloadFromPendingRegistration(item) {
-  const { city, province } = extractCityFromAddress(item.address);
+  const loc = extractLocationFromAddress(item.address || item.assignedHub || '');
   return {
     registrationId: generateRegistrationId('RD'),
     accountNumber: generateAccountNumber(),
     riderName: item.fullName,
-    vehicleType: item.vehicle?.type || 'Motorcycle',
+    vehicleType: item.vehicle?.type || item.vehicleType || '',
     email: item.email,
-    phone: item.contactNumber,
+    phone: item.contactNumber || item.phone || '',
     address: item.address || '',
-    city,
-    state: province,
-    country: 'Philippines',
-    postalCode: '',
-    licenseNumber: item.governmentId?.number || '',
-    vehiclePlate: item.vehicle?.plate || '',
-    bankName: '',
-    payoutRate: 80,
-    payoutCycle: 'Weekly',
+    city: loc.city,
+    state: loc.province,
+    country: loc.country || item.country || '',
+    postalCode: loc.postalCode || '',
+    licenseNumber: item.governmentId?.number || item.licenseNumber || item.raw?.licenseNumber || '',
+    vehiclePlate: item.vehicle?.plate || item.plateNumber || item.raw?.vehiclePlate || '',
+    riderType: item.raw?.riderType || item.riderType || 'PARTNER',
+    bankName: item.bankName || '',
+    payoutRate: item.payoutRate ?? 0,
+    payoutCycle: item.payoutCycle || '',
+    documents: Array.isArray(item.documents) ? item.documents : (Array.isArray(item.raw?.documents) ? item.raw.documents : []),
     status: RIDER_STATUS.ACTIVE,
     deliveries: 0,
-    rating: 5.0,
+    rating: item.rating ?? 0,
   };
 }
 
 export function normalizeRider(raw = {}) {
-  // Riders saved before the city-extraction fix (or created some other way)
-  // can still have an empty `city`/`state` even though their `address` string
-  // has one embedded — fall back to parsing it so the CITY column doesn't
-  // render blank for those older records either.
-  const addrFallback = raw.city ? { city: '', province: '' } : extractCityFromAddress(raw.address);
+  // Derive location honestly: parse address or assigned hub if raw.city or raw.state is missing
+  const loc = extractLocationFromAddress(raw.address || raw.assignedHub || '');
+  const city = raw.city || loc.city || '';
+  const isBtown = city && BULACAN_MUNICIPALITIES.some((b) => b.toLowerCase() === city.toLowerCase());
+  const isMtown = city && METRO_MANILA_CITIES.some((m) => m.toLowerCase() === city.toLowerCase());
+  const province = raw.state || raw.province || loc.province || (isBtown ? 'Bulacan' : (isMtown ? 'Metro Manila' : ''));
+
   return {
     _id: raw._id,
     riderId: raw.registrationId || raw.riderId || raw._id || '—',
     fullName: raw.riderName || raw.fullName || '',
+    // D-16: the photo the rider set in the app; '' means show the initials /
+    // vehicle glyph instead, exactly as before.
+    profilePhotoUrl: raw.profilePhotoUrl || '',
+    coverPhotoUrl: raw.coverPhotoUrl || '',
     driverLicenseNumber: raw.licenseNumber || raw.driverLicenseNumber || '',
     phone: raw.phone || '',
     email: raw.email || '',
-    vehicleType: raw.vehicleType || 'Motorcycle',
+    vehicleType: raw.vehicleType || raw.vehicleModel || '',
     vehiclePlateNumber: raw.vehiclePlate || raw.vehiclePlateNumber || '',
+    riderType: raw.riderType || '',
+    documents: Array.isArray(raw.documents) ? raw.documents : [],
     assignedHub: raw.assignedHub || '',
     location: {
-      province: raw.state || raw.province || addrFallback.province || '',
-      city: raw.city || addrFallback.city || '',
+      province: province,
+      city: city,
       barangay: raw.barangay || '',
     },
     emergencyContactName: raw.emergencyContactName || '',
@@ -206,15 +318,15 @@ export function normalizeRider(raw = {}) {
     payoutCommissionShare: raw.payoutRate ?? 0,
     bankName: raw.bankName || '',
     accountNumber: raw.accountNumber || '',
-    payoutCycle: raw.payoutCycle || 'Weekly',
+    payoutCycle: raw.payoutCycle || '',
     // Real-time duty flag synced from the Android rider profile toggle
     // (bridge sync-duty-status). Raw kept on `raw.isOnDuty` too — the UI
     // derives both this and the parcel-based "on-delivery" signal.
     isOnDuty: raw.isOnDuty === true,
-    status: normalizeStatus(raw.status),
+    status: normalizeStatus(raw.status),
     performance: {
       deliveriesCount: raw.deliveries ?? 0,
-      rating: raw.rating ?? 5.0,
+      rating: raw.rating ?? 0,
     },
     joined: raw.createdAt ? raw.createdAt.split('T')[0] : 'N/A',
     createdAt: raw.createdAt || null,
@@ -226,20 +338,27 @@ export function normalizeRider(raw = {}) {
 // platform is REAL-only and pages render only live API records.
 
 export function mapSellerToPendingItem(seller) {
+  const resolvedAddress = (typeof seller.address === 'string' && seller.address.trim())
+    ? seller.address.trim()
+    : (typeof seller.warehouseAddress === 'string' && seller.warehouseAddress.trim()
+        ? seller.warehouseAddress.trim()
+        : (seller.address?.street || ''));
+
   return {
     id: seller.registrationId || String(seller._id),
     _id: seller._id,
     fullName: seller.fullName || '—',
     contactNumber: seller.phone || '—',
     email: seller.email || '—',
-    storeName: seller.storeName || '—',
+    storeName: seller.storeName || seller.raw?.storeName || '',
+    warehouseAddress: seller.warehouseAddress || seller.raw?.warehouseAddress || resolvedAddress,
     governmentId: {
-      type: seller.idType || 'National ID',
-      number: seller.idNumber || '—',
+      type: seller.idType || '',
+      number: seller.idNumber || '',
     },
-    address: typeof seller.address === 'string' ? seller.address : (seller.address?.street || '—'),
-    businessName: seller.storeName || seller.fullName || '—',
-    businessType: 'Retail',
+    address: resolvedAddress || '—',
+    businessName: seller.storeName || seller.raw?.storeName || '',
+    businessType: seller.businessType || seller.raw?.businessType || '',
     submittedAt: seller.createdAt || new Date().toISOString(),
     status: seller.status || 'Pending Verification',
     documents: Array.isArray(seller.documents) ? seller.documents : [],
@@ -248,19 +367,25 @@ export function mapSellerToPendingItem(seller) {
 }
 
 export function mapRiderToPendingItem(rider) {
+  const resolvedAddress = (typeof rider.address === 'string' && rider.address.trim())
+    ? rider.address.trim()
+    : (typeof rider.assignedHub === 'string' && rider.assignedHub.trim()
+        ? rider.assignedHub.trim()
+        : (rider.address?.street || ''));
+
   return {
     id: rider.registrationId || String(rider._id),
     _id: rider._id,
     fullName: rider.riderName || '—',
     contactNumber: rider.phone || '—',
     email: rider.email || '—',
-    vehicleType: rider.vehicleType || 'Motorcycle',
-    plateNumber: rider.vehiclePlate || '—',
+    vehicleType: rider.vehicleType || rider.vehicleModel || '',
+    plateNumber: rider.vehiclePlate || rider.plateNumber || '',
     governmentId: {
-      type: rider.idType || "Driver's License",
-      number: rider.idNumber || '—',
+      type: rider.idType || (rider.licenseNumber ? "Driver's License" : ''),
+      number: rider.idNumber || rider.licenseNumber || '',
     },
-    address: typeof rider.address === 'string' ? rider.address : (rider.address?.street || '—'),
+    address: resolvedAddress || '—',
     submittedAt: rider.createdAt || new Date().toISOString(),
     status: rider.status || 'Pending Verification',
     documents: Array.isArray(rider.documents) ? rider.documents : [],

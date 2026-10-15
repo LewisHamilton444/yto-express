@@ -130,7 +130,7 @@ export default function SettingsArchiveView({
         primaryName: s.fullName,
         subDetail: s.storeName || s.email,
         contact: s.phone || s.email,
-        meta: s.paymentCycle || 'Weekly',
+        meta: s.paymentCycle || '',
         isArchived: s.status === SELLER_STATUS.ARCHIVED,
       }));
     } else if (activeTab === 'riders') {
@@ -138,7 +138,7 @@ export default function SettingsArchiveView({
         ...r,
         displayId: r.riderId,
         primaryName: r.fullName,
-        subDetail: r.vehicleType || 'Motorcycle',
+        subDetail: r.vehicleType || '',
         contact: r.phone || r.email,
         meta: `${r.performance?.deliveriesCount ?? 0} deliveries`,
         isArchived: r.status === RIDER_STATUS.ARCHIVED,
@@ -531,7 +531,7 @@ export default function SettingsArchiveView({
             {hasActiveFilters && (
               <button
                 onClick={handleClearFilters}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white text-[#475569] text-xs font-bold border border-[#cbd5e1] hover:brightness-105 active:scale-95 transition-all shadow-sm"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white text-[#475569] text-xs font-bold border border-[#cbd5e1] hover:brightness-105 active:scale-95 transition-all"
               >
                 <X size={13} aria-hidden="true" /> Clear Filters
               </button>
@@ -554,7 +554,7 @@ export default function SettingsArchiveView({
               {lifecycleFilter !== 'active' && activeTab !== 'parcels' && (
                 <button
                   onClick={handleBulkRestore}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-white text-brand-purple text-xs font-bold hover:bg-purple-50 transition"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white text-brand-purple text-xs font-bold hover:bg-purple-50 transition border border-white/20"
                 >
                   <RotateCcw size={12} /> Bulk Restore
                 </button>
@@ -562,21 +562,21 @@ export default function SettingsArchiveView({
               {lifecycleFilter === 'active' && activeTab !== 'parcels' && (
                 <button
                   onClick={handleBulkArchive}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-amber-500 text-white text-xs font-bold hover:bg-amber-600 transition"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#f37021] text-white text-xs font-bold hover:bg-amber-600 transition"
                 >
                   <Archive size={12} /> Bulk Archive
                 </button>
               )}
               <button
                 onClick={handleBulkExport}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition border border-white/20"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition border border-white/20"
               >
                 <Download size={12} /> Export Selected
               </button>
               {lifecycleFilter !== 'active' && activeTab !== 'parcels' && (
                 <button
                   onClick={() => setConfirmBulkDelete(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition"
                 >
                   <Trash2 size={12} /> Bulk Delete
                 </button>
@@ -649,7 +649,7 @@ export default function SettingsArchiveView({
                       action={hasActiveFilters ? (
                         <button
                           onClick={handleClearFilters}
-                          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white text-[#475569] text-xs font-bold border border-[#cbd5e1] hover:brightness-105 active:scale-95 transition-all shadow-sm"
+                          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white text-[#475569] text-xs font-bold border border-[#cbd5e1] hover:brightness-105 active:scale-95 transition-all"
                         >
                           <X size={13} aria-hidden="true" /> Clear Filters
                         </button>
@@ -765,7 +765,7 @@ export default function SettingsArchiveView({
 
       {/* ── AUDIT DETAILS DRAWER / MODAL ── */}
       {auditModalRecord && (
-        <Modal tint="rgba(26,6,40,0.55)" blur={false} maxWidth={540} padding={0} cardStyle={{ borderRadius: 12, overflow: 'hidden', boxShadow: '0 20px 40px rgba(0,0,0,0.2)' }}>
+        <Modal tint="rgba(26,6,40,0.55)" blur={false} maxWidth={540} padding={0} cardStyle={{ overflow: 'hidden', boxShadow: '0 20px 40px rgba(0,0,0,0.2)' }}>
           <ModalHeader title={`Audit Inspector — ${auditModalRecord.displayId}`} icon={Eye} onClose={() => setAuditModalRecord(null)} closeLabel="Close audit inspector" />
           <div className="p-6 space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-gray-100">
@@ -832,7 +832,7 @@ export default function SettingsArchiveView({
 
       {/* ── CONFIRM ARCHIVE MODAL ── */}
       {confirmArchive && (
-        <Modal tint="rgba(26,6,40,0.55)" blur={false} maxWidth={440} padding={0} cardStyle={{ borderRadius: 12, overflow: 'hidden', boxShadow: '0 20px 40px rgba(0,0,0,0.18)' }}>
+        <Modal tint="rgba(26,6,40,0.55)" blur={false} maxWidth={440} padding={0} cardStyle={{ overflow: 'hidden', boxShadow: '0 20px 40px rgba(0,0,0,0.18)' }}>
           <ModalHeader title="Archive Record" icon={Archive} tone="warning" onClose={() => setConfirmArchive(null)} />
           <div className="p-6">
             <p className="text-sm text-gray-800 leading-relaxed mb-2">
@@ -861,7 +861,7 @@ export default function SettingsArchiveView({
 
       {/* ── CONFIRM SINGLE DELETE MODAL ── */}
       {confirmDelete && (
-        <Modal tint="rgba(26,6,40,0.55)" blur={false} maxWidth={440} padding={0} cardStyle={{ borderRadius: 12, overflow: 'hidden', boxShadow: '0 20px 40px rgba(0,0,0,0.18)' }}>
+        <Modal tint="rgba(26,6,40,0.55)" blur={false} maxWidth={440} padding={0} cardStyle={{ overflow: 'hidden', boxShadow: '0 20px 40px rgba(0,0,0,0.18)' }}>
           <ModalHeader title="Permanently Delete Record" icon={AlertTriangle} tone="danger" onClose={() => setConfirmDelete(null)} />
           <div className="p-6">
             <p className="text-sm text-gray-800 leading-relaxed mb-2">
@@ -890,7 +890,7 @@ export default function SettingsArchiveView({
 
       {/* ── CONFIRM BULK DELETE MODAL ── */}
       {confirmBulkDelete && (
-        <Modal tint="rgba(26,6,40,0.55)" blur={false} maxWidth={440} padding={0} cardStyle={{ borderRadius: 12, overflow: 'hidden', boxShadow: '0 20px 40px rgba(0,0,0,0.18)' }}>
+        <Modal tint="rgba(26,6,40,0.55)" blur={false} maxWidth={440} padding={0} cardStyle={{ overflow: 'hidden', boxShadow: '0 20px 40px rgba(0,0,0,0.18)' }}>
           <ModalHeader title="Bulk Permanent Deletion" icon={AlertTriangle} tone="danger" onClose={() => setConfirmBulkDelete(false)} />
           <div className="p-6">
             <p className="text-sm text-gray-800 leading-relaxed mb-2">

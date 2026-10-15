@@ -5,6 +5,17 @@ const riderSchema = new mongoose.Schema({
     accountNumber: { type: String, default: '' },
     riderName: String,
     vehicleType: String,
+    // Profile / cover photos synced from the app (D-16); written only when the
+    // bridge sends a non-empty value, so a blank never clears a stored photo.
+    profilePhotoUrl: { type: String, default: '' },
+    coverPhotoUrl: { type: String, default: '' },
+    // COMPANY (fleet, company vehicle) vs PARTNER (own motorcycle).
+    // Set by the mobile verification submit; admin may reclassify at review.
+    riderType: { type: String, default: '' },
+    // Verification documents synced from the app (DL, clearance, ORCR,
+    // authorization letter). Same { name, url, dataUrl } shape the seller
+    // sync-verification endpoint writes; ReviewModal renders generically.
+    documents: [{ name: String, url: String, dataUrl: String }],
     email: { type: String, required: true },
     phone: { type: String, default: '' },
     address: String,

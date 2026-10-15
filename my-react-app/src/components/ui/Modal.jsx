@@ -35,6 +35,12 @@ export default function Modal({
 }) {
   const cardRef = useRef(null);
   const restoreFocusRef = useRef(null);
+  // Latest-handler ref: callers pass inline onBackdropClick arrows (new
+  // identity every render), so the mount effect below must NOT depend on it —
+  // otherwise every keystroke re-runs the effect and its cleanup yanks focus
+  // out of the field being typed in. The Esc branch reads via this ref.
+  const onBackdropClickRef = useRef(onBackdropClick);
+  onBackdropClickRef.current = onBackdropClick;
 
   useEffect(() => {
     restoreFocusRef.current = document.activeElement;
@@ -48,9 +54,10 @@ export default function Modal({
     }
 
     const onKeyDown = (e) => {
-      if (e.key === 'Escape' && onBackdropClick) {
+      const backdropHandler = onBackdropClickRef.current;
+      if (e.key === 'Escape' && backdropHandler) {
         e.stopPropagation();
-        onBackdropClick();
+        backdropHandler();
         return;
       }
       if (e.key !== 'Tab' || !card) return;
@@ -70,7 +77,7 @@ export default function Modal({
         restoreFocusRef.current.focus({ preventScroll: true });
       }
     };
-  }, [onBackdropClick]);
+  }, []);
 
   return (
     <div
@@ -89,7 +96,7 @@ export default function Modal({
         aria-modal="true"
         aria-label={label}
         style={{
-          background: 'white', borderRadius: 'var(--yto-radius-xl, 16px)', padding, maxWidth, width: '90%',
+          background: 'white', borderRadius: 'var(--yto-radius-dialog, 10px)', padding, maxWidth, width: '90%',
           maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)',
           outline: 'none',
           ...cardStyle,

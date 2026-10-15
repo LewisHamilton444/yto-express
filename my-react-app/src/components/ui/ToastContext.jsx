@@ -107,7 +107,7 @@ export function ToastProvider({ children }) {
                   fontWeight: 500,
                   lineHeight: 1.4,
                   animation: 'yto-toast-slide-down 0.22s cubic-bezier(0.16, 1, 0.3, 1)',
-                  fontFamily: "'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+                  fontFamily: "'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif",
                 }}
               >
                 <div
@@ -135,9 +135,9 @@ export function ToastProvider({ children }) {
                     background: 'transparent',
                     border: 'none',
                     color: '#94a3b8',
-                    width: 22,
-                    height: 22,
-                    borderRadius: 6,
+                    width: 30,
+                    height: 30,
+                    borderRadius: 'var(--yto-radius-button, 8px)',
                     cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',

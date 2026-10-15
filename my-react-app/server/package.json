@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node Server.js",
     "dev": "node Server.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "qa:gates": "node scripts/qa/bridgeReconcileGates.js"
   },
   "keywords": [],
   "author": "",

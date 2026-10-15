@@ -1,10 +1,22 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import LiveRiderMap from './LiveRiderMap';
+import { extractMunicipality, matchRider } from './utils/bulacanLocationUtils';
+import {
+  ZONE_LABELS,
+  ALL_MUNICIPALITIES,
+  allZoneIds,
+  municipalitiesOf,
+  barangaysOf,
+  zoneForMunicipality,
+  sameBarangay,
+  extractBarangayFromAddress,
+} from './utils/deliveryZoneDirectory';
 import { CITY_COORDS } from './luzonCityCoords';
 import { LOGISTICS_HUBS, haversineKm } from './hubGeofenceData';
 import { ridersApi, parcelsApi, parcelLocationsApi } from './services/api';
 import { getFreshPing, formatLivePosition, LIVE_REFRESH_MS } from './utils/riderGps';
-import { isFinishedParcelStatus } from './utils/parcelStatus';
+import { isFinishedParcelStatus, IN_FLIGHT_WEIGHT } from './utils/parcelStatus';
+import { resolveParcelCurrentLocation } from './utils/parcelLocationResolver';
 import useSSE from './services/useSSE';
 import { VehicleIcon } from './components/ui/vehicleIcons';
 import Tooltip from './components/ui/Tooltip';
@@ -55,9 +67,14 @@ export default function MonitorGeofenceBoundary() {
   const [vehicleFilter, setVehicleFilter] = useState('all');
   const [signalFilter, setSignalFilter] = useState('all');
   const [locationFilter, setLocationFilter] = useState('all');
+  // Zone -> Municipality -> Barangay cascade (deliveryZoneDirectory.js;
+  // barangay data covers 3/24 towns until professor sign-off).
+  const [zoneFilter, setZoneFilter] = useState('all');
+  const [barangayFilter, setBarangayFilter] = useState('all');
   const [activeSegment, setActiveSegment] = useState('all');
   const [viewMode, setViewMode] = useState('table');
   const [selectedRiderId, setSelectedRiderId] = useState(null);
+  const [selectedTrackingId, setSelectedTrackingId] = useState(null);
   const [copiedId, setCopiedId] = useState(null);
   const [lastUpdated, setLastUpdated] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -95,13 +112,22 @@ export default function MonitorGeofenceBoundary() {
         })
         .map((r, i) => {
           const coords = CITY_COORDS[r.city];
-          // Check if any parcel assigned to this courier has a real GPS fix in locMap
-          const heldParcelWithFix = safeParcels.find(
-            p => (p.riderId === (r.registrationId || r._id)) && locMap[(p.trackingNumber || p.trackingId || '').toUpperCase()]
-          );
-          // A fresh GPS ping from the rider app wins; then a parcel's location; then the city.
+          const rReg = r.registrationId ? String(r.registrationId) : '';
+          const rMongoId = r._id ? String(r._id) : '';
+          const matchRider = (pRider) => {
+            if (!pRider) return false;
+            const pid = typeof pRider === 'object' ? String(pRider._id || pRider.registrationId || '') : String(pRider);
+            return (rReg && pid === rReg) || (rMongoId && pid === rMongoId);
+          };
+          const riderParcelsWithFix = safeParcels
+            .filter(p => matchRider(p.riderId || p.rider) && locMap[(p.trackingNumber || p.trackingId || '').toUpperCase()])
+            .sort((a, b) => (IN_FLIGHT_WEIGHT[String(b.status || '').toLowerCase()] ?? 0) - (IN_FLIGHT_WEIGHT[String(a.status || '').toLowerCase()] ?? 0));
+          const heldParcelWithFix = riderParcelsWithFix[0] || null;
+          // A fresh GPS ping from the rider app wins; then lastLocation fix; then a parcel's location; then the city.
           const ping = getFreshPing(r);
-          const fix = ping || (heldParcelWithFix ? locMap[(heldParcelWithFix.trackingNumber || heldParcelWithFix.trackingId || '').toUpperCase()] : null);
+          const lastLoc = r.lastLocation;
+          const hasLastLoc = lastLoc && Number.isFinite(Number(lastLoc.lat)) && Number.isFinite(Number(lastLoc.lng));
+          const fix = ping || (hasLastLoc ? { lat: Number(lastLoc.lat), lng: Number(lastLoc.lng) } : null) || (heldParcelWithFix ? locMap[(heldParcelWithFix.trackingNumber || heldParcelWithFix.trackingId || '').toUpperCase()] : null);
           const lat = fix ? fix.lat : (coords ? coords.lat + (i * 0.002) : LOGISTICS_HUBS[0].coordinates.lat + (i * 0.004));
           const lng = fix ? fix.lng : (coords ? coords.lng + (i * 0.002) : LOGISTICS_HUBS[0].coordinates.lng + (i * 0.003));
 
@@ -110,7 +136,7 @@ export default function MonitorGeofenceBoundary() {
             _id: r._id,
             name: r.riderName || '—',
             phone: r.phone || '',
-            vehicle: r.vehicleType || 'Motorcycle',
+            vehicle: r.vehicleType || '',
             status: r.status || 'Active',
             city: r.city || '',
             province: r.province || '',
@@ -130,17 +156,14 @@ export default function MonitorGeofenceBoundary() {
         .map((p, i) => {
           const tn = (p.trackingNumber || p.trackingId || '').toUpperCase();
           const fix = locMap[tn];
-          const center = p.trackingGeofence?.center;
+          const resolved = resolveParcelCurrentLocation(p);
           let lat, lng;
-          if (fix) {
+          if (resolved.lat !== null && resolved.lng !== null) {
+            lat = Number(resolved.lat);
+            lng = Number(resolved.lng);
+          } else if (fix && Number.isFinite(fix.lat) && Number.isFinite(fix.lng)) {
             lat = fix.lat;
             lng = fix.lng;
-          } else if (center && Number.isFinite(center.lat) && Number.isFinite(center.lng)) {
-            lat = center.lat;
-            lng = center.lng;
-          } else if (Number.isFinite(p.riderLat) && Number.isFinite(p.riderLng) && !(p.riderLat === 0 && p.riderLng === 0)) {
-            lat = p.riderLat;
-            lng = p.riderLng;
           } else {
             const destCoords = CITY_COORDS[p.destination];
             const origCoords = CITY_COORDS[p.origin];
@@ -194,10 +217,21 @@ export default function MonitorGeofenceBoundary() {
     return Array.from(set);
   }, [riders]);
 
+  // Canonical municipality options from the delivery zone directory
+  // (scoped by the selected zone); the directory always offers real
+  // Bulacan towns even when live data is sparse.
   const availableCities = useMemo(() => {
-    const set = new Set(riders.map(r => r.city).filter(Boolean));
-    return Array.from(set).sort();
-  }, [riders]);
+    if (zoneFilter === 'all') return ALL_MUNICIPALITIES.slice();
+    return municipalitiesOf(zoneFilter);
+  }, [zoneFilter]);
+
+  // Barangay options for the picked municipality. Empty for the 21/24
+  // towns whose mapping is still pending professor sign-off — the
+  // dropdown is hidden in that case.
+  const availableBarangays = useMemo(() => {
+    if (locationFilter === 'all') return [];
+    return barangaysOf(locationFilter);
+  }, [locationFilter]);
 
   // Operational breakdown counts
   const insideHubCount = useMemo(() => {
@@ -241,7 +275,35 @@ export default function MonitorGeofenceBoundary() {
       }
 
       if (vehicleFilter !== 'all' && r.vehicle !== vehicleFilter) return false;
-      if (locationFilter !== 'all' && r.city !== locationFilter) return false;
+      if (locationFilter !== 'all') {
+        const rTown = extractMunicipality(r.city) || extractMunicipality(r.province) || (r.city || '').trim();
+        const rParcels = parcels.filter(p => matchRider(p.riderId || p.rider, r));
+        const hasParcelInTown = rParcels.some(p => {
+          const origTown = extractMunicipality(p.origin);
+          const destTown = extractMunicipality(p.destination);
+          return origTown === locationFilter || destTown === locationFilter;
+        });
+        if (rTown !== locationFilter && !hasParcelInTown) return false;
+      }
+
+      if (zoneFilter !== 'all') {
+        const rZone = zoneForMunicipality(extractMunicipality(r.city) || extractMunicipality(r.province));
+        const rParcels = parcels.filter(p => matchRider(p.riderId || p.rider, r));
+        const hasParcelInZone = rParcels.some(p =>
+          zoneForMunicipality(extractMunicipality(p.origin)) === zoneFilter ||
+          zoneForMunicipality(extractMunicipality(p.destination)) === zoneFilter
+        );
+        if (rZone !== zoneFilter && !hasParcelInZone) return false;
+      }
+
+      if (barangayFilter !== 'all') {
+        const rParcels = parcels.filter(p => matchRider(p.riderId || p.rider, r));
+        const hasParcelInBrgy = rParcels.some(p =>
+          sameBarangay(extractBarangayFromAddress(p.origin), barangayFilter) ||
+          sameBarangay(extractBarangayFromAddress(p.destination), barangayFilter)
+        );
+        if (!sameBarangay(r.barangay, barangayFilter) && !hasParcelInBrgy) return false;
+      }
 
       if (signalFilter !== 'all') {
         if (signalFilter === 'live' && !r.hasRealGps) return false;
@@ -260,26 +322,29 @@ export default function MonitorGeofenceBoundary() {
 
       return true;
     });
-  }, [riders, parcels, riderSearch, vehicleFilter, locationFilter, signalFilter, activeSegment]);
+  }, [riders, parcels, riderSearch, vehicleFilter, locationFilter, zoneFilter, barangayFilter, signalFilter, activeSegment]);
 
   const paginatedRiders = useMemo(() => {
     const start = (currentPage - 1) * rowsPerPage;
     return filteredRiders.slice(start, start + rowsPerPage);
   }, [filteredRiders, currentPage, rowsPerPage]);
 
-  const hasActiveFilters = riderSearch || vehicleFilter !== 'all' || locationFilter !== 'all' || signalFilter !== 'all' || activeSegment !== 'all';
+  const hasActiveFilters = riderSearch || vehicleFilter !== 'all' || zoneFilter !== 'all' || locationFilter !== 'all' || barangayFilter !== 'all' || signalFilter !== 'all' || activeSegment !== 'all';
 
   const handleClearFilters = () => {
     setRiderSearch('');
     setVehicleFilter('all');
+    setZoneFilter('all');
     setLocationFilter('all');
+    setBarangayFilter('all');
     setSignalFilter('all');
     setActiveSegment('all');
     setCurrentPage(1);
   };
 
-  const handleLocateRider = (riderId) => {
-    setSelectedRiderId(prev => (prev === riderId ? null : riderId));
+  const handleLocateRider = (riderId, trackingNumber = null) => {
+    setSelectedRiderId(prev => (prev === riderId && !trackingNumber ? null : riderId));
+    setSelectedTrackingId(trackingNumber);
     if (mapSectionRef.current) {
       mapSectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
@@ -311,7 +376,7 @@ export default function MonitorGeofenceBoundary() {
         signal: r.hasRealGps ? 'Live GPS Ping' : 'City Approximation',
         packagesCount: courierParcels.length,
         proximity: `${distToHub.toFixed(1)} km to hub`,
-        boundary: isInside ? 'Inside Hub Geofence' : 'Outside Hub Boundary (In Transit)',
+        boundary: isInside ? 'Inside Hub Geofence' : 'Outside Hub Geofence',
         dutyStatus: (r.status || 'Active').toLowerCase() === 'active' ? 'On Duty' : 'Off Duty',
       };
     });
@@ -330,13 +395,13 @@ export default function MonitorGeofenceBoundary() {
   const segmentTabs = [
     { id: 'all', label: 'All', count: riders.length },
     { id: 'inside', label: 'Inside Geofence', count: insideHubCount },
-    { id: 'outside', label: 'In Transit', count: outsideHubCount },
+    { id: 'outside', label: 'Outside Geofence', count: outsideHubCount },
     { id: 'with-parcels', label: 'Carrying Shipments', count: withShipmentsCount },
     { id: 'idle', label: 'Available / Idle', count: idleCount },
   ];
 
   return (
-    <div style={{ flex: 1, padding: '24px 30px 48px', backgroundColor: '#f0ecf7', minHeight: '100vh', fontFamily: "'DM Sans', sans-serif" }}>
+    <div style={{ flex: 1, padding: '24px 30px 48px', backgroundColor: '#f0ecf7', minHeight: '100vh', fontFamily: "'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif" }}>
       <style>{`@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(1.4)}} @keyframes fadein{from{opacity:0;transform:translateY(8px)}to{opacity:1}} .leaflet-popup-content-wrapper{border-radius:10px!important;box-shadow:0 8px 24px rgba(0,0,0,.14)!important;}`}</style>
 
       <PageHeader
@@ -359,7 +424,9 @@ export default function MonitorGeofenceBoundary() {
         <div ref={mapSectionRef} className="scroll-mt-4">
           <LiveRiderMap
             externalSelectedRiderId={selectedRiderId}
-            onSelectRider={setSelectedRiderId}
+            externalSelectedTrackingId={selectedTrackingId}
+            onSelectRider={(id) => { setSelectedRiderId(id); setSelectedTrackingId(null); }}
+            onSelectTracking={setSelectedTrackingId}
             refreshTrigger={refreshTrigger}
             activeRidersCount={riders.length}
             activeShipmentsCount={parcels.length}
@@ -380,9 +447,9 @@ export default function MonitorGeofenceBoundary() {
                 <button
                   type="button"
                   onClick={() => setViewMode('table')}
-                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                  className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
                     viewMode === 'table'
-                      ? 'bg-white text-[#390955] shadow-xs border border-[#e4d8f2]'
+                      ? 'bg-white text-[#390955] border border-[#e4d8f2]'
                       : 'text-slate-600 hover:text-[#390955] hover:bg-white/60 border border-transparent'
                   }`}
                   title="Table Ledger View"
@@ -392,9 +459,9 @@ export default function MonitorGeofenceBoundary() {
                 <button
                   type="button"
                   onClick={() => setViewMode('grid')}
-                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                  className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
                     viewMode === 'grid'
-                      ? 'bg-white text-[#390955] shadow-xs border border-[#e4d8f2]'
+                      ? 'bg-white text-[#390955] border border-[#e4d8f2]'
                       : 'text-slate-600 hover:text-[#390955] hover:bg-white/60 border border-transparent'
                   }`}
                   title="Dispatch Grid Cards View"
@@ -475,15 +542,39 @@ export default function MonitorGeofenceBoundary() {
                 <option value="approx">Approximate Fixes Only</option>
               </FilterBar.Select>
 
+              <FilterBar.Select
+                aria-label="Filter by delivery zone"
+                value={zoneFilter}
+                onChange={e => { setZoneFilter(e.target.value); setLocationFilter('all'); setBarangayFilter('all'); setCurrentPage(1); }}
+              >
+                <option value="all">All Zones</option>
+                {allZoneIds().map(z => (
+                  <option key={z} value={z}>{ZONE_LABELS[z]}</option>
+                ))}
+              </FilterBar.Select>
+
               {availableCities.length > 0 && (
                 <FilterBar.Select
                   aria-label="Filter by city location"
                   value={locationFilter}
-                  onChange={e => { setLocationFilter(e.target.value); setCurrentPage(1); }}
+                  onChange={e => { setLocationFilter(e.target.value); setBarangayFilter('all'); setCurrentPage(1); }}
                 >
                   <option value="all">All</option>
                   {availableCities.map(c => (
                     <option key={c} value={c}>{c}</option>
+                  ))}
+                </FilterBar.Select>
+              )}
+
+              {availableBarangays.length > 0 && (
+                <FilterBar.Select
+                  aria-label="Filter by barangay"
+                  value={barangayFilter}
+                  onChange={e => { setBarangayFilter(e.target.value); setCurrentPage(1); }}
+                >
+                  <option value="all">All Barangays</option>
+                  {availableBarangays.map(b => (
+                    <option key={b} value={b}>{b}</option>
                   ))}
                 </FilterBar.Select>
               )}
@@ -495,7 +586,7 @@ export default function MonitorGeofenceBoundary() {
               {hasActiveFilters && (
                 <button
                   onClick={handleClearFilters}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white text-[#475569] text-xs font-bold border border-[#cbd5e1] hover:brightness-105 active:scale-95 transition-all shadow-xs cursor-pointer"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-white text-[#475569] text-xs font-bold border border-[#cbd5e1] hover:brightness-105 active:scale-95 transition-all cursor-pointer"
                 >
                   <X size={13} aria-hidden="true" /> Clear Filters
                 </button>
@@ -524,7 +615,7 @@ export default function MonitorGeofenceBoundary() {
                 action={
                   <button
                     onClick={handleClearFilters}
-                    className="h-[34px] px-3.5 bg-[#390955] text-white text-xs font-bold rounded-lg hover:brightness-110 cursor-pointer shadow-sm"
+                    className="h-[34px] px-3.5 bg-[#390955] text-white text-xs font-bold rounded-lg hover:brightness-110 cursor-pointer"
                   >
                     Clear Filters
                   </button>
@@ -549,7 +640,18 @@ export default function MonitorGeofenceBoundary() {
                 </DataTable.Head>
                 <tbody>
                   {paginatedRiders.map((r) => {
-                    const courierParcels = parcels.filter(p => p.riderId === r.id || p.riderId === r._id);
+                    const qSearch = riderSearch.toLowerCase().trim();
+                    const courierParcels = parcels
+                      .filter(p => p.riderId === r.id || p.riderId === r._id)
+                      .sort((a, b) => {
+                        const aTn = (a.trackingNumber || a.trackingId || '').toLowerCase();
+                        const bTn = (b.trackingNumber || b.trackingId || '').toLowerCase();
+                        const aMatches = qSearch && aTn.includes(qSearch);
+                        const bMatches = qSearch && bTn.includes(qSearch);
+                        if (aMatches && !bMatches) return -1;
+                        if (!aMatches && bMatches) return 1;
+                        return (IN_FLIGHT_WEIGHT[String(b.status || '').toLowerCase()] ?? 0) - (IN_FLIGHT_WEIGHT[String(a.status || '').toLowerCase()] ?? 0);
+                      });
                     const distToHub = haversineKm(
                       r.lat,
                       r.lng,
@@ -569,7 +671,7 @@ export default function MonitorGeofenceBoundary() {
                             </span>
                             <button
                               onClick={() => handleCopy(r.id)}
-                              className="p-1 rounded text-slate-400 hover:text-[#390955] hover:bg-slate-100 transition-colors cursor-pointer"
+                              className="w-7 h-7 rounded-lg inline-flex items-center justify-center text-slate-400 hover:text-[#390955] hover:bg-slate-100 transition-colors cursor-pointer"
                               title="Copy Rider ID"
                             >
                               {copiedId === r.id ? (
@@ -606,27 +708,41 @@ export default function MonitorGeofenceBoundary() {
                           </span>
                         </DataTable.Cell>
 
-                        {/* 5. Assigned Shipments */}
+                        {/* 5. Assigned Shipments — simple dropdown listing every claimed parcel */}
                         <DataTable.Cell>
                           {courierParcels.length === 0 ? (
                             <span className="text-slate-400 font-normal text-xs">Available (0)</span>
-                          ) : courierParcels.length === 1 ? (
-                            <span className="inline-flex items-center gap-1 font-semibold text-[#f37021] text-xs font-mono">
-                              <Package size={12} aria-hidden="true" />
-                              {courierParcels[0].trackingNumber || courierParcels[0].trackingId}
-                            </span>
                           ) : (
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="inline-flex items-center gap-1 font-semibold text-[#f37021] text-xs font-mono">
-                                <Package size={12} aria-hidden="true" />
-                                {courierParcels[0].trackingNumber || courierParcels[0].trackingId}
-                              </span>
-                              <Tooltip content={courierParcels.map(p => p.trackingNumber || p.trackingId).join(', ')}>
-                                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#f0eaf8] text-[#390955] cursor-pointer">
-                                  +{courierParcels.length - 1} more
-                                </span>
-                              </Tooltip>
-                            </div>
+                            <select
+                              className="max-w-[175px] cursor-pointer rounded border border-orange-200 bg-[#fbf7f0] px-1.5 py-0.5 font-mono text-xs font-semibold text-[#f37021] hover:bg-[#faebd7] focus:outline-none focus:ring-2 focus:ring-orange-300"
+                              aria-label={`Assigned shipments for ${r.riderName || r.id}`}
+                              title="All shipments claimed by this rider"
+                              value={
+                                selectedTrackingId &&
+                                courierParcels.some(
+                                  (p) => (p.trackingNumber || p.trackingId) === selectedTrackingId
+                                )
+                                  ? selectedTrackingId
+                                  : ''
+                              }
+                              onChange={(e) => {
+                                const tn = e.target.value;
+                                if (tn) handleLocateRider(r.id, tn);
+                              }}
+                            >
+                              <option value="" disabled>
+                                Shipments ({courierParcels.length})
+                              </option>
+                              {courierParcels.map((p) => {
+                                const tn = p.trackingNumber || p.trackingId;
+                                return (
+                                  <option key={tn} value={tn}>
+                                    {tn}
+                                    {p.status ? ` — ${p.status}` : ''}
+                                  </option>
+                                );
+                              })}
+                            </select>
                           )}
                         </DataTable.Cell>
 
@@ -635,7 +751,7 @@ export default function MonitorGeofenceBoundary() {
                           <div className="flex flex-col gap-0.5">
                             <div data-testid={`rider-boundary-${r.id}`}>
                               <Badge tone={isInsideHubGeofence ? 'purple' : 'amber'}>
-                                {isInsideHubGeofence ? 'Inside Geofence' : 'In Transit'}
+                                {isInsideHubGeofence ? 'Inside Geofence' : 'Outside Geofence'}
                               </Badge>
                             </div>
                             <span data-testid={`rider-distance-${r.id}`} className="text-[10px] font-mono text-slate-500">
@@ -649,7 +765,7 @@ export default function MonitorGeofenceBoundary() {
                           <button
                             type="button"
                             onClick={() => handleLocateRider(r.id)}
-                            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer shadow-sm ${
+                            className={`inline-flex items-center gap-1 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                               isSelected
                                 ? 'bg-[#390955] text-white ring-2 ring-purple-400'
                                 : 'bg-[#f0eaf8] text-[#390955] hover:bg-[#e4d6f3]'
@@ -719,7 +835,7 @@ export default function MonitorGeofenceBoundary() {
                                 <button
                                   type="button"
                                   onClick={() => handleCopy(r.id)}
-                                  className="text-slate-400 hover:text-slate-600 p-0.5"
+                                  className="w-7 h-7 rounded-lg inline-flex items-center justify-center text-slate-400 hover:text-slate-600"
                                   title="Copy Rider ID"
                                 >
                                   {copiedId === r.id ? <Check size={10} className="text-emerald-600" /> : <Copy size={10} />}
@@ -768,11 +884,30 @@ export default function MonitorGeofenceBoundary() {
                             <span className="text-xs text-slate-400">Available (0)</span>
                           ) : (
                             <div className="flex flex-wrap gap-1">
-                              {courierParcels.slice(0, 2).map(p => (
-                                <span key={p._id || p.trackingNumber} className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-orange-50 text-[#f37021] border border-orange-200">
-                                  <Package size={10} /> {p.trackingNumber || p.trackingId}
-                                </span>
-                              ))}
+                              {courierParcels.map((p, idx) => {
+                                const tn = p.trackingNumber || p.trackingId;
+                                const isFocused = selectedTrackingId === tn;
+                                const qSearch = riderSearch.toLowerCase().trim();
+                                const isSearchMatch = qSearch && tn.toLowerCase().includes(qSearch);
+                                if (idx > 1 && !isSearchMatch && !isFocused) return null;
+                                return (
+                                  <button
+                                    key={p._id || tn}
+                                    type="button"
+                                    onClick={() => handleLocateRider(r.id, tn)}
+                                    title={`Click to focus shipment ${tn} on map`}
+                                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold cursor-pointer transition-all ${
+                                      isFocused
+                                        ? 'bg-[#f37021] text-white ring-2 ring-orange-300'
+                                        : isSearchMatch
+                                        ? 'bg-amber-100 text-amber-900 border border-amber-400'
+                                        : 'bg-orange-50 text-[#f37021] hover:bg-orange-100 border border-orange-200'
+                                    }`}
+                                  >
+                                    <Package size={10} /> {tn}
+                                  </button>
+                                );
+                              })}
                               {courierParcels.length > 2 && (
                                 <Tooltip content={courierParcels.slice(2).map(p => p.trackingNumber || p.trackingId).join(', ')}>
                                   <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#f0eaf8] text-[#390955] cursor-pointer">
@@ -790,7 +925,7 @@ export default function MonitorGeofenceBoundary() {
                         <button
                           type="button"
                           onClick={() => handleLocateRider(r.id)}
-                          className={`w-full inline-flex items-center justify-center gap-1.5 h-[34px] px-3 rounded-lg text-xs font-bold transition-all cursor-pointer shadow-sm ${
+                          className={`w-full inline-flex items-center justify-center gap-1.5 h-[34px] px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                             isSelected
                               ? 'bg-[#390955] text-white ring-2 ring-purple-400'
                               : 'bg-[#f0eaf8] text-[#390955] hover:bg-[#e4d6f3]'

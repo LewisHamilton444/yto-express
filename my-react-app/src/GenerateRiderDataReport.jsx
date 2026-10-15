@@ -277,7 +277,7 @@ export default function GenerateRiderDataReport() {
   const td = { padding: '13px 16px', borderBottom: '1px solid #f0eaf8', color: '#1a1a1a', verticalAlign: 'middle', whiteSpace: 'nowrap' };
 
   return (
-    <div style={{ flex: 1, padding: '24px 30px 48px', minHeight: '100vh', background: '#f0ecf7', fontFamily: "'DM Sans', sans-serif", color: '#390955', overflowY: 'auto' }}>
+    <div style={{ flex: 1, padding: '24px 30px 48px', minHeight: '100vh', background: '#f0ecf7', fontFamily: "'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif", color: '#390955', overflowY: 'auto' }}>
       <style>{`
         .hrow:hover td { background: #faf5ff !important; }
         .rider-actions { opacity: 0.8; transition: opacity 0.15s ease; }
@@ -343,7 +343,7 @@ export default function GenerateRiderDataReport() {
                 <button
                   type="button"
                   onClick={handleReset}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-lg transition-colors cursor-pointer"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-white text-[#475569] text-xs font-bold border border-[#cbd5e1] hover:brightness-105 active:scale-95 transition-all cursor-pointer"
                 >
                   <RotateCcw size={11} aria-hidden="true" />
                   <span>Reset</span>
@@ -448,7 +448,7 @@ export default function GenerateRiderDataReport() {
                             <td style={{ ...td, textAlign: 'right' }} onClick={e => e.stopPropagation()}>
                               <div className="rider-actions" style={{ display:'inline-flex', gap:6, whiteSpace: 'nowrap' }}>
                                 <button onClick={(e) => { e.stopPropagation(); setSelectedRider(r.riderId); }}
-                                  style={{ padding: '5px 10px', border: 'none', borderRadius: 6, background: '#390955', color: 'white', fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                                  style={{ padding: '6px 14px', border: '1px solid #e2d9ee', borderRadius: 'var(--yto-radius-button, 8px)', background: 'white', color: '#390955', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
                                   View <ArrowRight size={12} aria-hidden="true" />
                                 </button>
                               </div>
@@ -476,7 +476,7 @@ export default function GenerateRiderDataReport() {
           /* PROFILE VIEW */
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <button onClick={() => setSelectedRider(null)}
-              style={{ padding: '8px 16px', border: '1.5px solid #e0d5f0', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', background: 'white', color: '#390955', alignSelf: 'flex-start', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              style={{ padding: '10px 22px', border: '1.5px solid #e0d5f0', borderRadius: 'var(--yto-radius-button, 8px)', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', background: 'white', color: '#390955', alignSelf: 'flex-start', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
               <ArrowLeft size={13} aria-hidden="true" /> Back to Report Records
             </button>
 
@@ -524,7 +524,7 @@ export default function GenerateRiderDataReport() {
                         ['Rider ID',           rider.riderId],
                         ['Email Address',      rider.email || '—'],
                         ['Phone Number',       rider.phone || '—'],
-                        ['Vehicle Info',       `${rider.vehicleType}${rider.vehiclePlateNumber ? ` (${rider.vehiclePlateNumber})` : ''}`],
+                        ['Vehicle Info',       rider.vehicleType ? `${rider.vehicleType}${rider.vehiclePlateNumber ? ` (${rider.vehiclePlateNumber})` : ''}` : 'No vehicle registered yet'],
                         ['Driver License No.', rider.driverLicenseNumber || '—'],
                         ['Plate No.',          rider.vehiclePlateNumber || '—'],
                         ['Hub Address',        rider.raw?.assignedHubAddress || rider.raw?.address || (rider.location.city ? `${rider.location.city} Hub` : 'Pulilan Hub')],
@@ -615,7 +615,7 @@ export default function GenerateRiderDataReport() {
                     <span style={{ fontSize: 12, fontWeight: 700, color: '#390955', textTransform: 'uppercase', letterSpacing: 0.5 }}>Delivery History</span>
                     {riderArchivedCount > 0 && (
                       <button onClick={() => setShowArchivedDeliveries(v => !v)}
-                        style={{ padding: '4px 10px', border: '1.5px solid #e0d5f0', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer', background: 'white', color: '#390955', fontFamily: 'inherit' }}>
+                        style={{ padding: '6px 14px', border: '1.5px solid #e0d5f0', borderRadius: 'var(--yto-radius-button, 8px)', fontSize: 12, fontWeight: 700, cursor: 'pointer', background: 'white', color: '#390955', fontFamily: 'inherit' }}>
                         {showArchivedDeliveries ? 'Hide' : 'Show'} archived ({riderArchivedCount}, 7+ days)
                       </button>
                     )}
@@ -661,7 +661,7 @@ export default function GenerateRiderDataReport() {
 
                 <div style={{ display: 'flex', gap: 10 }}>
                   <button onClick={(e) => handleOpenEdit(rider, e)}
-                    style={{ padding: '11px 24px', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', background: '#390955', color: 'white' }}>
+                    style={{ padding: '10px 22px', border: 'none', borderRadius: 'var(--yto-radius-button, 8px)', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', background: '#390955', color: 'white' }}>
                     Edit Profile Details
                   </button>
                 </div>
@@ -676,7 +676,7 @@ export default function GenerateRiderDataReport() {
           zIndex={9999} blur={false} tint="rgba(26,10,36,0.5)" overlayStyle={{ backdropFilter: 'blur(4px)' }}
           padding={0} cardStyle={{ background: 'transparent', boxShadow: 'none', width: 'auto', maxWidth: 'none', maxHeight: 'none', overflowY: 'visible' }}
         >
-          <form onSubmit={handleSaveEdit} style={{ width: 460, background: 'white', borderRadius: 12, overflow: 'hidden', boxShadow: '0 12px 36px rgba(57,9,85,0.25)' }}>
+          <form onSubmit={handleSaveEdit} style={{ width: 460, background: 'white', borderRadius: 'var(--yto-radius-dialog, 10px)', overflow: 'hidden', boxShadow: '0 12px 36px rgba(57,9,85,0.25)' }}>
             <ModalHeader title="Edit Rider Profile" icon={User} onClose={() => setEditingRider(null)} />
 
             {saveMsg && <div style={{ background: '#d1fae5', color: '#065f46', padding: '10px 24px', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 7 }}><CheckCircle2 size={15} aria-hidden="true" /> {saveMsg}</div>}
@@ -748,11 +748,11 @@ export default function GenerateRiderDataReport() {
 
             <div style={{ padding: '16px 24px', borderTop: '1px solid #e0d5f0', background: '#faf9ff', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
               <button type="button" onClick={() => setEditingRider(null)}
-                style={{ padding: '10px 20px', border: '1.5px solid #e0d5f0', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', background: 'white', color: '#555' }}>
+                style={{ padding: '10px 22px', border: '1.5px solid #e0d5f0', borderRadius: 'var(--yto-radius-button, 8px)', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', background: 'white', color: '#555' }}>
                 Cancel
               </button>
               <button type="submit"
-                style={{ padding: '10px 20px', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', background: '#390955', color: 'white' }}>
+                style={{ padding: '10px 22px', border: 'none', borderRadius: 'var(--yto-radius-button, 8px)', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', background: '#390955', color: 'white' }}>
                 Save Changes
               </button>
             </div>
@@ -765,7 +765,7 @@ export default function GenerateRiderDataReport() {
         <Modal
           zIndex={9999} blur={false} tint="rgba(26,10,36,0.5)" overlayStyle={{ backdropFilter: 'blur(4px)' }}
           onBackdropClick={() => setViewParcel(null)}
-          padding={0} cardStyle={{ width: 460, borderRadius: 12, overflow: 'hidden', boxShadow: '0 12px 36px rgba(57,9,85,0.25)', maxHeight: '85vh', maxWidth: 'none', display: 'flex', flexDirection: 'column' }}
+          padding={0} cardStyle={{ width: 460, overflow: 'hidden', boxShadow: '0 12px 36px rgba(57,9,85,0.25)', maxHeight: '85vh', maxWidth: 'none', display: 'flex', flexDirection: 'column' }}
         >
             <ModalHeader title={viewParcel.trackingNumber} subtitle="Parcel Info" icon={Package} onClose={() => setViewParcel(null)} closeLabel="Close parcel info" />
             <div style={{ padding: '20px 24px', overflowY: 'auto' }}>
@@ -808,7 +808,7 @@ export default function GenerateRiderDataReport() {
             </div>
             <div style={{ padding: '14px 24px', borderTop: '1px solid #e0d5f0', background: '#faf9ff', display: 'flex', justifyContent: 'flex-end' }}>
               <button onClick={() => setViewParcel(null)}
-                style={{ padding: '10px 20px', border: '1.5px solid #e0d5f0', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', background: 'white', color: '#555' }}>
+                style={{ padding: '10px 22px', border: '1.5px solid #e0d5f0', borderRadius: 'var(--yto-radius-button, 8px)', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', background: 'white', color: '#555' }}>
                 Close
               </button>
             </div>

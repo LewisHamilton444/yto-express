@@ -20,7 +20,6 @@ import ManageParcelLocation from './ManageParcelLocation';
 import MonitorParcel from './MonitorParcel';
 import GenerateTrackingInformation from './GenerateTrackingInformation';
 import Settings from './Settings';
-import Logout from './Logout';
 
 export const PAGE_MAP = {
   'dashboard':           AnalyticsDashboard,
@@ -41,5 +40,4 @@ export const PAGE_MAP = {
   'geofence':            MonitorParcel,
   'tracking-info':       GenerateTrackingInformation,
   'settings':            Settings,
-  'logout':              Logout,
 };

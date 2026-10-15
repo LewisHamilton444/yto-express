@@ -132,21 +132,22 @@
 .lp-export > button {
   height: 40px;
   padding: 0 16px;
-  border-radius: 10px;
+  border-radius: 8px;
   font-size: 12.5px;
-  background: linear-gradient(135deg, #ff8a3d 0%, #f37021 55%, #e25e10 100%);
-  border: 1px solid rgba(226, 94, 16, 0.55);
-  box-shadow: 0 6px 16px -8px rgba(243, 112, 33, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  background: #f37021;
+  border: none;
+  box-shadow: none;
   transition: box-shadow 0.18s ease, transform 0.18s ease, filter 0.18s ease;
 }
 .lp-export > button:hover:not(:disabled) {
   transform: translateY(-1px);
   filter: none;
-  box-shadow: 0 10px 22px -10px rgba(243, 112, 33, 0.85), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  box-shadow: none;
 }
 .lp-export > button:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3px #ffffff, 0 0 0 5px #f37021;
+  outline: 2px solid #f37021;
+  outline-offset: 2px;
+  box-shadow: none;
 }
 
 /* ── Table ── */
@@ -294,7 +295,7 @@
   gap: 6px;
   height: 32px;
   padding: 0 12px;
-  border-radius: 9px;
+  border-radius: 8px;
   border: 1px solid #e2d9ee;
   background: #ffffff;
   color: #390955;
@@ -307,11 +308,12 @@
 .lp-view-btn:hover {
   background: #f7f1fc;
   border-color: #cdb8e6;
-  box-shadow: 0 4px 12px -6px rgba(57, 9, 85, 0.30);
+  box-shadow: none;
 }
 .lp-view-btn:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3px rgba(57, 9, 85, 0.18);
+  outline: 2px solid #f37021;
+  outline-offset: 2px;
+  box-shadow: none;
   border-color: #390955;
 }
 
@@ -372,8 +374,8 @@
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 20px 22px;
+  gap: 10px;
+  padding: 14px 18px;
   /* Light theme (2026-10-05): white header like every other popup. */
   background: #ffffff;
   border-bottom: 1px solid #efe8f6;
@@ -383,14 +385,14 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 46px;
-  height: 46px;
+  width: 36px;
+  height: 36px;
   flex-shrink: 0;
   border-radius: 50%;
   background: linear-gradient(135deg, #f4ecfb 0%, #e9dcf6 100%);
   border: 1px solid #e2d4f1;
   color: #390955;
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 800;
   letter-spacing: 0.02em;
 }
@@ -400,7 +402,7 @@
 }
 .lp-modal-identity h3 {
   margin: 0;
-  font-size: 17px;
+  font-size: 15px;
   font-weight: 800;
   letter-spacing: -0.01em;
   color: #111827;
@@ -412,8 +414,8 @@
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 6px;
+  gap: 6px;
+  margin-top: 4px;
 }
 .lp-modal-id {
   padding: 3px 8px;
@@ -434,12 +436,12 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
+  width: 30px;
+  height: 30px;
   flex-shrink: 0;
-  border-radius: 10px;
-  border: 1px solid #e5e7eb;
-  background: #ffffff;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
   color: #6b7280;
   cursor: pointer;
   transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
@@ -450,8 +452,9 @@
   color: #111827;
 }
 .lp-modal-close:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3px rgba(57, 9, 85, 0.18);
+  outline: 2px solid #f37021;
+  outline-offset: 2px;
+  box-shadow: none;
 }
 
 .lp-modal-tabs {
@@ -653,7 +656,7 @@
   gap: 6px;
   height: 36px;
   padding: 0 14px;
-  border-radius: 10px;
+  border-radius: 8px;
   font-size: 12.5px;
   font-weight: 700;
   font-family: inherit;
@@ -678,8 +681,9 @@
   background: #2a0640;
 }
 .lp-btn:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3px rgba(57, 9, 85, 0.2);
+  outline: 2px solid #f37021;
+  outline-offset: 2px;
+  box-shadow: none;
 }
 
 /* Timeline (seller status history) */
@@ -837,24 +841,25 @@
   gap: 6px;
   height: 32px;
   padding: 0 14px;
-  border-radius: 9px;
-  border: 1px solid rgba(226, 94, 16, 0.55);
-  background: linear-gradient(135deg, #ff8a3d 0%, #f37021 55%, #e25e10 100%);
+  border-radius: 8px;
+  border: none;
+  background: #f37021;
   color: #ffffff;
   font-size: 12px;
   font-weight: 700;
   font-family: inherit;
   cursor: pointer;
-  box-shadow: 0 6px 14px -8px rgba(243, 112, 33, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  box-shadow: none;
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 .lp-review-btn:hover {
   transform: translateY(-1px);
-  box-shadow: 0 10px 20px -10px rgba(243, 112, 33, 0.9), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  box-shadow: none;
 }
 .lp-review-btn:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3px #ffffff, 0 0 0 5px #f37021;
+  outline: 2px solid #f37021;
+  outline-offset: 2px;
+  box-shadow: none;
 }
 .lp-table--review .lp-stack-sub.lp-mono {
   font-size: 11px;
@@ -877,15 +882,17 @@
 }
 /* Primary approve: brand-orange gradient with a soft glow */
 .lp-btn.is-approve {
-  border: 1px solid rgba(226, 94, 16, 0.55);
-  background: linear-gradient(120deg, #ff9a4f 0%, #f37021 55%, #e0520a 100%);
+  border: none;
+  background: #f37021;
   color: #ffffff;
-  box-shadow: 0 10px 22px -10px rgba(243, 112, 33, 0.85), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  box-shadow: none;
 }
 .lp-btn.is-approve:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 14px 28px -12px rgba(243, 112, 33, 0.95), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  box-shadow: none;
 }
 .lp-btn.is-approve:focus-visible {
-  box-shadow: 0 0 0 3px #ffffff, 0 0 0 5px #f37021;
+  outline: 2px solid #f37021;
+  outline-offset: 2px;
+  box-shadow: none;
 }

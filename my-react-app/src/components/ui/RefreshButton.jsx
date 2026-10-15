@@ -19,7 +19,7 @@ export default function RefreshButton({
       onClick={onClick}
       disabled={isBusy}
       className={`inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-[#e0d5f0] rounded-lg text-[11px] font-bold text-[#390955] transition-all duration-150 ${
-        isBusy ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer hover:bg-[#faf7fd] hover:border-[#cfbfe6] active:scale-95 shadow-2xs'
+        isBusy ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer hover:bg-[#faf7fd] hover:border-[#cfbfe6] active:scale-95'
       } ${className}`}
     >
       <RefreshCw

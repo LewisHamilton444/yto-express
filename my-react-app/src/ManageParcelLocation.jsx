@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { apiFetch, parcelLocationsApi, parcelsApi, ridersApi } from './services/api';
 import useSSE from './services/useSSE';
 import Modal from './components/ui/Modal';
+import ModalHeader from './components/ui/ModalHeader';
 import { useToast } from './components/ui/useToast';
 import PageHeader from './components/ui/PageHeader';
 import SectionCard from './components/ui/SectionCard';
@@ -18,6 +19,7 @@ import ExportDropdown from './components/ui/ExportDropdown';
 import { exportToCSV, exportToExcel, exportToWord, exportToPDF } from './exportUtils';
 import { loadLeaflet } from './leafletLoader';
 import { LOGISTICS_HUBS, haversineKm } from './hubGeofenceData';
+import { resolveParcelCurrentLocation } from './utils/parcelLocationResolver';
 import './ManageParcelLocation.css';
 import {
   AlertTriangle, MapPin, Pencil, RotateCw, Check, Search, Map,
@@ -68,17 +70,17 @@ function EditModal({ row, onSave, onClose }) {
   };
 
   return (
-    <Modal onBackdropClick={onClose} zIndex={99999} maxWidth={520} tint="rgba(0,0,0,0.4)" cardStyle={{ borderRadius: 12, boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom: 6 }}>
-          <h3 style={{ color:'#390955', margin:0, fontSize:'18px', fontWeight:700 }}>Edit Location Details</h3>
+    <Modal onBackdropClick={onClose} zIndex={99999} maxWidth={520} tint="rgba(0,0,0,0.4)" padding={0} cardStyle={{ overflow: 'hidden', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
+        <ModalHeader title="Edit Location Details" icon={MapPin}>
           <button
             type="button"
             onClick={setPulilanPreset}
-            className="text-[11px] font-bold text-[#390955] bg-[#f0eaf8] hover:bg-[#e4d6f3] px-2.5 py-1 rounded-md transition-colors cursor-pointer"
+            className="text-xs font-bold text-[#390955] bg-[#f0eaf8] hover:bg-[#e4d6f3] px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
           >
             Preset: Pulilan Central Hub
           </button>
-        </div>
+        </ModalHeader>
+        <div style={{ padding: '24px' }}>
         <p style={{ fontFamily:'monospace', margin:'0 0 20px 0', fontSize:'13px', color:'#f37021', fontWeight:600 }}>{row.parcelId}</p>
         <div style={{ display:'flex', flexDirection:'column', gap:'14px' }}>
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }}>
@@ -124,11 +126,22 @@ function EditModal({ row, onSave, onClose }) {
             <Check size={14} className="inline mr-1" /> Save Changes
           </button>
         </div>
+        </div>
     </Modal>
   );
 }
 
-function ParcelLocationMapPreview({ lat, lng, parcelId, locationName }) {
+function ParcelLocationMapPreview({
+  lat,
+  lng,
+  parcelId,
+  locationName,
+  status,
+  type,
+  origin,
+  destination,
+  deliveryCoords,
+}) {
   const mapContainerRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const tileLayerRef = useRef(null);
@@ -164,20 +177,27 @@ function ParcelLocationMapPreview({ lat, lng, parcelId, locationName }) {
       }).addTo(map);
       tileLayerRef.current = streetTile;
 
-      // 100m geofence ring
+      const normStatus = (status || '').toLowerCase();
+      const isDelivered = normStatus === 'delivered';
+      const isDoorstep = normStatus === 'out for delivery';
+      const isPickupStage = ['pending', 'to ship', 'confirmed', 'processing', 'to pickup'].includes(normStatus);
+
+      // 100m geofence ring: green for delivered, brand purple for pickup/transit
+      const ringColor = isDelivered ? '#43A047' : '#390955';
       L.circle([numLat, numLng], {
         radius: 100,
-        color: '#390955',
-        fillColor: '#390955',
+        color: ringColor,
+        fillColor: ringColor,
         fillOpacity: 0.12,
         weight: 2,
         dashArray: '4, 4',
       }).addTo(map);
 
-      // Custom brand pin marker
+      // Custom brand pin marker for current position
+      const pinColor = isDelivered ? '#43A047' : isDoorstep ? '#1E88E5' : '#390955';
       const pinHtml = `
-        <div style="position:relative;width:36px;height:36px;display:flex;align-items:center;justify-content:center;">
-          <div style="width:32px;height:32px;border-radius:10px;background:#390955;border:2.5px solid #ffffff;box-shadow:0 3px 12px rgba(57,9,85,0.45);display:flex;align-items:center;justify-content:center;">
+        <div style="position:relative;width:38px;height:38px;display:flex;align-items:center;justify-content:center;">
+          <div style="width:34px;height:34px;border-radius:10px;background:${pinColor};border:2.5px solid #ffffff;box-shadow:0 3px 12px rgba(57,9,85,0.45);display:flex;align-items:center;justify-content:center;">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
               <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
               <circle cx="12" cy="10" r="3"></circle>
@@ -190,19 +210,81 @@ function ParcelLocationMapPreview({ lat, lng, parcelId, locationName }) {
         icon: L.divIcon({
           className: '',
           html: pinHtml,
-          iconSize: [36, 36],
-          iconAnchor: [18, 18],
+          iconSize: [38, 38],
+          iconAnchor: [19, 19],
           popupAnchor: [0, -20],
         }),
       }).addTo(map);
 
+      const statusBadgeText = status ? ` • ${status}` : '';
+      const stageDescription = isPickupStage
+        ? 'Pickup Location (Seller Warehouse)'
+        : isDelivered
+        ? 'Delivered at Destination'
+        : 'Active Courier Location';
+
       marker.bindPopup(`
-        <div style="font-family:sans-serif;font-size:12px;line-height:1.6;min-width:160px;padding:2px;">
-          <div style="font-weight:700;color:#390955;font-size:13px;margin-bottom:2px;">${parcelId || 'Parcel'}</div>
-          <div style="color:#475569;font-size:11px;">${locationName || 'Current Location'}</div>
+        <div style="font-family:sans-serif;font-size:12px;line-height:1.6;min-width:180px;padding:3px;">
+          <div style="font-weight:700;color:${pinColor};font-size:13px;margin-bottom:2px;">${parcelId || 'Parcel'}${statusBadgeText}</div>
+          <div style="color:#0f172a;font-weight:600;font-size:11px;">${locationName || 'Current Location'}</div>
+          <div style="color:#64748b;font-size:10px;margin-top:2px;">${stageDescription}</div>
           <div style="color:#64748b;font-family:monospace;font-size:10px;margin-top:4px;">${numLat.toFixed(5)}, ${numLng.toFixed(5)}</div>
         </div>
       `);
+
+      // If delivery coords exist and differ from current position (e.g. parcel awaiting pickup or in transit)
+      const validDestLat = parseFloat(deliveryCoords?.lat);
+      const validDestLng = parseFloat(deliveryCoords?.lng);
+      const hasDestCoords = !isNaN(validDestLat) && !isNaN(validDestLng) && validDestLat !== 0 && validDestLng !== 0;
+      const isDistinctDestination = hasDestCoords && (Math.abs(validDestLat - numLat) > 0.0005 || Math.abs(validDestLng - numLng) > 0.0005);
+
+      if (isDistinctDestination && !isDelivered) {
+        const destPinHtml = `
+          <div style="position:relative;width:34px;height:34px;display:flex;align-items:center;justify-content:center;">
+            <div style="width:30px;height:30px;border-radius:10px;background:#43A047;border:2.5px solid #ffffff;box-shadow:0 3px 10px rgba(67,160,71,0.4);display:flex;align-items:center;justify-content:center;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                <polyline points="9 22 9 12 15 12 15 22"></polyline>
+              </svg>
+            </div>
+          </div>
+        `;
+
+        const destMarker = L.marker([validDestLat, validDestLng], {
+          icon: L.divIcon({
+            className: '',
+            html: destPinHtml,
+            iconSize: [34, 34],
+            iconAnchor: [17, 17],
+            popupAnchor: [0, -18],
+          }),
+        }).addTo(map);
+
+        destMarker.bindPopup(`
+          <div style="font-family:sans-serif;font-size:12px;line-height:1.6;min-width:180px;padding:3px;">
+            <div style="font-weight:700;color:#43A047;font-size:13px;margin-bottom:2px;">Delivery Destination</div>
+            <div style="color:#0f172a;font-weight:600;font-size:11px;">${destination || 'Recipient Doorstep'}</div>
+            <div style="color:#64748b;font-family:monospace;font-size:10px;margin-top:4px;">${validDestLat.toFixed(5)}, ${validDestLng.toFixed(5)}</div>
+          </div>
+        `);
+
+        // Dashed logistics route connector line
+        L.polyline([
+          [numLat, numLng],
+          [validDestLat, validDestLng]
+        ], {
+          color: '#F37021',
+          weight: 2.5,
+          dashArray: '6, 6',
+          opacity: 0.8,
+        }).addTo(map);
+
+        // Frame both points so both current position and destination are clearly visible
+        map.fitBounds(L.latLngBounds([[numLat, numLng], [validDestLat, validDestLng]]), {
+          padding: [50, 50],
+          maxZoom: 16,
+        });
+      }
 
       mapInstanceRef.current = map;
       setMapReady(true);
@@ -217,7 +299,7 @@ function ParcelLocationMapPreview({ lat, lng, parcelId, locationName }) {
       tileLayerRef.current = null;
       setMapReady(false);
     };
-  }, [numLat, numLng, parcelId, locationName, hasValidCoords]);
+  }, [numLat, numLng, parcelId, locationName, status, type, origin, destination, deliveryCoords, hasValidCoords]);
 
   useEffect(() => {
     if (!mapReady || !mapInstanceRef.current || !tileLayerRef.current) return;
@@ -261,7 +343,7 @@ function ParcelLocationMapPreview({ lat, lng, parcelId, locationName }) {
         <button
           type="button"
           onClick={() => setIsSatellite((prev) => !prev)}
-          className={`px-2.5 py-1 text-[11px] font-bold rounded-md transition-colors cursor-pointer ${
+          className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-colors cursor-pointer ${
             isSatellite
               ? 'bg-[#390955] text-white'
               : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
@@ -273,7 +355,7 @@ function ParcelLocationMapPreview({ lat, lng, parcelId, locationName }) {
         <button
           type="button"
           onClick={recenterMap}
-          className="px-2.5 py-1 text-[11px] font-bold rounded-md bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors cursor-pointer"
+          className="px-2.5 py-1 text-xs font-bold rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors cursor-pointer"
           title="Center on Parcel"
         >
           Center
@@ -313,25 +395,104 @@ export default function ProcessParcelLocation() {
   const [parcelRiderByTracking, setParcelRiderByTracking] = useState({});
   const [riderNameById,         setRiderNameById]         = useState({});
   const [parcelsList,           setParcelsList]           = useState([]);
+  const fetchTimeoutRef = useRef(null);
+  const inFlightRef = useRef(false);
+
+  const fetchAll = useCallback(async () => {
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
+    try {
+      await Promise.all([fetchLocations(), fetchRiderLinks()]);
+    } finally {
+      inFlightRef.current = false;
+    }
+  }, []);
+
+  const scheduleFetch = useCallback((delay = 200) => {
+    if (fetchTimeoutRef.current) clearTimeout(fetchTimeoutRef.current);
+    fetchTimeoutRef.current = setTimeout(() => {
+      fetchAll();
+    }, delay);
+  }, [fetchAll]);
 
   useEffect(() => {
-    fetchLocations();
-    fetchRiderLinks();
-  }, []);
+    fetchAll();
+  }, [fetchAll]);
 
   // SSE real-time updates for newly created or updated parcels
   const { on } = useSSE();
   useEffect(() => {
-    const unsub1 = on('location-synced', () => { fetchLocations(); fetchRiderLinks(); });
-    const unsub2 = on('parcel-synced',   () => { fetchLocations(); fetchRiderLinks(); });
-    const unsub3 = on('parcel-updated',  () => { fetchLocations(); fetchRiderLinks(); });
+    const unsub1 = on('location-synced', () => scheduleFetch());
+    const unsub2 = on('parcel-synced',   () => scheduleFetch());
+    const unsub3 = on('parcel-updated',  () => scheduleFetch());
     return () => { unsub1(); unsub2(); unsub3(); };
-  }, [on]);
+  }, [on, scheduleFetch]);
 
   const fetchLocations = async () => {
     try {
-      const data = await parcelLocationsApi.list();
-      setLocations(Array.isArray(data) ? data : []);
+      const [locData, pData] = await Promise.all([
+        parcelLocationsApi.list().catch(() => []),
+        parcelsApi.list().catch(() => [])
+      ]);
+      const baseLocations = Array.isArray(locData) ? [...locData] : [];
+      const safeParcels = Array.isArray(pData) ? pData : [];
+
+      const parcelByTracking = {};
+      safeParcels.forEach(p => {
+        const tn = (p.trackingNumber || p.trackingId || '').toUpperCase();
+        if (tn) parcelByTracking[tn] = p;
+      });
+
+      // Reconcile stored location rows with authoritative parcel state
+      const seenIds = new Set();
+      const reconciledLocations = baseLocations.map(l => {
+        const tn = (l.parcelId || '').toUpperCase();
+        seenIds.add(tn);
+        const p = parcelByTracking[tn];
+        if (!p) return l;
+        const resolved = resolveParcelCurrentLocation(p);
+        return {
+          ...l,
+          lat: resolved.lat !== null && resolved.lat !== undefined ? String(resolved.lat) : l.lat,
+          lng: resolved.lng !== null && resolved.lng !== undefined ? String(resolved.lng) : l.lng,
+          location: resolved.location || l.location,
+          type: resolved.type || l.type,
+          status: p.status || l.status,
+          origin: p.origin,
+          destination: p.destination,
+          pickupCoords: (p.pickupLat && p.pickupLng) ? { lat: p.pickupLat, lng: p.pickupLng } : null,
+          deliveryCoords: (p.trackingGeofence?.center?.lat && p.trackingGeofence?.center?.lng) ? { lat: p.trackingGeofence.center.lat, lng: p.trackingGeofence.center.lng } : null,
+        };
+      });
+
+      // Include any parcels with coordinates that aren't in baseLocations yet
+      safeParcels.forEach(p => {
+        const tn = (p.trackingNumber || p.trackingId || '').toUpperCase();
+        if (tn && !seenIds.has(tn)) {
+          const resolved = resolveParcelCurrentLocation(p);
+          if (resolved.lat !== null && resolved.lng !== null) {
+            seenIds.add(tn);
+            reconciledLocations.push({
+              _id: p._id,
+              parcelId: p.trackingNumber || p.trackingId,
+              lat: String(resolved.lat),
+              lng: String(resolved.lng),
+              location: resolved.location,
+              type: resolved.type,
+              status: p.status || 'Active',
+              geofence: 'Inside',
+              notes: p.item || '',
+              origin: p.origin,
+              destination: p.destination,
+              pickupCoords: (p.pickupLat && p.pickupLng) ? { lat: p.pickupLat, lng: p.pickupLng } : null,
+              deliveryCoords: (p.trackingGeofence?.center?.lat && p.trackingGeofence?.center?.lng) ? { lat: p.trackingGeofence.center.lat, lng: p.trackingGeofence.center.lng } : null,
+              updatedAt: p.updatedAt || p.createdAt,
+            });
+          }
+        }
+      });
+
+      setLocations(reconciledLocations);
     } catch (err) {
       console.error('Error fetching locations:', err);
     } finally {
@@ -391,37 +552,45 @@ export default function ProcessParcelLocation() {
     }
   };
 
-  const handleGpsLookup = async () => {
-    const q = gpsQuery.trim().toUpperCase();
+  const handleGpsLookup = async (targetId) => {
+    const q = (typeof targetId === 'string' ? targetId : gpsQuery).trim().toUpperCase();
+    if (typeof targetId === 'string') setGpsQuery(targetId);
     if (!q) { setGpsError('Please provide a Parcel ID.'); setGpsResult(null); return; }
 
-    // 1. Search in local locations
-    const found = locations.find(r => r.parcelId?.toUpperCase() === q);
-    if (found) {
-      setGpsResult(found);
+    const findEnrichedParcel = (parcelDoc, baseRow = {}) => {
+      const resolved = resolveParcelCurrentLocation(parcelDoc);
+      return {
+        _id: parcelDoc._id || baseRow._id,
+        parcelId: parcelDoc.trackingNumber || parcelDoc.trackingId || baseRow.parcelId,
+        lat: resolved.lat !== null && resolved.lat !== undefined ? String(resolved.lat) : (baseRow.lat || null),
+        lng: resolved.lng !== null && resolved.lng !== undefined ? String(resolved.lng) : (baseRow.lng || null),
+        noPosition: resolved.lat === null || resolved.lng === null,
+        location: resolved.location || baseRow.location,
+        type: resolved.type || baseRow.type,
+        status: parcelDoc.status || baseRow.status || 'Active',
+        geofence: baseRow.geofence || 'Inside',
+        notes: parcelDoc.item || baseRow.notes || '',
+        origin: parcelDoc.origin,
+        destination: parcelDoc.destination,
+        pickupCoords: (parcelDoc.pickupLat && parcelDoc.pickupLng) ? { lat: parcelDoc.pickupLat, lng: parcelDoc.pickupLng } : null,
+        deliveryCoords: (parcelDoc.trackingGeofence?.center?.lat && parcelDoc.trackingGeofence?.center?.lng) ? { lat: parcelDoc.trackingGeofence.center.lat, lng: parcelDoc.trackingGeofence.center.lng } : null,
+        updatedAt: parcelDoc.updatedAt || parcelDoc.createdAt || baseRow.updatedAt || new Date().toISOString(),
+      };
+    };
+
+    // 1. Search in parcelsList (most up-to-date document)
+    const foundParcel = parcelsList.find(p => (p.trackingNumber || p.trackingId || '').toUpperCase() === q);
+    if (foundParcel) {
+      const matchingLoc = locations.find(r => r.parcelId?.toUpperCase() === q);
+      setGpsResult(findEnrichedParcel(foundParcel, matchingLoc));
       setGpsError('');
       return;
     }
 
-    // 2. Search in parcelsList
-    const foundParcel = parcelsList.find(p => (p.trackingNumber || p.trackingId || '').toUpperCase() === q);
-    if (foundParcel) {
-      const center = foundParcel.trackingGeofence?.center;
-      const lat = center?.lat ? String(center.lat) : (foundParcel.riderLat !== undefined && foundParcel.riderLat !== null ? String(foundParcel.riderLat) : null);
-      const lng = center?.lng ? String(center.lng) : (foundParcel.riderLng !== undefined && foundParcel.riderLng !== null ? String(foundParcel.riderLng) : null);
-      setGpsResult({
-        _id: foundParcel._id,
-        parcelId: foundParcel.trackingNumber || foundParcel.trackingId,
-        lat,
-        lng,
-        noPosition: lat === null || lng === null,
-        location: foundParcel.origin || foundParcel.destination || 'Pulilan Sorting Hub',
-        type: 'Warehouse',
-        status: foundParcel.status || 'Active',
-        geofence: 'Inside',
-        notes: foundParcel.item || '',
-        updatedAt: foundParcel.updatedAt || foundParcel.createdAt || new Date().toISOString(),
-      });
+    // 2. Search in local locations
+    const found = locations.find(r => r.parcelId?.toUpperCase() === q);
+    if (found) {
+      setGpsResult(found);
       setGpsError('');
       return;
     }
@@ -433,22 +602,7 @@ export default function ProcessParcelLocation() {
         const list = await pRes.json();
         const p = Array.isArray(list) ? list.find(x => (x.trackingNumber || x.trackingId || '').toUpperCase() === q) : null;
         if (p) {
-          const center = p.trackingGeofence?.center;
-          const lat = center?.lat ? String(center.lat) : (p.riderLat !== undefined && p.riderLat !== null ? String(p.riderLat) : null);
-          const lng = center?.lng ? String(center.lng) : (p.riderLng !== undefined && p.riderLng !== null ? String(p.riderLng) : null);
-          setGpsResult({
-            _id: p._id,
-            parcelId: p.trackingNumber || p.trackingId,
-            lat,
-            lng,
-            noPosition: lat === null || lng === null,
-            location: p.origin || p.destination || 'Pulilan Sorting Hub',
-            type: 'Warehouse',
-            status: p.status || 'Active',
-            geofence: 'Inside',
-            notes: p.item || '',
-            updatedAt: p.updatedAt || p.createdAt || new Date().toISOString(),
-          });
+          setGpsResult(findEnrichedParcel(p));
           setGpsError('');
           return;
         }
@@ -542,6 +696,26 @@ export default function ProcessParcelLocation() {
   const insideCount = useMemo(() => locations.filter(l => (l.geofence || 'Inside') === 'Inside').length, [locations]);
   const outsideCount = useMemo(() => locations.filter(l => l.geofence === 'Outside').length, [locations]);
 
+  const suggestionList = useMemo(() => {
+    const list = [];
+    const seen = new Set();
+    locations.forEach(r => {
+      const pid = r.parcelId;
+      if (pid && !seen.has(pid.toUpperCase())) {
+        seen.add(pid.toUpperCase());
+        list.push(r);
+      }
+    });
+    parcelsList.forEach(p => {
+      const tn = p.trackingNumber || p.trackingId;
+      if (tn && !seen.has(tn.toUpperCase())) {
+        seen.add(tn.toUpperCase());
+        list.push({ parcelId: tn, _id: p._id });
+      }
+    });
+    return list.slice(0, 8);
+  }, [locations, parcelsList]);
+
   // Add Location was a manual-entry form — removed since GPS coordinates are
   // now captured automatically via the rider mobile app scan, not typed in
   // by an admin. Get Parcel Info is the default view.
@@ -551,7 +725,7 @@ export default function ProcessParcelLocation() {
   ];
 
   return (
-    <div style={{ flex: 1, padding: '24px 30px 48px', backgroundColor: '#f0ecf7', minHeight: '100vh', fontFamily: "'DM Sans', sans-serif" }}>
+    <div style={{ flex: 1, padding: '24px 30px 48px', backgroundColor: '#f0ecf7', minHeight: '100vh', fontFamily: "'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif" }}>
       <PageHeader
         title="Manage Parcel Location"
         subtitle="Track, monitor, map, and process regional parcel positioning logistics"
@@ -570,7 +744,7 @@ export default function ProcessParcelLocation() {
             key={key}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
               activeTab === key
-                ? 'bg-[#390955] text-white shadow-sm'
+                ? 'bg-[#390955] text-white'
                 : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
             }`}
             onClick={() => setActiveTab(key)}
@@ -638,7 +812,7 @@ export default function ProcessParcelLocation() {
                 {(search || boundaryFilter !== 'all' || typeFilter !== 'all') && (
                   <button
                     onClick={handleClearFilters}
-                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white text-[#475569] text-xs font-bold border border-[#cbd5e1] hover:brightness-105 active:scale-95 transition-all shadow-sm cursor-pointer"
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white text-[#475569] text-xs font-bold border border-[#cbd5e1] hover:brightness-105 active:scale-95 transition-all cursor-pointer"
                   >
                     <X size={13} aria-hidden="true" /> Clear Filters
                   </button>
@@ -692,7 +866,7 @@ export default function ProcessParcelLocation() {
                             (search || boundaryFilter !== 'all' || typeFilter !== 'all') ? (
                               <button
                                 onClick={handleClearFilters}
-                                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#390955] text-white text-xs font-bold hover:brightness-110 transition shadow-sm cursor-pointer"
+                                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#390955] text-white text-xs font-bold hover:brightness-110 transition cursor-pointer"
                               >
                                 <RotateCw size={12} /> Reset Filters
                               </button>
@@ -713,7 +887,7 @@ export default function ProcessParcelLocation() {
                               <button
                                 type="button"
                                 onClick={(e) => handleCopyId(e, row.parcelId)}
-                                className="text-slate-400 hover:text-[#390955] transition-colors p-0.5 cursor-pointer"
+                                className="inline-flex items-center justify-center w-7 h-7 rounded-lg text-slate-400 hover:text-[#390955] transition-colors cursor-pointer"
                                 title="Copy tracking ID"
                               >
                                 {copiedId === row.parcelId ? (
@@ -758,7 +932,7 @@ export default function ProcessParcelLocation() {
                                   setGpsResult(row);
                                   setActiveTab('gps');
                                 }}
-                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold text-[#390955] bg-[#f0eaf8] hover:bg-[#e4d6f3] transition-colors cursor-pointer"
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold text-[#390955] bg-white border border-[#e2d9ee] hover:bg-[#e4d6f3] transition-colors cursor-pointer"
                                 title="Inspect in Location Lookup"
                               >
                                 <Eye size={12} /> Inspect
@@ -803,7 +977,7 @@ export default function ProcessParcelLocation() {
             actions={
               <button
                 onClick={handleGpsRefresh}
-                className="flex items-center gap-1.5 h-[34px] px-3.5 rounded-lg bg-white border border-[#390955] text-[#390955] text-xs font-bold hover:bg-slate-50 transition-all cursor-pointer shadow-sm"
+                className="flex items-center gap-1.5 h-[34px] px-3.5 rounded-lg bg-white border border-[#390955] text-[#390955] text-xs font-bold hover:bg-slate-50 transition-all cursor-pointer"
               >
                 <RotateCw size={13} aria-hidden="true" /> Refresh Coordinates
               </button>
@@ -829,7 +1003,7 @@ export default function ProcessParcelLocation() {
                       <button
                         type="button"
                         onClick={() => { setGpsQuery(''); setGpsResult(null); setGpsError(''); }}
-                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 inline-flex items-center justify-center w-7 h-7 rounded-lg text-slate-400 hover:text-slate-600 cursor-pointer"
                         title="Clear search"
                       >
                         <X size={14} />
@@ -839,22 +1013,30 @@ export default function ProcessParcelLocation() {
                 </div>
                 <button
                   type="button"
-                  className="h-[40px] px-5 rounded-lg bg-[#390955] text-white text-xs font-bold hover:brightness-110 transition-all cursor-pointer shadow-sm flex items-center justify-center gap-1.5"
+                  className="h-[40px] px-5 rounded-lg bg-[#390955] text-white text-xs font-bold hover:brightness-110 transition-all cursor-pointer flex items-center justify-center gap-1.5"
                   onClick={handleGpsLookup}
                 >
                   <Search size={14} /> Look Up Coordinates
                 </button>
               </div>
 
-              {locations.length > 0 && (
+              {suggestionList.length > 0 && (
                 <div className="flex gap-2 flex-wrap items-center pt-0.5">
                   <span className="text-[11px] text-slate-500 font-bold uppercase tracking-wider">Quick Suggestions:</span>
-                  {locations.slice(0, 5).map(r => (
+                  {suggestionList.map(r => (
                     <button
                       key={r._id || r.parcelId}
                       type="button"
-                      onClick={() => { setGpsQuery(r.parcelId); setGpsResult(r); setGpsError(''); }}
-                      className={`px-2.5 py-1 rounded-md text-xs font-mono font-bold border transition-colors cursor-pointer ${
+                      onClick={() => {
+                        setGpsQuery(r.parcelId);
+                        if (r.lat && r.lng) {
+                          setGpsResult(r);
+                          setGpsError('');
+                        } else {
+                          handleGpsLookup(r.parcelId);
+                        }
+                      }}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold border transition-colors cursor-pointer ${
                         gpsResult?.parcelId === r.parcelId
                           ? 'bg-[#390955] text-white border-[#390955]'
                           : 'border-[#dcd3e8] bg-white text-[#390955] hover:border-[#390955]'
@@ -921,7 +1103,7 @@ export default function ProcessParcelLocation() {
                               showMessage('Coordinates copied to clipboard');
                               setTimeout(() => setCopiedCoords(false), 2000);
                             }}
-                            className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
+                            className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
                             title="Copy Formatted Coordinates"
                           >
                             {copiedCoords ? <Check size={14} className="text-emerald-300" /> : <Copy size={14} />}
@@ -990,7 +1172,7 @@ export default function ProcessParcelLocation() {
                         <div className="grid grid-cols-2 gap-2">
                           <button
                             type="button"
-                            className="inline-flex items-center justify-center gap-1.5 h-[36px] px-3 rounded-lg bg-[#390955] text-white text-xs font-bold hover:brightness-110 transition-all cursor-pointer shadow-sm truncate"
+                            className="inline-flex items-center justify-center gap-1.5 h-[36px] px-3 rounded-lg bg-[#390955] text-white text-xs font-bold hover:brightness-110 transition-all cursor-pointer truncate"
                             onClick={() => setEditTarget(gpsResult)}
                           >
                             <Pencil size={12} /> Edit Details
@@ -1002,7 +1184,7 @@ export default function ProcessParcelLocation() {
                               setSearch(gpsResult.parcelId);
                               setActiveTab('parcel');
                             }}
-                            className="inline-flex items-center justify-center gap-1.5 h-[36px] px-3 rounded-lg border border-[#cbd5e1] bg-white text-[#390955] text-xs font-bold hover:bg-slate-50 transition-colors cursor-pointer shadow-sm truncate"
+                            className="inline-flex items-center justify-center gap-1.5 h-[36px] px-3 rounded-lg border border-[#e2d9ee] bg-white text-[#390955] text-xs font-bold hover:bg-slate-50 transition-colors cursor-pointer truncate"
                             title="Locate in Scanned Log Table"
                           >
                             <Eye size={12} /> View in Table
@@ -1038,6 +1220,12 @@ export default function ProcessParcelLocation() {
                           lng={gpsResult.lng}
                           parcelId={gpsResult.parcelId}
                           locationName={gpsResult.location}
+                          status={gpsResult.status}
+                          type={gpsResult.type}
+                          origin={gpsResult.origin}
+                          destination={gpsResult.destination}
+                          pickupCoords={gpsResult.pickupCoords}
+                          deliveryCoords={gpsResult.deliveryCoords}
                         />
                       </div>
                     </div>

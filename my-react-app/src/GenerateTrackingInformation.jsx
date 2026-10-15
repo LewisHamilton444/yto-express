@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { parcelsApi } from './services/api';
+import useSSE from './services/useSSE';
 import { useToast } from './components/ui/useToast';
 import Tooltip from './components/ui/Tooltip';
 import PageHeader from './components/ui/PageHeader';
@@ -16,7 +17,7 @@ import ExportDropdown from './components/ui/ExportDropdown';
 import { exportToCSV, exportToExcel, exportToWord, exportToPDF } from './exportUtils';
 import {
   CheckCircle2, Download, FileText, Loader2, Search,
-  Calendar, Hash, MapPin, Tag, Clock, Eye, Package,
+  Calendar, Hash, MapPin, Tag, Clock, Eye, Package, Trash2,
 } from 'lucide-react';
 
 const statusColor = (s) => s === 'Delivered' ? '#065f46' : s === 'In Transit' ? '#f37021' : '#390955';
@@ -64,12 +65,24 @@ export default function GenerateTrackingInformation({ reports: externalReports, 
   const [reportRowsPerPage,  setReportRowsPerPage]  = useState(10);
   const toast = useToast();
 
-  const [_reports, _setReports] = useState([]);
+  const [_reports, _setReports] = useState(() => {
+    try {
+      const saved = localStorage.getItem('yto_tracking_reports_ledger');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
   const reports    = externalReports ?? _reports;
   const setReports = (updater) => {
     const next = typeof updater === 'function' ? updater(reports) : updater;
     _setReports(next);
     onReportsChange?.(next);
+    try {
+      localStorage.setItem('yto_tracking_reports_ledger', JSON.stringify(next));
+    } catch (e) {
+      console.warn('Failed to persist tracking reports ledger:', e);
+    }
   };
 
   const showSuccess = (msg) => toast(msg);
@@ -96,9 +109,17 @@ export default function GenerateTrackingInformation({ reports: externalReports, 
     }
   };
 
+  const { on: onSSE } = useSSE();
   useEffect(() => {
     fetchParcels();
   }, []);
+
+  useEffect(() => {
+    if (!onSSE) return;
+    const unsub1 = onSSE('parcel-synced', () => fetchParcels());
+    const unsub2 = onSSE('parcel-updated', () => fetchParcels());
+    return () => { if (unsub1) unsub1(); if (unsub2) unsub2(); };
+  }, [onSSE]);
 
   const handleRefresh = () => {
     fetchParcels(true);
@@ -202,6 +223,12 @@ export default function GenerateTrackingInformation({ reports: externalReports, 
     }, 600);
   };
 
+  const handleDeleteReport = (reportId) => {
+    setReports((prev) => prev.filter((r) => r.id !== reportId));
+    if (previewReport?.id === reportId) setPreviewReport(null);
+    showSuccess('Report removed from ledger.');
+  };
+
   const handleClearForm = () => {
     setSelectedParcel(parcels.length > 0 ? parcels[0].trackingNumber : '');
     setParcelFilter('');
@@ -301,7 +328,7 @@ export default function GenerateTrackingInformation({ reports: externalReports, 
   };
 
   return (
-    <div style={{ flex: 1, padding: '24px 30px 48px', backgroundColor: '#f0ecf7', minHeight: '100vh', fontFamily: "'DM Sans', sans-serif" }}>
+    <div style={{ flex: 1, padding: '24px 30px 48px', backgroundColor: '#f0ecf7', minHeight: '100vh', fontFamily: "'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif" }}>
       <PageHeader
         title="Generate Tracking Information"
         subtitle="Generate and retrieve printable tracking reports and data exports for parcels"
@@ -463,14 +490,14 @@ export default function GenerateTrackingInformation({ reports: externalReports, 
             <div className="flex items-center justify-end gap-3 pt-4 border-t border-[#e8e0f0]">
               <button
                 type="button"
-                className="h-[40px] px-5 rounded-lg bg-white border border-[#cbd5e1] text-[#390955] text-xs font-bold hover:bg-slate-50 active:scale-95 transition-all cursor-pointer"
+                className="h-[40px] px-5 rounded-lg bg-white border border-[#cbd5e1] text-[#390955] text-[13px] font-bold hover:bg-slate-50 active:scale-95 transition-all cursor-pointer"
                 onClick={handleClearForm}
               >
                 Clear
               </button>
               <button
                 type="button"
-                className="flex items-center gap-2 h-[40px] px-5 rounded-lg bg-[#390955] text-white text-xs font-bold hover:brightness-110 active:scale-95 transition-all cursor-pointer shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center gap-2 h-[40px] px-5 rounded-lg bg-[#390955] text-white text-[13px] font-bold hover:brightness-110 active:scale-95 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 onClick={handleGenerate}
                 disabled={generating || parcels.length === 0}
               >
@@ -497,7 +524,7 @@ export default function GenerateTrackingInformation({ reports: externalReports, 
                 </div>
                 <Tooltip content={`Download report as ${previewReport.format}`}>
                   <button
-                    className="flex items-center gap-2 h-[34px] px-4 rounded-lg bg-[#f37021] text-white text-xs font-bold hover:brightness-105 transition-all cursor-pointer shadow-sm"
+                    className="flex items-center gap-2 h-[34px] px-4 rounded-lg bg-[#f37021] text-white text-xs font-bold hover:brightness-105 transition-all cursor-pointer"
                     onClick={() => handleDownload(previewReport)}
                   >
                     <Download size={13} aria-hidden="true" /> Download {previewReport.format}
@@ -648,13 +675,22 @@ export default function GenerateTrackingInformation({ reports: externalReports, 
                       {r.generatedDate}
                     </DataTable.Cell>
                     <DataTable.Cell align="right" className="whitespace-nowrap" onClick={e => e.stopPropagation()}>
-                      <button
-                        onClick={() => handleDownload(r)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-purple-200 text-brand-purple text-xs font-bold hover:bg-purple-50 transition cursor-pointer"
-                        title={`Download as ${r.format}`}
-                      >
-                        <Download size={12} /> Download
-                      </button>
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => handleDownload(r)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-purple-200 text-brand-purple text-xs font-bold hover:bg-purple-50 transition cursor-pointer"
+                          title={`Download as ${r.format}`}
+                        >
+                          <Download size={12} /> Download
+                        </button>
+                        <button
+                          onClick={() => handleDeleteReport(r.id)}
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-red-200 text-red-600 text-xs font-bold hover:bg-red-50 transition cursor-pointer"
+                          title="Remove from ledger"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
                     </DataTable.Cell>
                   </DataTable.Row>
                 ))

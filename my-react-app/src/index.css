@@ -61,3 +61,9 @@ html, body, #root {
   background: #b5a5cb;
 }
 
+/* ── Unified button focus ring (keyboard visibility, chrome-only) ── */
+button:focus-visible {
+  outline: 2px solid var(--yto-brand-orange, #f37021);
+  outline-offset: 2px;
+}
+

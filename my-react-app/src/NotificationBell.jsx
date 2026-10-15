@@ -5,7 +5,7 @@ import Tooltip from './components/ui/Tooltip';
 
 const s = {
   wrap:   { position: 'relative' },
-  bellBtn: { position: 'relative', width: 38, height: 38, borderRadius: 10, border: '1.5px solid #ede4f5', background: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' },
+  bellBtn: { position: 'relative', width: 30, height: 30, borderRadius: 'var(--yto-radius-button, 8px)', border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' },
   badge:  { position: 'absolute', top: -4, right: -4, minWidth: 17, height: 17, borderRadius: '50%', background: '#ef4444', color: 'white', fontSize: 10, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 3px', border: '2px solid white' },
   dropdown: { position: 'absolute', top: 'calc(100% + 8px)', right: 0, width: 340, background: 'white', borderRadius: 12, boxShadow: '0 12px 32px rgba(57,9,85,0.18)', border: '1px solid #ede4f5', zIndex: 3000, maxHeight: 420, overflowY: 'auto' },
   header: { padding: '14px 16px', borderBottom: '1px solid #f3edfb', fontSize: 13, fontWeight: 800, color: '#1a1a1a' },

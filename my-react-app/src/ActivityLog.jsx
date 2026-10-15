@@ -242,7 +242,7 @@ export default function ActivityLog() {
             handleCopy(trackingMatch[0]);
           }}
           title="Click to copy tracking reference"
-          className="inline-flex items-center px-1.5 py-0.5 rounded bg-amber-50 text-[#f37021] font-mono font-bold text-[11px] border border-amber-200/60 mx-1 hover:bg-amber-100 transition cursor-pointer"
+          className="inline-flex items-center px-1.5 py-0.5 rounded-lg bg-amber-50 text-[#f37021] font-mono font-bold text-[11px] border border-amber-200/60 mx-1 hover:bg-amber-100 transition cursor-pointer"
         >
           {trackingMatch[0]}
         </button>
@@ -399,7 +399,7 @@ export default function ActivityLog() {
             {hasActiveFilters && (
               <button
                 onClick={handleClearFilters}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white text-[#475569] text-xs font-bold border border-[#cbd5e1] hover:brightness-105 active:scale-95 transition-all shadow-sm cursor-pointer"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white text-[#475569] text-xs font-bold border border-[#cbd5e1] hover:brightness-105 active:scale-95 transition-all cursor-pointer"
               >
                 <X size={13} aria-hidden="true" /> Clear Filters
               </button>
@@ -452,7 +452,7 @@ export default function ActivityLog() {
                         hasActiveFilters ? (
                           <button
                             onClick={handleClearFilters}
-                            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white text-[#475569] text-xs font-bold border border-[#cbd5e1] hover:brightness-105 active:scale-95 transition-all shadow-sm cursor-pointer"
+                            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white text-[#475569] text-xs font-bold border border-[#cbd5e1] hover:brightness-105 active:scale-95 transition-all cursor-pointer"
                           >
                             <X size={13} aria-hidden="true" /> Clear Filters
                           </button>
@@ -486,7 +486,7 @@ export default function ActivityLog() {
                                 handleCopy(evt.actorId);
                               }}
                               title="Copy Reference ID"
-                              className="p-1 rounded hover:bg-purple-100 text-slate-400 hover:text-brand-purple transition opacity-0 group-hover:opacity-100 cursor-pointer"
+                              className="inline-flex h-7 w-7 items-center justify-center rounded-lg hover:bg-purple-100 text-slate-400 hover:text-brand-purple transition opacity-0 group-hover:opacity-100 cursor-pointer"
                             >
                               <Copy size={11} />
                             </button>
@@ -549,7 +549,7 @@ export default function ActivityLog() {
                       <DataTable.Cell align="right" className="whitespace-nowrap" onClick={e => e.stopPropagation()}>
                         <button
                           onClick={() => setDetailEvent(evt)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-purple-200 text-brand-purple text-xs font-bold hover:bg-purple-50 transition opacity-80 group-hover:opacity-100 whitespace-nowrap cursor-pointer"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#e2d9ee] bg-white text-brand-purple text-xs font-bold hover:bg-purple-50 transition opacity-80 group-hover:opacity-100 whitespace-nowrap cursor-pointer"
                         >
                           <Eye size={12} /> View Event
                         </button>
@@ -583,7 +583,7 @@ export default function ActivityLog() {
           blur={false}
           maxWidth={540}
           padding={0}
-          cardStyle={{ borderRadius: 12, overflow: 'hidden', boxShadow: '0 20px 40px rgba(0,0,0,0.2)' }}
+          cardStyle={{ overflow: 'hidden', boxShadow: '0 20px 40px rgba(0,0,0,0.2)' }}
         >
           <ModalHeader title="Activity Details" icon={Eye} onClose={() => setDetailEvent(null)} closeLabel="Close activity details" />
 
@@ -642,7 +642,7 @@ export default function ActivityLog() {
                 <button
                   type="button"
                   onClick={() => handleCopy(detailEvent.actorId)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-gray-300 bg-white text-gray-700 text-xs font-bold hover:bg-gray-50 transition cursor-pointer"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-xs font-bold hover:bg-gray-50 transition cursor-pointer"
                 >
                   {copiedId ? <Check size={12} className="text-emerald-600" /> : <Copy size={12} />}
                   {copiedId ? 'Copied' : 'Copy Reference ID'}

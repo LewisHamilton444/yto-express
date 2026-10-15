@@ -51,7 +51,7 @@
   /* Typography scale — 12px is the floor for primary reading text.
      The old 10px/11px uppercase labels render here as 11px/12px via
      the JSX typography-floor rules (see the overrides at bottom). */
-  --yto-font-body: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --yto-font-body: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
   --yto-font-mono: 'DM Mono', 'Courier New', monospace;
 
   --yto-text-xs: 11px;
@@ -74,7 +74,9 @@
   --yto-radius: 8px;          /* Alias for backwards compatibility */
   --yto-radius-lg: 12px;      /* Large: nested cards, filter panels, tab trays */
   --yto-radius-xl: 16px;      /* Extra Large: primary dashboard cards, table panels */
-  --yto-radius-2xl: 20px;     /* 2XL: modals, dialog overlays, floating sheets */
+  --yto-radius-2xl: 20px;     /* 2XL: large floating sheets (non-dialog) */
+  --yto-radius-dialog: 10px;  /* Dialogs: every modal card shell renders at this value */
+  --yto-radius-button: 8px;   /* Buttons: every action button renders at this value (one step below dialog cards) */
   --yto-radius-full: 9999px;  /* Pill / Circle: avatars, toggle switches, single-line count chips */
 
   /* Elevation */

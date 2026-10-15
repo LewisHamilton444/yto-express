@@ -16,10 +16,18 @@
     "preview": "vite preview",
     "qa:live": "node scripts/qa/liveAdminE2E.mjs",
     "qa:browser": "node scripts/qa/browserE2E.mjs",
-    "qa:bridge": "node scripts/qa/appWebIntegration.mjs"
+    "qa:bridge": "node scripts/qa/appWebIntegration.mjs",
+    "qa:waybill": "node server/scripts/qa/waybillParityCheck.mjs",
+    "qa:qr": "node scripts/qa/qrWaybillRenderCheck.mjs",
+    "qa:drawer": "node scripts/qa/returnHandoverRenderCheck.mjs",
+    "qa:hubs": "node server/scripts/qa/hubParityCheck.mjs",
+    "qa:events": "node server/scripts/qa/parcelEventsCheck.mjs",
+    "qa:features": "node server/scripts/qa/bridgeFeaturesLiveCheck.mjs",
+    "qa:i8ui": "node scripts/qa/newSurfacesRenderCheck.mjs"
   },
   "dependencies": {
     "lucide-react": "^1.34.0",
+    "qrcode": "^1.5.4",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },
@@ -34,6 +42,8 @@
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
     "globals": "^16.5.0",
+    "jsqr": "^1.4.0",
+    "mongodb-memory-server": "^11.3.0",
     "tailwindcss": "^4.3.3",
     "vite": "^7.2.4"
   },

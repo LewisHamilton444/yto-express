@@ -50,23 +50,23 @@ app.use(helmet({
 // localhost dev origins are always allowed; production origins must be listed
 // EXACTLY in CORS_ORIGIN (comma-separated, e.g.
 // CORS_ORIGIN=https://yto-express-web.onrender.com). The old "any
-// *.onrender.com host" rule was removed — anyone can create an onrender.com
+// *.onrender.com host" rule was removed â€” anyone can create an onrender.com
 // site, so it let attacker pages call this API from a browser. Disallowed
 // origins get no ACAO header at all.
 //
-// BUGFIX 2026-09-22 — this predicate previously had signature (origin) => bool.
+// BUGFIX 2026-09-22 â€” this predicate previously had signature (origin) => bool.
 // cors@2.8.6 treats a FUNCTION origin as the async-decision contract
 // (origin, callback) => void. Our predicate never invoked its 2nd argument,
 // so cors's internal continuation never ran, next() was never called, and
-// EVERY request — allowed or not — hung until the client timed out. That was
+// EVERY request â€” allowed or not â€” hung until the client timed out. That was
 // the login page's "stuck spinner + error after ~1 minute" (apiFetch's 60s
 // abort) and the perpetually orange "Connecting..." health pill. The fixed
 // form below keeps the same allowlist rules but answers cors's callback:
-//   cb(null, originValue)  → allow (reflects the origin)
-//   cb(null, false)        → deny (no ACAO header, request still proceeds)
-//   cb(err)                → reject with error
+//   cb(null, originValue)  â†’ allow (reflects the origin)
+//   cb(null, false)        â†’ deny (no ACAO header, request still proceeds)
+//   cb(err)                â†’ reject with error
 // Verified against the installed cors source: server/node_modules/cors/lib/index.js
-// (middlewareWrapper → originCallback(req.headers.origin, function (err2, origin) ...)).
+// (middlewareWrapper â†’ originCallback(req.headers.origin, function (err2, origin) ...)).
 const isAllowedCorsOrigin = (origin, callback) => {
     if (!origin) return callback(null, true); // same-origin requests, curl, native clients
     try {
@@ -84,13 +84,13 @@ app.use(cors({
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
 }));
-app.use(express.json({ limit: '1mb' }));
+app.use(express.json({ limit: '15mb' })); // I-3e/G-32: was 1mb - a POD-bearing syncParcel (7MB JPEG -> ~9.33MB base64) 413'd and the mobile queue silently discarded it. 15mb matches the mobile backend's own C-18 precedent.
 app.use((req, res, next) => {
     if (req.body && typeof req.body === 'object') stripMongoOperators(req.body);
     next();
 });
 
-// ── EDITABLE-FIELD ALLOWLISTS ───────────────────────────────────────────────
+// â”€â”€ EDITABLE-FIELD ALLOWLISTS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Every admin PUT below assigns its fields straight into $set, so each request body
 // is filtered through an explicit allowlist first. Without this, an authenticated
 // admin could write any schema field, and validation was off so bad values were
@@ -99,7 +99,7 @@ app.use((req, res, next) => {
 // (riderLat/riderLng), money (codAmount, deliveryFee), derived counters
 // (deliveries, rating, successRate, isOnDuty), and the Web-minted identity
 // artifacts (qrPayload, sellerEnterpriseId, customerEnterpriseId, trackingGeofence)
-// — the Web is the sole minting authority for those.
+// â€” the Web is the sole minting authority for those.
 const pickEditable = (body, allowed) => {
     const updates = {};
     allowed.forEach((field) => {
@@ -144,14 +144,14 @@ const CUSTOMER_EDITABLE_FIELDS = [
 const SELLER_EDITABLE_FIELDS = [
     'fullName', 'storeName', 'warehouseAddress', 'operatingHours',
     'idType', 'idNumber', 'email', 'phone', 'address', 'city', 'state',
-    'country', 'postalCode', 'bankName', 'commissionRate', 'paymentCycle', 'status',
+    'country', 'postalCode', 'bankName', 'commissionRate', 'paymentCycle', 'status', 'documents',
 ];
 
 const RIDER_EDITABLE_FIELDS = [
     'riderName', 'vehicleType', 'email', 'phone', 'address', 'city', 'state',
-    'country', 'postalCode', 'licenseNumber', 'vehiclePlate',
+    'country', 'postalCode', 'licenseNumber', 'vehiclePlate', 'riderType',
     'emergencyContactName', 'emergencyContactPhone', 'bankName',
-    'payoutRate', 'payoutCycle', 'assignedHub', 'status',
+    'payoutRate', 'payoutCycle', 'assignedHub', 'status', 'documents',
 ];
 
 // events IS allowed: office status screens legitimately append timeline entries
@@ -165,6 +165,26 @@ const PARCEL_EDITABLE_FIELDS = [
     'dimensions', 'estimatedDeliveryDate', 'actualDeliveryDate',
 ];
 
+// â”€â”€ PART 5.2: office field edits that must reach the mobile app â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// The app's POST /api/bridge/receive-parcel reads these names. An office edit
+// used to stop at this database entirely, so the app kept the old payment
+// mode / piece count / category / item indefinitely.
+// Deliberately EXCLUDED from this push:
+//   value              - the mobile Shipment has no counterpart field
+//   status             - already travels via BridgeClient.sendStatus
+//                        (vocabulary-validated + audited there)
+//   riderId            - already travels via emitRiderAssignPush, which
+//                        resolves it to an email the app can look up
+//   events             - the portal's own timeline; the app stamps its own
+//   actualDeliveryDate - the app owns that clock (Delivered / Returned)
+const PARCEL_FIELD_PUSH_TO_APP = [
+    'senderName', 'senderPhone', 'senderEmail',
+    'receiverName', 'receiverPhone', 'recipientEmail',
+    'item', 'weight', 'origin', 'destination', 'notes',
+    'paymentMode', 'packageCount', 'packageCategory', 'packageType',
+    'dimensions', 'estimatedDeliveryDate',
+];
+
 // parcelId excluded: it is the join key with Parcel, so rewriting it would orphan
 // the location from the parcel it belongs to.
 const PARCEL_LOCATION_EDITABLE_FIELDS = [
@@ -173,22 +193,32 @@ const PARCEL_LOCATION_EDITABLE_FIELDS = [
 
 const Seller          = require('./models/Seller');
 const Rider           = require('./models/Rider');
+const CompanyVehicle  = require('./models/CompanyVehicle');
 const Customer        = require('./models/Customer');
 const Parcel          = require('./models/Parcel');
 const ParcelLocation  = require('./models/ParcelLocation');
 const BridgeClient    = require('./utils/BridgeClient');
+const bridgeReconcile = require('./utils/bridgeReconcile');
 const Account         = require('./models/Account');
 const Issue           = require('./models/Issue');
 const AdminNotification = require('./models/AdminNotification');
 const sseBroadcaster  = require('./utils/sseBroadcaster');
+const {
+    initAppDatabase,
+    enrichParcelsFromAppDb,
+    enrichParcelLocationsFromAppDb,
+    enrichRidersFromAppDb,
+} = require('./utils/appDatabase');
 const AuditLog        = require('./models/AuditLog');
 const { logAudit }    = require('./utils/auditLog');
 const {
     MAX_DELIVERY_ATTEMPTS, FAILED_ATTEMPT_REASONS, NOTES_MAX_LENGTH, STATUS: DELIVERY_STATUS,
     FAILED_ATTEMPT_ALLOWED_FROM, REDELIVER_ALLOWED_FROM,
+    computeNextAttemptDate, mapWebAttemptsToApp,
 } = require('./utils/deliveryAttempts');
+const { resolveParcelCurrentLocation } = require('./utils/parcelLocationResolver');
 
-// ── JWT AUTHENTICATION MIDDLEWARE ───────────────────────────────────────
+// â”€â”€ JWT AUTHENTICATION MIDDLEWARE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // No fallback: a missing JWT_SECRET must be a loud startup failure, never a
 // silent fall-through to a publicly-known string (token forgery risk).
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -204,7 +234,7 @@ function verifyJwtToken(token) {
 }
 
 // 2026 audit M2: an account's Deactivated status is enforced on EVERY
-// authenticated request, not just at login — an existing token cannot keep
+// authenticated request, not just at login â€” an existing token cannot keep
 // working after an admin neutralizes the account.
 async function authenticateToken(req, res, next) {
     const authHeader = req.headers['authorization'];
@@ -224,7 +254,9 @@ async function authenticateToken(req, res, next) {
         return res.status(403).json({ error: 'Invalid token.' });
     }
 
-    const account = await Account.findById(decoded.id);
+    const account = mongoose.isValidObjectId(decoded.id)
+        ? await Account.findById(decoded.id)
+        : await Account.findOne({ $or: [{ adminId: decoded.id }, { email: decoded.id }, { email: decoded.email }] });
     if (!account) {
         return res.status(401).json({ error: 'Account no longer exists. Please log in again.' });
     }
@@ -250,15 +282,42 @@ function requireRole(...allowedRoles) {
 
 // 2026-09-29 RBAC pass: role groups mirror the admin panel's page access
 // (AnalyticsDashboard getMenuSections/canOpenPage). The panel hides pages a
-// role cannot open, but a hidden page is not a protected one — these checks
+// role cannot open, but a hidden page is not a protected one â€” these checks
 // are what actually stop a staff or hub account calling the API directly.
-//   ANY_ROLE    — every signed-in role (the hub dashboard reads these)
-//   OFFICE      — super_admin + staff (people, parcels admin, issues, logs)
-//   SUPER_ONLY  — super_admin (deletes, map/geofence edits, settings)
+//   ANY_ROLE    â€” every signed-in role (the hub dashboard reads these)
+//   OFFICE      â€” super_admin + staff (people, parcels admin, issues, logs)
+//   SUPER_ONLY  â€” super_admin (deletes, map/geofence edits, settings)
 const ANY_ROLE = ['super_admin', 'staff', 'hub_receiver'];
 const OFFICE = ['super_admin', 'staff'];
 const SUPER_ONLY = ['super_admin'];
 
+// â”€â”€ I-6 manual reconcile trigger (auth) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Two accepted credentials, because the callers differ: the bridge secret for
+// ops scripts / the app backend, and a signed-in super_admin for the portal's
+// own "sync now" nudge (a browser can never hold the server secret). Anything
+// else is refused by the existing middleware, unchanged.
+function bridgeKeyMatches(req) {
+    const expected = process.env.BRIDGE_API_KEY;
+    if (!expected) return false;
+    const presented = String(req.get('x-bridge-api-key') || '');
+    const a = Buffer.from(presented);
+    const b = Buffer.from(String(expected));
+    return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+function requireBridgeKeyOrSuperAdmin(req, res, next) {
+    if (bridgeKeyMatches(req)) return next();
+    return authenticateToken(req, res, () => requireRole(...SUPER_ONLY)(req, res, next));
+}
+
+async function handleBridgeReconcile(req, res) {
+    try {
+        const result = await bridgeReconcile.runOnce();
+        return res.status(result.ok ? 200 : 503).json(result);
+    } catch (error) {
+        return sendServerError(res, error, `POST ${req.path}`);
+    }
+}
 // 2026-09-29 secure error handling: never send raw exception text (database
 // error codes, duplicate-key index names, validation internals, stack
 // traces, file paths) to the client. The full error is logged server-side
@@ -321,12 +380,12 @@ function validateAdminPassword(password) {
     return null;
 }
 
-// ── ROOT ROUTE ──
+// â”€â”€ ROOT ROUTE â”€â”€
 app.get('/', (req, res) => {
     res.send('YTO Express API Server is Running!');
 });
 
-// ── HEALTH CHECK ──
+// â”€â”€ HEALTH CHECK â”€â”€
 // Machine-readable liveness endpoint (the root route returns prose). The login
 // page's server-status pill probes this; before it existed the pill polled '/'
 // and could not distinguish "API up" from "some other server on that port".
@@ -339,12 +398,12 @@ app.get('/api/health', (req, res) => {
     });
 });
 
-// ── SSE EVENT STREAM ───────────────────────────────────────────────────
+// â”€â”€ SSE EVENT STREAM â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // 2026 audit H2: the stream is now authenticated. A browser EventSource cannot
 // send request headers, so the dashboard already rides the JWT as ?token=; the
 // server validates it (HS256 + real Active Account) BEFORE opening the stream,
 // and rejects anonymous/expired tokens with 401/403. Residual: the token rides
-// the query string (visible in access logs) — swapping the frontend to a
+// the query string (visible in access logs) â€” swapping the frontend to a
 // fetch()-based reader with an Authorization header removes that residual.
 app.get('/api/events/stream', async (req, res) => {
     // 2026 audit M5: Authorization header is the preferred carrier (the
@@ -388,7 +447,7 @@ app.get('/api/events/stream', async (req, res) => {
     });
 });
 
-// ── SSE STATS ───────────────────────────────────────────────────────────
+// â”€â”€ SSE STATS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 app.get('/api/events/stats', authenticateToken, (req, res) => {
     const stats = sseBroadcaster.getStats();
     res.json({
@@ -400,19 +459,19 @@ app.get('/api/events/stats', authenticateToken, (req, res) => {
     });
 });
 
-// ── SSE CONNECTION HISTORY ──────────────────────────────────────────────
+// â”€â”€ SSE CONNECTION HISTORY â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 app.get('/api/events/history', authenticateToken, (req, res) => {
     const history = sseBroadcaster.getConnectionHistory();
     res.json(history);
 });
 
-// ── SSE PEAK ALERTS ────────────────────────────────────────────────────
+// â”€â”€ SSE PEAK ALERTS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 app.get('/api/events/alerts', authenticateToken, (req, res) => {
     const alerts = sseBroadcaster.getPeakAlerts();
     res.json(alerts);
 });
 
-// ── SSE THRESHOLD CONFIG ───────────────────────────────────────────────
+// â”€â”€ SSE THRESHOLD CONFIG â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 app.put('/api/events/threshold', authenticateToken, requireRole(...SUPER_ONLY), (req, res) => {
     const { threshold } = req.body;
     if (typeof threshold !== 'number' || threshold < 1) {
@@ -422,10 +481,19 @@ app.put('/api/events/threshold', authenticateToken, requireRole(...SUPER_ONLY), 
     res.json({ success: true, threshold, message: `Threshold updated to ${threshold}` });
 });
 
-// ── BRIDGE ROUTES ──
+// â”€â”€ BRIDGE ROUTES â”€â”€
+// I-6: the manual reconcile trigger must be registered BEFORE this mount so
+// it can accept a signed-in super_admin as well as the shared bridge secret.
+// (The 60s loop in utils/bridgeReconcile.js runs regardless of this route; the
+// endpoint is the "sync now" nudge the portal fires on load, and the hook a
+// QA script uses.) It is deliberately NOT reachable without either credential
+// â€” an unauthenticated endpoint that writes records on demand would be a
+// denial-of-service lever on the live database.
+app.post('/api/bridge/reconcile', requireBridgeKeyOrSuperAdmin, handleBridgeReconcile);
+
 app.use('/api/bridge', require('./bridgeRoutes'));
 
-// ── SELLER ROUTES ──
+// â”€â”€ SELLER ROUTES â”€â”€
 app.post('/api/sellers', authenticateToken, requireRole(...OFFICE), async (req, res) => {
     try {
         const sellerEmail = String(req.body.email || '').toLowerCase().trim();
@@ -448,7 +516,7 @@ app.post('/api/sellers', authenticateToken, requireRole(...OFFICE), async (req, 
 
         if (newSeller.email && (newSeller.status === 'ACTIVE' || newSeller.status === 'Active')) {
             BridgeClient.sendApproval(newSeller.email, 'seller', newSeller.status, newSeller.registrationId)
-                .catch(e => console.warn('[Bridge→Android] sendApproval seller failed:', e.message));
+                .catch(e => console.warn('[Bridgeâ†’Android] sendApproval seller failed:', e.message));
         }
 
         res.status(201).json({ message: "Seller saved!", data: newSeller });
@@ -492,7 +560,7 @@ app.put('/api/sellers/:id', authenticateToken, requireRole(...OFFICE), async (re
 
         if (req.body.status && updated.email) {
             BridgeClient.sendApproval(updated.email, 'seller', req.body.status, updated.registrationId)
-                .catch(e => console.warn('[Bridge→Android] sendApproval failed:', e.message));
+                .catch(e => console.warn('[Bridgeâ†’Android] sendApproval failed:', e.message));
         }
 
         if (updated && updated.email) {
@@ -504,7 +572,7 @@ app.put('/api/sellers/:id', authenticateToken, requireRole(...OFFICE), async (re
                 operatingHours: updated.operatingHours,
                 address: updated.address,
                 city: updated.city,
-            }).catch(e => console.warn('[Bridge→Android] sendUserUpdate seller failed:', e.message));
+            }).catch(e => console.warn('[Bridgeâ†’Android] sendUserUpdate seller failed:', e.message));
         }
 
         res.json(updated);
@@ -525,7 +593,7 @@ app.delete('/api/sellers/:id', authenticateToken, requireRole(...SUPER_ONLY), as
     }
 });
 
-// ── RIDER ROUTES ──
+// â”€â”€ RIDER ROUTES â”€â”€
 app.post('/api/riders', authenticateToken, requireRole(...OFFICE), async (req, res) => {
     try {
         const riderEmail = String(req.body.email || '').toLowerCase().trim();
@@ -547,7 +615,7 @@ app.post('/api/riders', authenticateToken, requireRole(...OFFICE), async (req, r
 
         if (newRider.email && (newRider.status === 'ACTIVE' || newRider.status === 'Active')) {
             BridgeClient.sendApproval(newRider.email, 'rider', newRider.status, newRider.registrationId)
-                .catch(e => console.warn('[Bridge→Android] sendApproval rider failed:', e.message));
+                .catch(e => console.warn('[Bridgeâ†’Android] sendApproval rider failed:', e.message));
         }
 
         res.status(201).json({ message: "Rider saved!", data: newRider });
@@ -565,8 +633,9 @@ app.get('/api/riders', authenticateToken, async (req, res) => {
             const escapedStatus = req.query.status.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
             filter.status = new RegExp(`^${escapedStatus}$`, 'i');
         }
-        const riders = await Rider.find(filter).sort({ createdAt: -1 });
-        res.json(riders);
+        const riders = await Rider.find(filter).sort({ createdAt: -1 }).lean();
+        const enriched = await enrichRidersFromAppDb(riders);
+        res.json(enriched);
     } catch (error) {
         sendServerError(res, error, `${req.method} ${req.path}`);
     }
@@ -591,7 +660,7 @@ app.put('/api/riders/:id', authenticateToken, requireRole(...OFFICE), async (req
 
         if (req.body.status && updated.email) {
             BridgeClient.sendApproval(updated.email, 'rider', req.body.status, updated.registrationId)
-                .catch(e => console.warn('[Bridge→Android] sendApproval failed:', e.message));
+                .catch(e => console.warn('[Bridgeâ†’Android] sendApproval failed:', e.message));
         }
 
         if (updated && updated.email) {
@@ -603,7 +672,7 @@ app.put('/api/riders/:id', authenticateToken, requireRole(...OFFICE), async (req
                 assignedHub: updated.assignedHub,
                 address: updated.address,
                 city: updated.city,
-            }).catch(e => console.warn('[Bridge→Android] sendUserUpdate rider failed:', e.message));
+            }).catch(e => console.warn('[Bridgeâ†’Android] sendUserUpdate rider failed:', e.message));
         }
 
         res.json(updated);
@@ -624,7 +693,7 @@ app.delete('/api/riders/:id', authenticateToken, requireRole(...SUPER_ONLY), asy
     }
 });
 
-// ── RIDER GPS PING ──
+// â”€â”€ RIDER GPS PING â”€â”€
 // Called by the rider app (or server/simulateRider.js) every few seconds with
 // the rider's current position. Only the LATEST position is kept, on the rider
 // record itself, so the Geofence Monitor (which already loads GET /api/riders)
@@ -666,21 +735,123 @@ app.post('/api/riders/:registrationId/location', requireBridgeKey, async (req, r
             lastLocation.recordedAt = sentAt;
         }
 
+        const regParam = String(req.params.registrationId || '').trim();
+        const riderQuery = {
+            $or: [
+                { registrationId: regParam },
+                ...(mongoose.Types.ObjectId.isValid(regParam) ? [{ _id: regParam }] : []),
+            ]
+        };
         const rider = await Rider.findOneAndUpdate(
-            { registrationId: String(req.params.registrationId) },
+            riderQuery,
             { $set: { lastLocation } },
             { new: true }
         );
         if (!rider) {
             return res.status(404).json({ error: 'That rider could not be found.' });
         }
+        sseBroadcaster.broadcast('location-synced', {
+            riderId: rider.registrationId,
+            lat,
+            lng,
+            recordedAt: lastLocation.recordedAt,
+        });
         res.json({ message: 'Location received.', riderId: rider.registrationId, lastLocation: rider.lastLocation });
     } catch (error) {
         sendServerError(res, error, `${req.method} ${req.path}`);
     }
 });
 
-// ── CUSTOMER ROUTES ──
+// ── COMPANY VEHICLE ROUTES (fleet pool for COMPANY riders) ──
+const COMPANY_VEHICLE_EDITABLE = ['makeModel', 'vehicleType', 'documents', 'notes'];
+app.get('/api/company-vehicles', authenticateToken, requireRole(...OFFICE), async (req, res) => {
+    try {
+        const vehicles = await CompanyVehicle.find({}).sort({ createdAt: -1 });
+        res.json(vehicles);
+    } catch (error) {
+        sendServerError(res, error, `${req.method} ${req.path}`);
+    }
+});
+app.post('/api/company-vehicles', authenticateToken, requireRole(...OFFICE), async (req, res) => {
+    try {
+        const plateNumber = String(req.body.plateNumber || '').trim().toUpperCase();
+        if (!plateNumber) { return res.status(400).json({ error: 'Plate number is required.' }); }
+        const existing = await CompanyVehicle.findOne({ plateNumber });
+        if (existing) { return res.status(400).json({ error: 'A vehicle with this plate already exists.' }); }
+        const doc = await CompanyVehicle.create({
+            plateNumber,
+            makeModel: String(req.body.makeModel || '').trim(),
+            vehicleType: String(req.body.vehicleType || 'Motorcycle').trim(),
+            notes: String(req.body.notes || '').trim(),
+            statusHistory: [{ status: 'Available', reason: 'Added to fleet pool' }],
+        });
+        res.status(201).json(doc);
+    } catch (error) {
+        sendServerError(res, error, `${req.method} ${req.path}`);
+    }
+});
+app.put('/api/company-vehicles/:id', authenticateToken, requireRole(...OFFICE), async (req, res) => {
+    try {
+        const updates = pickEditable(req.body, COMPANY_VEHICLE_EDITABLE);
+        if (Object.keys(updates).length === 0) { return res.status(400).json({ error: 'No updatable fields were provided.' }); }
+        const updated = await CompanyVehicle.findByIdAndUpdate(req.params.id, { $set: updates }, { new: true, runValidators: true });
+        if (!updated) { return res.status(404).json({ error: 'That vehicle could not be found.' }); }
+        res.json(updated);
+    } catch (error) {
+        sendServerError(res, error, `${req.method} ${req.path}`);
+    }
+});
+app.put('/api/company-vehicles/:id/assign', authenticateToken, requireRole(...OFFICE), async (req, res) => {
+    try {
+        const vehicle = await CompanyVehicle.findById(req.params.id);
+        if (!vehicle) { return res.status(404).json({ error: 'That vehicle could not be found.' }); }
+        if (vehicle.status === 'Retired') { return res.status(400).json({ error: 'A retired vehicle cannot be assigned.' }); }
+        if (vehicle.assignedRiderEmail) { return res.status(400).json({ error: 'This vehicle is already assigned. Unassign it first.' }); }
+        const riderEmail = String(req.body.riderEmail || '').trim().toLowerCase();
+        if (!riderEmail) { return res.status(400).json({ error: 'Rider email is required.' }); }
+        const rider = await Rider.findOne({ email: riderEmail });
+        if (!rider) { return res.status(404).json({ error: 'That rider could not be found.' }); }
+        if (rider.riderType !== 'COMPANY') {
+            return res.status(400).json({ error: 'Only COMPANY riders use fleet vehicles. This rider is not classified as COMPANY.' });
+        }
+        vehicle.assignedRiderEmail = riderEmail;
+        vehicle.assignedAt = new Date();
+        vehicle.assignedBy = req.user && req.user.email ? req.user.email : '';
+        vehicle.status = 'Assigned';
+        vehicle.statusHistory.push({ status: 'Assigned', reason: `Assigned to ${riderEmail}` });
+        await vehicle.save();
+        res.json(vehicle);
+    } catch (error) {
+        sendServerError(res, error, `${req.method} ${req.path}`);
+    }
+});
+app.put('/api/company-vehicles/:id/unassign', authenticateToken, requireRole(...OFFICE), async (req, res) => {
+    try {
+        const vehicle = await CompanyVehicle.findById(req.params.id);
+        if (!vehicle) { return res.status(404).json({ error: 'That vehicle could not be found.' }); }
+        if (!vehicle.assignedRiderEmail) { return res.status(400).json({ error: 'This vehicle is not assigned.' }); }
+        const prev = vehicle.assignedRiderEmail;
+        vehicle.assignedRiderEmail = '';
+        vehicle.assignedAt = null;
+        vehicle.assignedBy = '';
+        vehicle.status = 'Available';
+        vehicle.statusHistory.push({ status: 'Available', reason: `Unassigned from ${prev}` });
+        await vehicle.save();
+        res.json(vehicle);
+    } catch (error) {
+        sendServerError(res, error, `${req.method} ${req.path}`);
+    }
+});
+app.delete('/api/company-vehicles/:id', authenticateToken, requireRole(...SUPER_ONLY), async (req, res) => {
+    try {
+        const deleted = await CompanyVehicle.findByIdAndDelete(req.params.id);
+        if (!deleted) { return res.status(404).json({ error: 'That vehicle could not be found.' }); }
+        res.json({ message: 'Vehicle removed from fleet pool.' });
+    } catch (error) {
+        sendServerError(res, error, `${req.method} ${req.path}`);
+    }
+});
+// â”€â”€ CUSTOMER ROUTES â”€â”€
 app.get('/api/customers', authenticateToken, requireRole(...OFFICE), async (req, res) => {
     try {
         const customers = await Customer.find({}).sort({ createdAt: -1 });
@@ -719,7 +890,7 @@ app.put('/api/customers/:id', authenticateToken, requireRole(...OFFICE), async (
                 address: updated.address,
                 city: updated.city,
                 deliveryInstructions: updated.deliveryInstructions,
-            }).catch(e => console.warn('[Bridge→Android] sendUserUpdate customer failed:', e.message));
+            }).catch(e => console.warn('[Bridgeâ†’Android] sendUserUpdate customer failed:', e.message));
         }
 
         res.json(updated);
@@ -779,8 +950,8 @@ app.get('/api/customers/:id/orders', authenticateToken, requireRole(...OFFICE), 
     }
 });
 
-// ── ACTIVITY LOG ROUTE ──
-// ── ACTIVITY LOG ROUTE ──
+// â”€â”€ ACTIVITY LOG ROUTE â”€â”€
+// â”€â”€ ACTIVITY LOG ROUTE â”€â”€
 app.get('/api/activity-log', authenticateToken, requireRole(...OFFICE), async (req, res) => {
     try {
         const limit = Math.min(parseInt(req.query.limit) || 100, 300);
@@ -856,7 +1027,7 @@ app.get('/api/activity-log', authenticateToken, requireRole(...OFFICE), async (r
                     actorId: s.registrationId,
                     type: 'registration',
                     status: s.status || 'ACTIVE',
-                    description: `${s.fullName} registered as a merchant (${s.storeName || 'Store'})`,
+                    description: s.storeName ? `${s.fullName} registered as a merchant (${s.storeName})` : `${s.fullName} registered as a merchant`,
                     timestamp: s.createdAt,
                 });
                 if (s.statusHistory && s.statusHistory.length > 0) {
@@ -999,17 +1170,58 @@ app.get('/api/activity-log', authenticateToken, requireRole(...OFFICE), async (r
     }
 });
 
-// ── PARCEL ROUTES ──
+// â”€â”€ PARCEL ROUTES â”€â”€
 // Bridge parity (2026-09-13): admin-created parcels now push to the mobile
-// backend via BridgeClient.syncParcel → POST /api/bridge/receive-parcel, so
+// backend via BridgeClient.syncParcel â†’ POST /api/bridge/receive-parcel, so
 // they appear in the app like app-booked shipments do. The mobile side
 // resolves its own seller User by sellerEmail (a Web Seller _id is NOT a
 // mobile User id, so it is deliberately never sent); parcels with no
-// resolvable seller are skipped — the mobile Shipment schema requires one
+// resolvable seller are skipped â€” the mobile Shipment schema requires one
 // and the old "any existing seller" mis-attribution fallback is gone.
 // Fire-and-forget: bridge failure never fails the admin save.
 function titleCaseStatus(s) {
     return typeof s === 'string' && s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : s;
+}
+
+// â”€â”€ I-3b (G-19): rider assignment bridge to the mobile backend â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// The office PUT/redeliver paths used to write only the Web row, so the
+// mobile shipment.riderId silently drifted. The mobile side resolves riders
+// by EMAIL only (never a raw Web id â€” a Rider registrationId/ObjectId is not
+// a mobile User id), so look the Rider up and push a minimal riderEmail
+// patch through the existing receive-parcel route. Contract:
+//   - riderEmail '<email>'  â†’ mobile resolves the rider and assigns;
+//   - riderEmail ''         â†’ explicit unassign (rider cleared on Web);
+//   - non-empty id that resolves to no email â†’ push NOTHING, so a failed
+//     lookup can never be mistaken for an unassign.
+// Fire-and-forget: a bridge failure never fails the admin save.
+function riderLookupQuery(riderId) {
+    const q = [{ registrationId: riderId }];
+    if (mongoose.isValidObjectId(riderId)) q.push({ _id: riderId });
+    return q;
+}
+
+async function resolveRiderEmail(riderId) {
+    if (!riderId) return '';
+    const rider = await Rider.findOne({ $or: riderLookupQuery(String(riderId)) }, 'email');
+    return rider && rider.email ? rider.email : '';
+}
+
+async function emitRiderAssignPush(trackingNumber, riderId) {
+    if (!trackingNumber || !BridgeClient.isBridgeEnabled()) return;
+    try {
+        if (!riderId) {
+            await BridgeClient.syncParcel({ trackingNumber, riderEmail: '' });
+            return;
+        }
+        const email = await resolveRiderEmail(riderId);
+        if (!email) {
+            console.warn(`[Bridgeâ†’Android] rider-assign ${trackingNumber}: rider "${riderId}" has no resolvable email â€” push skipped.`);
+            return;
+        }
+        await BridgeClient.syncParcel({ trackingNumber, riderEmail: email });
+    } catch (e) {
+        console.warn('[Bridgeâ†’Android] rider-assign push failed:', e.message);
+    }
 }
 
 app.post('/api/parcels', authenticateToken, requireRole(...OFFICE), async (req, res) => {
@@ -1037,7 +1249,7 @@ app.post('/api/parcels', authenticateToken, requireRole(...OFFICE), async (req, 
                         origin: newParcel.origin || '',
                         destination: newParcel.destination || '',
                         // Mobile Shipment.status is Title-case enum
-                        // ('Pending'…); the admin form posts 'pending'.
+                        // ('Pending'â€¦); the admin form posts 'pending'.
                         status: titleCaseStatus(newParcel.status) || 'Pending',
                         notes: newParcel.notes || '',
                         paymentMode: newParcel.paymentMode || 'Prepaid',
@@ -1048,35 +1260,42 @@ app.post('/api/parcels', authenticateToken, requireRole(...OFFICE), async (req, 
                             ? newParcel.deliveryFee
                             : (parseFloat(newParcel.shippingCost) || 0),
                         packageType: titleCaseStatus(newParcel.packageType || newParcel.serviceType || ''),
-                        riderId: newParcel.riderId ? String(newParcel.riderId) : '',
-                    }).catch(e => console.warn('[Bridge→Android] sync-parcel failed:', e.message));
+                        riderEmail: await resolveRiderEmail(newParcel.riderId),
+                        // I-3f (G-33) + PART L: previously the create push
+                        // dropped dimensions/ETA and carried no coordinates,
+                        // so a Web-created parcel could not heal A-side
+                        // package metadata or destination fix. Parcel.lat/lng
+                        // ride as the A-wire GeoJSON [lng, lat] pair; a
+                        // [0,0] placeholder is treated as absent.
+                        ...(newParcel.dimensions && (newParcel.dimensions.length || newParcel.dimensions.width || newParcel.dimensions.height)
+                            ? { dimensions: newParcel.dimensions }
+                            : {}),
+                        ...(newParcel.estimatedDeliveryDate ? { estimatedDeliveryDate: newParcel.estimatedDeliveryDate } : {}),
+                        ...(Number.isFinite(newParcel.lat) && Number.isFinite(newParcel.lng) && !(newParcel.lat === 0 && newParcel.lng === 0)
+                            ? { deliveryCoordinates: [newParcel.lng, newParcel.lat] }
+                            : {}),
+                    }).catch(e => console.warn('[Bridgeâ†’Android] sync-parcel failed:', e.message));
                 } else {
-                    console.warn(`[Bridge→Android] Parcel ${newParcel.trackingNumber} has no resolvable seller — not bridged (mobile Shipment requires one).`);
+                    console.warn(`[Bridgeâ†’Android] Parcel ${newParcel.trackingNumber} has no resolvable seller â€” not bridged (mobile Shipment requires one).`);
                 }
             }
         } catch (bridgeErr) {
-            console.warn('[Bridge→Android] sync-parcel error:', bridgeErr.message);
+            console.warn('[Bridgeâ†’Android] sync-parcel error:', bridgeErr.message);
         }
 
         // Auto-index into ParcelLocation for Parcel Map and Geofence telemetry
         try {
-            // Index only a genuine coordinate. The old fallback pinned every located
-            // parcel to one fixed point, which misleads the map and the geofence far
-            // more than leaving it unlocated until a real fix arrives.
-            if (!newParcel.riderLat || !newParcel.riderLng) {
-                console.warn(`[ParcelLocation] skipping auto-index for ${newParcel.trackingNumber}: no coordinates yet`);
-            } else {
-                const lat = String(newParcel.riderLat);
-                const lng = String(newParcel.riderLng);
+            const resolvedLoc = resolveParcelCurrentLocation(newParcel);
+            if (resolvedLoc.lat !== null && resolvedLoc.lat !== undefined && resolvedLoc.lng !== null && resolvedLoc.lng !== undefined) {
                 await ParcelLocation.findOneAndUpdate(
                     { parcelId: newParcel.trackingNumber },
                     {
                         $set: {
                             parcelId: newParcel.trackingNumber,
-                            lat,
-                            lng,
-                            location: newParcel.origin || 'Pulilan Sorting Hub',
-                            type: 'Warehouse',
+                            lat: String(resolvedLoc.lat),
+                            lng: String(resolvedLoc.lng),
+                            location: resolvedLoc.location,
+                            type: resolvedLoc.type,
                             status: newParcel.status || 'Active',
                             geofence: 'Inside',
                             notes: newParcel.item || '',
@@ -1084,6 +1303,8 @@ app.post('/api/parcels', authenticateToken, requireRole(...OFFICE), async (req, 
                     },
                     { upsert: true, new: true, setDefaultsOnInsert: true }
                 );
+            } else {
+                console.warn(`[ParcelLocation] skipping auto-index for ${newParcel.trackingNumber}: no coordinates yet`);
             }
         } catch (locErr) {
             console.warn('[ParcelLocation] auto-index error:', locErr.message);
@@ -1097,14 +1318,15 @@ app.post('/api/parcels', authenticateToken, requireRole(...OFFICE), async (req, 
 
 app.get('/api/parcels', authenticateToken, async (req, res) => {
     try {
-        const parcels = await Parcel.find({}).sort({ createdAt: -1 });
+        const rawParcels = await Parcel.find({}).sort({ createdAt: -1 }).lean();
+        const parcels = await enrichParcelsFromAppDb(rawParcels);
         res.json(parcels);
     } catch (error) {
         sendServerError(res, error, `${req.method} ${req.path}`);
     }
 });
 
-// Hub receivers may only move a parcel to one of the two hub statuses — every
+// Hub receivers may only move a parcel to one of the two hub statuses â€” every
 // other parcel field is office-only. Each status lists the current statuses it
 // may NOT be applied from (lower-case); mirrored by the buttons on
 // HubParcelReceiving.jsx so the screen never offers a refused action.
@@ -1202,11 +1424,28 @@ app.put('/api/parcels/:id', authenticateToken, requireRole(...ANY_ROLE), async (
                 target: updated.trackingNumber,
                 details: { from: String(before.riderId || ''), to: String(updated.riderId || '') },
             });
+            // I-3b (G-19): tell the mobile backend about the new assignment.
+            emitRiderAssignPush(updated.trackingNumber, updated.riderId || '');
         }
 
         if (req.body.status && updated.trackingNumber) {
             BridgeClient.sendStatus(updated.trackingNumber, req.body.status)
-                .catch(e => console.warn('[Bridge→Android] sendStatus failed:', e.message));
+                .catch(e => console.warn('[Bridgeâ†’Android] sendStatus failed:', e.message));
+        }
+
+        // PART 5.2 (G-3 remainder): push the field edits this request actually
+        // made. ONLY the keys present in the body are sent, so an untouched
+        // field can never be blanked on the app (the "blank values never
+        // propagate" rule both sides rely on). Fire-and-forget: the admin's
+        // edit is already committed here, and a bridge outage must not fail it.
+        try {
+            const fieldPush = pickEditable(req.body, PARCEL_FIELD_PUSH_TO_APP);
+            if (Object.keys(fieldPush).length > 0 && BridgeClient.isBridgeEnabled()) {
+                BridgeClient.syncParcel({ trackingNumber: updated.trackingNumber, ...fieldPush })
+                    .catch(e => console.warn('[Bridgeâ†’Android] field-edit sync failed:', e.message));
+            }
+        } catch (fieldPushErr) {
+            console.warn('[Bridgeâ†’Android] field-edit push error:', fieldPushErr.message);
         }
 
         sseBroadcaster.broadcast('parcel-updated', {
@@ -1237,7 +1476,7 @@ app.delete('/api/parcels/:id', authenticateToken, requireRole(...SUPER_ONLY), as
     }
 });
 
-// ── FAILED DELIVERY ATTEMPTS ────────────────────────────────────────────
+// â”€â”€ FAILED DELIVERY ATTEMPTS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // The rules (max attempts, reasons, which status may follow which) live in
 // utils/deliveryAttempts.js. deliveryAttempts is NOT in PARCEL_EDITABLE_FIELDS,
 // so these routes are the only way it can change.
@@ -1251,7 +1490,7 @@ function readCoordinate(value, limit) {
     return n;
 }
 
-// Rider app reports a failed delivery. No admin login here — the rider app
+// Rider app reports a failed delivery. No admin login here â€” the rider app
 // uses the shared bridge key, like the GPS ping route above.
 app.post('/api/parcels/:trackingNumber/failed-attempt', requireBridgeKey, async (req, res) => {
     try {
@@ -1293,13 +1532,21 @@ app.post('/api/parcels/:trackingNumber/failed-attempt', requireBridgeKey, async 
         }
 
         // 2. Check the parcel.
-        const parcel = await Parcel.findOne({ trackingNumber }, 'trackingNumber status riderId destination deliveryAttempts');
+        const parcel = await Parcel.findOne({ trackingNumber }, 'trackingNumber status riderId destination deliveryAttempts maxDeliveryAttempts');
         if (!parcel) {
             return res.status(404).json({ error: 'That parcel could not be found.' });
         }
+        // D-18 (2026-10-12): the parcel's OWN retry cap, synced from the mobile
+        // Shipment at booking. It used to be this backend's constant only, so an
+        // app-booked parcel (cap 2) could keep accumulating attempts here up to
+        // 3 while the app had already escalated it. Falls back to the shared
+        // constant for portal-created parcels and pre-sync rows.
+        const attemptCap = Number(parcel.maxDeliveryAttempts) >= 1
+            ? Number(parcel.maxDeliveryAttempts)
+            : MAX_DELIVERY_ATTEMPTS;
         const usedAttempts = parcel.deliveryAttempts.length;
-        if (usedAttempts >= MAX_DELIVERY_ATTEMPTS) {
-            return res.status(400).json({ error: `This parcel already has ${MAX_DELIVERY_ATTEMPTS} failed delivery attempts. No more attempts can be recorded.` });
+        if (usedAttempts >= attemptCap) {
+            return res.status(400).json({ error: `This parcel already has ${attemptCap} failed delivery attempts. No more attempts can be recorded.` });
         }
         if (!FAILED_ATTEMPT_ALLOWED_FROM.includes(parcel.status)) {
             return res.status(400).json({ error: `This parcel is "${parcel.status}". A failed attempt can only be recorded while it is Out for Delivery or after an earlier failed attempt.` });
@@ -1307,19 +1554,23 @@ app.post('/api/parcels/:trackingNumber/failed-attempt', requireBridgeKey, async 
 
         // 3. Save the attempt. The 3rd failure sends the parcel back to the hub.
         const attemptNumber = usedAttempts + 1;
-        const isLastAttempt = attemptNumber >= MAX_DELIVERY_ATTEMPTS;
+        const isLastAttempt = attemptNumber >= attemptCap;
         const newStatus = isLastAttempt ? DELIVERY_STATUS.RETURNED_TO_HUB : DELIVERY_STATUS.FAILED_ATTEMPT;
         const eventText = isLastAttempt
-            ? `Delivery attempt ${attemptNumber} of ${MAX_DELIVERY_ATTEMPTS} failed (${body.reason}). Parcel is going back to the hub.`
-            : `Delivery attempt ${attemptNumber} of ${MAX_DELIVERY_ATTEMPTS} failed: ${body.reason}`;
+            ? `Delivery attempt ${attemptNumber} of ${attemptCap} failed (${body.reason}). Parcel is going back to the hub.`
+            : `Delivery attempt ${attemptNumber} of ${attemptCap} failed: ${body.reason}`;
 
         const setFields = { status: newStatus };
         if (lat !== null) { setFields.riderLat = lat; setFields.riderLng = lng; }
+        // I-3c (G-23): retriable attempts carry the shared PH retry date
+        // (next day, skipping Sunday); the final attempt rests at the hub with
+        // no next date â€” same rule the Android backend applies.
+        const nextAttemptDate = isLastAttempt ? null : computeNextAttemptDate(attemptedAt);
 
         // The filter repeats the checks above (same status, same number of
         // attempts), so two reports sent at the same moment cannot both pass.
         // Parcels saved before this feature have no deliveryAttempts field at
-        // all, which $size: 0 does not match — hence the $exists case.
+        // all, which $size: 0 does not match â€” hence the $exists case.
         const sameAttemptCount = usedAttempts === 0
             ? { $or: [{ deliveryAttempts: { $size: 0 } }, { deliveryAttempts: { $exists: false } }] }
             : { deliveryAttempts: { $size: usedAttempts } };
@@ -1328,7 +1579,7 @@ app.post('/api/parcels/:trackingNumber/failed-attempt', requireBridgeKey, async 
             {
                 $set: setFields,
                 $push: {
-                    deliveryAttempts: { attemptNumber, reason: body.reason, notes, riderId, lat, lng, photoUrl, attemptedAt },
+                    deliveryAttempts: { attemptNumber, reason: body.reason, notes, riderId, lat, lng, photoUrl, attemptedAt, nextAttemptDate },
                     events: { time: attemptedAt.toISOString(), event: eventText, location: parcel.destination || '', status: newStatus },
                 },
             },
@@ -1350,7 +1601,7 @@ app.post('/api/parcels/:trackingNumber/failed-attempt', requireBridgeKey, async 
         AdminNotification.create({
             role: 'admin',
             title: isLastAttempt ? 'Parcel going back to the hub' : 'Delivery attempt failed',
-            message: `${updated.trackingNumber}: attempt ${attemptNumber} of ${MAX_DELIVERY_ATTEMPTS} failed (${body.reason}).`,
+            message: `${updated.trackingNumber}: attempt ${attemptNumber} of ${attemptCap} failed (${body.reason}).`,
             type: 'delivery_failed',
             relatedId: updated.trackingNumber,
             source: 'rider-app',
@@ -1371,17 +1622,27 @@ app.post('/api/parcels/:trackingNumber/failed-attempt', requireBridgeKey, async 
         });
 
         BridgeClient.sendStatus(updated.trackingNumber, newStatus)
-            .catch(e => console.warn('[Bridge→Android] sendStatus failed:', e.message));
+            .catch(e => console.warn('[Bridgeâ†’Android] sendStatus failed:', e.message));
+
+        // I-3c (G-23): push the refreshed attempt ledger to the Android
+        // backend so a Web-logged office attempt appears in the app's
+        // deliveryAttempts history too (the two stores were disjoint before).
+        // Fire-and-forget; the status above already travelled via sendStatus.
+        BridgeClient.syncParcel({
+            trackingNumber: updated.trackingNumber,
+            deliveryAttempts: mapWebAttemptsToApp(updated.deliveryAttempts || []),
+            attemptCount: (updated.deliveryAttempts || []).length,
+        }).catch(e => console.warn('[Bridgeâ†’Android] attempt-ledger push failed:', e.message));
 
         res.status(201).json({
             message: isLastAttempt
-                ? `Attempt ${attemptNumber} of ${MAX_DELIVERY_ATTEMPTS} recorded. The parcel is now going back to the hub.`
-                : `Attempt ${attemptNumber} of ${MAX_DELIVERY_ATTEMPTS} recorded.`,
+                ? `Attempt ${attemptNumber} of ${attemptCap} recorded. The parcel is now going back to the hub.`
+                : `Attempt ${attemptNumber} of ${attemptCap} recorded.`,
             trackingNumber: updated.trackingNumber,
             status: updated.status,
             attemptNumber,
-            attemptsLeft: MAX_DELIVERY_ATTEMPTS - attemptNumber,
-            maxAttempts: MAX_DELIVERY_ATTEMPTS,
+            attemptsLeft: Math.max(0, attemptCap - attemptNumber),
+            maxAttempts: attemptCap,
         });
     } catch (error) {
         sendServerError(res, error, `${req.method} ${req.path}`);
@@ -1390,7 +1651,7 @@ app.post('/api/parcels/:trackingNumber/failed-attempt', requireBridgeKey, async 
 
 // Shared by the three office steps below: checks the parcel's current status,
 // moves it to the new one, adds a timeline entry, then logs, tells the mobile
-// side and refreshes open admin screens — the same follow-up PUT /api/parcels
+// side and refreshes open admin screens â€” the same follow-up PUT /api/parcels
 // does. `check` can add one more rule (returns an error message or '').
 async function moveParcelInReturnFlow(req, res, { allowedFrom, newStatus, actionLabel, location, eventText, check, extraSet = {} }) {
     const parcel = await Parcel.findById(req.params.id, 'trackingNumber status riderId deliveryAttempts');
@@ -1439,10 +1700,12 @@ async function moveParcelInReturnFlow(req, res, { allowedFrom, newStatus, action
             target: updated.trackingNumber,
             details: { from: String(parcel.riderId || ''), to: String(updated.riderId || '') },
         });
+        // I-3b (G-19): office redeliver can swap the rider â€” same bridge push.
+        emitRiderAssignPush(updated.trackingNumber, updated.riderId || '');
     }
 
     BridgeClient.sendStatus(updated.trackingNumber, newStatus)
-        .catch(e => console.warn('[Bridge→Android] sendStatus failed:', e.message));
+        .catch(e => console.warn('[Bridgeâ†’Android] sendStatus failed:', e.message));
 
     sseBroadcaster.broadcast('parcel-updated', {
         trackingNumber: updated.trackingNumber,
@@ -1490,10 +1753,18 @@ app.post('/api/parcels/:id/redeliver', authenticateToken, requireRole(...OFFICE)
             actionLabel: 'sent out for delivery again',
             location: 'Hub',
             extraSet,
-            check: (parcel) => (parcel.deliveryAttempts.length >= MAX_DELIVERY_ATTEMPTS
-                ? `This parcel already had ${MAX_DELIVERY_ATTEMPTS} failed delivery attempts. It can only be returned to the seller.`
-                : ''),
-            eventText: (parcel) => `Sent out for delivery again (attempt ${parcel.deliveryAttempts.length + 1} of ${MAX_DELIVERY_ATTEMPTS})`,
+            // D-18: per-parcel cap, so the redeliver guard agrees with the
+            // failed-attempt route for an app-booked parcel (cap 2).
+            check: (parcel) => {
+                const cap = Number(parcel.maxDeliveryAttempts) >= 1 ? Number(parcel.maxDeliveryAttempts) : MAX_DELIVERY_ATTEMPTS;
+                return parcel.deliveryAttempts.length >= cap
+                    ? `This parcel already had ${cap} failed delivery attempts. It can only be returned to the seller.`
+                    : '';
+            },
+            eventText: (parcel) => {
+                const cap = Number(parcel.maxDeliveryAttempts) >= 1 ? Number(parcel.maxDeliveryAttempts) : MAX_DELIVERY_ATTEMPTS;
+                return `Sent out for delivery again (attempt ${parcel.deliveryAttempts.length + 1} of ${cap})`;
+            },
         });
     } catch (error) {
         sendServerError(res, error, `${req.method} ${req.path}`);
@@ -1515,7 +1786,7 @@ app.post('/api/parcels/:id/return-to-seller', authenticateToken, requireRole(...
     }
 });
 
-// ── PARCEL LOCATION ROUTES ──
+// â”€â”€ PARCEL LOCATION ROUTES â”€â”€
 app.post('/api/parcel-locations', authenticateToken, requireRole(...SUPER_ONLY), async (req, res) => {
     try {
         const newLocation = new ParcelLocation(req.body);
@@ -1528,7 +1799,8 @@ app.post('/api/parcel-locations', authenticateToken, requireRole(...SUPER_ONLY),
 
 app.get('/api/parcel-locations', authenticateToken, requireRole(...OFFICE), async (req, res) => {
     try {
-        const locations = await ParcelLocation.find();
+        const rawLocations = await ParcelLocation.find().lean();
+        const locations = await enrichParcelLocationsFromAppDb(rawLocations);
         res.json(locations);
     } catch (error) {
         sendServerError(res, error, `${req.method} ${req.path}`);
@@ -1565,16 +1837,16 @@ app.delete('/api/parcel-locations/:id', authenticateToken, requireRole(...SUPER_
     }
 });
 
-// ── DASHBOARD ANALYTICS ──
+// â”€â”€ DASHBOARD ANALYTICS â”€â”€
 app.get('/api/dashboard/stats', authenticateToken, async (req, res) => {
     try {
         const [totalParcels, deliveredCount, totalRiders, activeRidersCount, totalSellers, riderStats] = await Promise.all([
             Parcel.countDocuments({}),
             Parcel.countDocuments({ status: { $regex: /^delivered$/i } }),
-            Rider.countDocuments({}),
-            Rider.countDocuments({ status: { $regex: /^active$/i } }),
-            Seller.countDocuments({}),
-            Rider.find({}, 'rating deliveries'),
+            Rider.countDocuments({ riderName: { $not: /test/i } }),
+            Rider.countDocuments({ isOnDuty: true, riderName: { $not: /test/i } }),
+            Seller.countDocuments({ storeName: { $not: /test/i }, fullName: { $not: /test/i } }),
+            Rider.find({ riderName: { $not: /test/i } }, 'rating deliveries'),
         ]);
 
         const deliverySuccessPct = totalParcels
@@ -1600,7 +1872,7 @@ app.get('/api/dashboard/stats', authenticateToken, async (req, res) => {
     }
 });
 
-// ── ACCOUNT ROUTES ──
+// â”€â”€ ACCOUNT ROUTES â”€â”€
 app.get('/api/accounts', authenticateToken, requireRole('super_admin'), async (req, res) => {
     try {
         const accounts = await Account.find({}).select('-password');
@@ -1618,7 +1890,7 @@ app.post('/api/accounts', authenticateToken, requireRole('super_admin'), async (
             return res.status(400).json({ error: 'An account with this email already exists.' });
         }
         // 2026 audit L3: enforce a sane password floor on self-service account
-        // creation (bootstrap accounts are unaffected — they bypass this route).
+        // creation (bootstrap accounts are unaffected â€” they bypass this route).
         const passwordError = validateAdminPassword(req.body.password);
         if (passwordError) {
             return res.status(400).json({ error: passwordError });
@@ -1778,7 +2050,7 @@ app.post('/api/accounts/login', loginLimiter, async (req, res) => {
             return res.status(400).json({ error: 'Please enter your email and password.' });
         }
         const attemptedEmail = email.toLowerCase().trim();
-        // Failed attempts record only the email that was tried and why —
+        // Failed attempts record only the email that was tried and why â€”
         // never the password.
         const auditLoginFailure = (reason, acct) => logAudit(req, {
             action: 'login_failure',
@@ -1820,7 +2092,7 @@ app.post('/api/accounts/login', loginLimiter, async (req, res) => {
     }
 });
 
-// ── APP NOTIFICATION FEED (bridged from the Android backend) ──
+// â”€â”€ APP NOTIFICATION FEED (bridged from the Android backend) â”€â”€
 // Durable, queryable feed of app-originated events for the admin panel.
 app.get('/api/notifications', authenticateToken, async (req, res) => {
     try {
@@ -1832,6 +2104,70 @@ app.get('/api/notifications', authenticateToken, async (req, res) => {
         if (req.query.type) filter.type = req.query.type;
         const notifications = await AdminNotification.find(filter).sort({ createdAt: -1 }).limit(limit);
         res.json(notifications);
+    } catch (error) {
+        sendServerError(res, error, `${req.method} ${req.path}`);
+    }
+});
+
+// â”€â”€ D-5 / G-8: operator announcement INTO the app's notification inbox â”€â”€
+// The portal could only ever read app-originated events; it had no way to
+// originate one. An operator composes an announcement here, this route hands it
+// to the Android bridge, and the app's own inbox shows it like any other
+// notification. Deny-by-default on audience and type, so an unknown value can
+// never create a row the app renders without an icon or a tone.
+const BROADCAST_AUDIENCES = ['all', 'customer', 'seller', 'rider'];
+const BROADCAST_TYPES = ['system_alert', 'order_update', 'delivery_update', 'security_alert'];
+const BROADCAST_TITLE_MAX = 120;
+const BROADCAST_MESSAGE_MAX = 1000;
+
+app.post('/api/notifications/broadcast', authenticateToken, requireRole(...OFFICE), async (req, res) => {
+    try {
+        const body = req.body || {};
+        const title = String(body.title || '').trim();
+        const message = String(body.message || '').trim();
+        const audience = String(body.audience || 'all').trim().toLowerCase();
+        const type = String(body.type || 'system_alert').trim().toLowerCase();
+
+        if (!title || !message) {
+            return res.status(400).json({ success: false, error: 'A title and a message are required.' });
+        }
+        if (title.length > BROADCAST_TITLE_MAX || message.length > BROADCAST_MESSAGE_MAX) {
+            return res.status(400).json({ success: false, error: `Keep the title under ${BROADCAST_TITLE_MAX} characters and the message under ${BROADCAST_MESSAGE_MAX}.` });
+        }
+        if (!BROADCAST_AUDIENCES.includes(audience)) {
+            return res.status(400).json({ success: false, error: `Choose an audience: ${BROADCAST_AUDIENCES.join(', ')}.` });
+        }
+        if (!BROADCAST_TYPES.includes(type)) {
+            return res.status(400).json({ success: false, error: `Choose a message type: ${BROADCAST_TYPES.join(', ')}.` });
+        }
+
+        if (!BridgeClient.isBridgeEnabled()) {
+            return res.status(503).json({ success: false, error: 'App notifications are not set up right now. Nothing was sent.' });
+        }
+
+        const result = await BridgeClient.sendBroadcast({ title, message, audience, type });
+        if (!result || !result.success) {
+            return res.status(502).json({ success: false, error: (result && result.error) || 'The app did not accept the announcement.' });
+        }
+
+        const payload = (result.data && result.data.data) ? result.data.data : (result.data || {});
+        const delivered = Number.isFinite(Number(payload.delivered)) ? Number(payload.delivered) : 0;
+
+        // Audit trail in this portal's own feed, so an operator can see what was
+        // sent (and to whom) without reading the Android server's logs.
+        AdminNotification.create({
+            role: 'admin',
+            title: `Announcement sent: ${title}`,
+            message: `Audience: ${audience} â€” reached ${delivered} account(s).`,
+            type: 'system',
+            source: 'admin-broadcast',
+        }).catch((e) => console.warn('[AdminNotification] broadcast audit row failed:', e.message));
+
+        res.json({
+            success: true,
+            message: `Announcement sent to ${delivered} account(s).`,
+            data: { audience, type, delivered, matched: payload.matched },
+        });
     } catch (error) {
         sendServerError(res, error, `${req.method} ${req.path}`);
     }
@@ -1855,7 +2191,7 @@ app.patch('/api/notifications/:id/read', authenticateToken, async (req, res) => 
     }
 });
 
-// ── SUPPORT TICKET / ISSUE ROUTES ──
+// â”€â”€ SUPPORT TICKET / ISSUE ROUTES â”€â”€
 app.get('/api/issues', authenticateToken, requireRole(...OFFICE), async (req, res) => {
     try {
         const limit = Math.min(parseInt(req.query.limit) || 200, 500);
@@ -1935,9 +2271,9 @@ app.put('/api/issues/:id/status', authenticateToken, requireRole(...OFFICE), asy
     }
 });
 
-// ── SMS ROUTES ──
+// â”€â”€ SMS ROUTES â”€â”€
 // 2026 audit M4: sending SMS burns Twilio/Semaphore credit and can spoof the
-// YTO sender ID — restricted to super_admin + staff and rate-capped.
+// YTO sender ID â€” restricted to super_admin + staff and rate-capped.
 function toE164PH(number) {
     const digits = number.replace(/\D/g, '');
     if (number.trim().startsWith('+')) return '+' + digits;
@@ -2019,7 +2355,7 @@ app.post('/api/sms/send', authenticateToken, requireRole('super_admin', 'staff')
     }
 });
 
-// ── EMAIL TRANSPORTER CONFIGURATION (IPV4 EXPLICIT FORCE) ──
+// â”€â”€ EMAIL TRANSPORTER CONFIGURATION (IPV4 EXPLICIT FORCE) â”€â”€
 let emailTransporter = null;
 
 function getEmailTransporter() {
@@ -2040,7 +2376,7 @@ function getEmailTransporter() {
             user: process.env.EMAIL_USER,
             pass: process.env.EMAIL_APP_PASSWORD,
         },
-        // 2026 audit M3: TLS certificate verification stays ON (default) — the
+        // 2026 audit M3: TLS certificate verification stays ON (default) â€” the
         // previous rejectUnauthorized:false opened a MITM window for the Gmail
         // app password. The IPv4-only family:4 + dnsLookup overrides above already
         // solve the ESOCKET IPv6 drop this was originally working around.
@@ -2049,7 +2385,7 @@ function getEmailTransporter() {
     return emailTransporter;
 }
 
-// ── BULLETPROOF EMAIL ROUTE (NON-BLOCKING BACKGROUND DISPATCH) ──
+// â”€â”€ BULLETPROOF EMAIL ROUTE (NON-BLOCKING BACKGROUND DISPATCH) â”€â”€
 app.post('/api/email/send', authenticateToken, requireRole('super_admin', 'staff'), messageLimiter, async (req, res) => {
     const { to, subject, message } = req.body;
 
@@ -2088,7 +2424,7 @@ app.post('/api/email/send', authenticateToken, requireRole('super_admin', 'staff
     });
 });
 
-// ── ADMIN: DATABASE RESET ──
+// â”€â”€ ADMIN: DATABASE RESET â”€â”€
 app.delete('/api/admin/reset-database', authenticateToken, requireRole(...SUPER_ONLY), async (req, res) => {
     if (req.user?.role !== 'super_admin') {
         return res.status(403).json({ error: 'Access denied. Only Super Admin can reset the database.' });
@@ -2125,7 +2461,7 @@ app.delete('/api/admin/reset-database', authenticateToken, requireRole(...SUPER_
     }
 });
 
-// ── SECURITY AUDIT TRAIL (SH-09) ──
+// â”€â”€ SECURITY AUDIT TRAIL (SH-09) â”€â”€
 // Super Admin only. Newest first, paginated (limit capped at 200), with
 // optional exact-match filters. Filter values are forced to strings so a
 // query-operator object can never reach the database query.
@@ -2151,22 +2487,22 @@ app.get('/api/audit-logs', authenticateToken, requireRole('super_admin'), async 
 // deploys that must all agree. Assert the wiring loudly at startup so a
 // silent 401 on every bridge call (wrong/rotated secret on one side) can
 // never masquerade as "sync just stopped working".
-//   App→Web outbound:  WEB_BACKEND_URL + WEB_BRIDGE_API_KEY
-//   Web inbound gate:  BRIDGE_API_KEY            ← must EQUAL WEB_BRIDGE_API_KEY
-//   Web→App outbound:  ANDROID_BACKEND_URL + ANDROID_BRIDGE_API_KEY
+//   Appâ†’Web outbound:  WEB_BACKEND_URL + WEB_BRIDGE_API_KEY
+//   Web inbound gate:  BRIDGE_API_KEY            â† must EQUAL WEB_BRIDGE_API_KEY
+//   Webâ†’App outbound:  ANDROID_BACKEND_URL + ANDROID_BRIDGE_API_KEY
 //   App inbound gate:  BRIDGE_API_KEY || WEB_BRIDGE_API_KEY
-//                      ← must EQUAL ANDROID_BRIDGE_API_KEY
+//                      â† must EQUAL ANDROID_BRIDGE_API_KEY
 // Conclusion: set ALL FOUR names to the SAME secret value on BOTH deploys.
 if (!process.env.BRIDGE_API_KEY) {
-  console.warn('[Bridge config] BRIDGE_API_KEY not set — ALL inbound bridge writes are denied with 503. Set it to the SAME secret as the App backend\'s WEB_BRIDGE_API_KEY.');
+  console.warn('[Bridge config] BRIDGE_API_KEY not set â€” ALL inbound bridge writes are denied with 503. Set it to the SAME secret as the App backend\'s WEB_BRIDGE_API_KEY.');
 }
 if (!process.env.ANDROID_BACKEND_URL) {
-  console.warn('[Bridge config] ANDROID_BACKEND_URL not set — Web-to-App bridge pushes (approvals, parcels, issue statuses) are DISABLED.');
+  console.warn('[Bridge config] ANDROID_BACKEND_URL not set â€” Web-to-App bridge pushes (approvals, parcels, issue statuses) are DISABLED.');
 } else if (!process.env.ANDROID_BRIDGE_API_KEY) {
-  console.warn('[Bridge config] ANDROID_BRIDGE_API_KEY not set — outbound bridge pushes will 401. Set it to the SAME secret as the App backend\'s WEB_BRIDGE_API_KEY.');
+  console.warn('[Bridge config] ANDROID_BRIDGE_API_KEY not set â€” outbound bridge pushes will 401. Set it to the SAME secret as the App backend\'s WEB_BRIDGE_API_KEY.');
 }
 
-// ── PORT & DATABASE STARTUP ──
+// â”€â”€ PORT & DATABASE STARTUP â”€â”€
 const PORT = process.env.PORT || 3001;
 const MONGO_URI = process.env.MONGO_URI;
 
@@ -2175,7 +2511,7 @@ if (!MONGO_URI) {
   process.exit(1);
 }
 
-// ── ADMIN BOOTSTRAP ──
+// â”€â”€ ADMIN BOOTSTRAP â”€â”€
 // Insert-only: ensures the canonical admin accounts exist with bcrypt-hashed
 // passwords from env. Passwords are never overwritten on restart.
 const ADMIN_BOOTSTRAP = [
@@ -2232,7 +2568,7 @@ async function ensureAdminAccounts() {
 
 async function ensureOfficialDemoAccounts() {
   // RETIRED 2026-09-18: the Web portal is REAL-only. The three canonical demo
-  // rows (seller/customer/rider@gmail.com) must NOT be created here — mobile
+  // rows (seller/customer/rider@gmail.com) must NOT be created here â€” mobile
   // testing keeps its own copies in the App database. This function is kept
   // as a no-op so existing bootstrap call sites need no change.
   console.log('[Bootstrap] Official demo-account seeding is retired (Web is REAL-only); skipping.');
@@ -2255,10 +2591,20 @@ mongoose.connect(MONGO_URI, { serverSelectionTimeoutMS: 15000 })
       console.log('[Bootstrap] ENABLE_ADMIN_BOOTSTRAP=1 while NODE_ENV=production without ALLOW_ADMIN_BOOTSTRAP_IN_PROD=1 - skipped for safety.');
     }
     app.listen(PORT, () => console.log(`Server running on port ${PORT} and Connected to MongoDB!`));
+
+    // Connect directly to Mobile App Database for live telemetry streaming and data coherence
+    initAppDatabase(sseBroadcaster);
+
+    // I-6: start the 60s bidirectional reconcile loop on a real server only
+    // (never under NODE_ENV=test). runOnce() additionally self-gates on the
+    // bridge key + ANDROID_BACKEND_URL, so an unconfigured process stays idle.
+    if (process.env.NODE_ENV !== 'test') {
+      bridgeReconcile.start();
+    }
   })
   .catch(err => console.error('[Startup Error] DB Connection Error:', err.message));
 
-// ── GLOBAL ERROR HANDLER ──
+// â”€â”€ GLOBAL ERROR HANDLER â”€â”€
 app.use((err, req, res, next) => {
   // Malformed JSON bodies (express.json) and oversized payloads are client
   // errors, reported without echoing the parser's message.

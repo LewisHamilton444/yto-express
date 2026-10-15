@@ -39,8 +39,8 @@ export default function GlobalHeader({ currentUser, riders, pendingSellerCount, 
           {mc.label}
           {mode !== 'sse' && (
             <button onClick={retry} style={{
-              marginLeft: 4, padding: '1px 6px', background: 'white', border: `1px solid ${mc.color}`,
-              borderRadius: 4, fontSize: 9, fontWeight: 700, color: mc.color, cursor: 'pointer',
+              marginLeft: 4, padding: '6px 14px', background: 'white', border: `1px solid ${mc.color}`,
+              borderRadius: 'var(--yto-radius-button, 8px)', fontSize: 12, fontWeight: 700, color: mc.color, cursor: 'pointer',
             }}>Retry</button>
           )}
         </div>

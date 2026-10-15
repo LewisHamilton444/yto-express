@@ -115,5 +115,13 @@ export const CITY_COORDS = {
 };
 
 export function resolveCityCoords(city) {
-  return CITY_COORDS[city] || null;
+  if (!city) return null;
+  if (CITY_COORDS[city]) return CITY_COORDS[city];
+  const clean = String(city).trim().toLowerCase();
+  for (const [key, coords] of Object.entries(CITY_COORDS)) {
+    if (new RegExp(`\\b${key}\\b`, 'i').test(clean)) {
+      return coords;
+    }
+  }
+  return null;
 }

@@ -3,6 +3,8 @@ import { apiFetch, parcelsApi } from './services/api';
 import StatusBadge from './components/ui/StatusBadge';
 import { useToast } from './components/ui/useToast';
 import Modal from './components/ui/Modal';
+import ModalHeader from './components/ui/ModalHeader';
+import { Undo2 } from 'lucide-react';
 import PageHeader from './components/ui/PageHeader';
 import TableSkeleton from './components/ui/TableSkeleton';
 import EmptyState from './components/ui/EmptyState';
@@ -114,7 +116,7 @@ export default function HubParcelReceiving() {
   ));
 
   return (
-    <div style={{ flex: 1, overflowY: 'auto', backgroundColor: '#f9f7ff', fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" }}>
+    <div style={{ flex: 1, overflowY: 'auto', backgroundColor: '#f9f7ff', fontFamily: "'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif" }}>
 
       <PageHeader
         title="Hub Parcel Receiving"
@@ -133,7 +135,7 @@ export default function HubParcelReceiving() {
                 aria-pressed={onlyReturns}
                 onClick={() => setOnlyReturns(v => !v)}
                 title="Parcels sent back after their last failed delivery"
-                style={{ padding: '7px 12px', borderRadius: '8px', border: `1.5px solid ${onlyReturns ? '#f37021' : '#e0d5f0'}`, background: onlyReturns ? '#f37021' : '#faf9ff', color: onlyReturns ? 'white' : '#390955', fontSize: '12px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}
+                style={{ padding: '6px 14px', borderRadius: 'var(--yto-radius-button, 8px)', border: `1.5px solid ${onlyReturns ? '#f37021' : '#e0d5f0'}`, background: onlyReturns ? '#f37021' : '#faf9ff', color: onlyReturns ? 'white' : '#390955', fontSize: '12px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}
               >
                 Waiting returns ({waitingReturns})
               </button>
@@ -211,7 +213,7 @@ export default function HubParcelReceiving() {
                             disabled={busy}
                             onClick={() => confirmReturnedReceived(p)}
                             title="Confirm this returned parcel has arrived at the hub"
-                            style={{ padding: '5px 10px', borderRadius: '6px', border: 'none', cursor: busy ? 'not-allowed' : 'pointer', background: '#f37021', color: 'white', fontSize: '11px', fontWeight: 700, opacity: busy ? 0.45 : 1, transition: 'all 0.15s ease', whiteSpace: 'nowrap' }}
+                            style={{ padding: '6px 14px', borderRadius: 'var(--yto-radius-button, 8px)', border: 'none', cursor: busy ? 'not-allowed' : 'pointer', background: '#f37021', color: 'white', fontSize: '12px', fontWeight: 700, opacity: busy ? 0.45 : 1, transition: 'all 0.15s ease', whiteSpace: 'nowrap' }}
                           >
                             Confirm Received
                           </button>
@@ -221,7 +223,7 @@ export default function HubParcelReceiving() {
                           disabled={receivedDisabled}
                           onClick={() => markStatus(p, 'Received at Hub')}
                           title={alreadyReceived ? 'Already marked as received at hub' : 'Mark parcel as received at the hub'}
-                          style={{ padding: '5px 10px', borderRadius: '6px', border: '1px solid #a7f3d0', cursor: receivedDisabled ? 'not-allowed' : 'pointer', background: '#ecfdf5', color: '#065f46', fontSize: '11px', fontWeight: 600, opacity: receivedDisabled ? 0.45 : 1, transition: 'all 0.15s ease', whiteSpace: 'nowrap' }}
+                          style={{ padding: '6px 14px', borderRadius: 'var(--yto-radius-button, 8px)', border: '1px solid #a7f3d0', cursor: receivedDisabled ? 'not-allowed' : 'pointer', background: '#ecfdf5', color: '#065f46', fontSize: '12px', fontWeight: 700, opacity: receivedDisabled ? 0.45 : 1, transition: 'all 0.15s ease', whiteSpace: 'nowrap' }}
                         >
                           Received at Hub
                         </button>
@@ -230,7 +232,7 @@ export default function HubParcelReceiving() {
                           disabled={returnedDisabled}
                           onClick={() => setConfirmReturn(p)}
                           title={closed ? `A ${st} parcel cannot be returned to the hub` : alreadyReturned ? 'Already returned' : 'Return parcel to the hub (requires confirmation)'}
-                          style={{ padding: '5px 10px', borderRadius: '6px', border: '1px solid #fecaca', cursor: returnedDisabled ? 'not-allowed' : 'pointer', background: '#fef2f2', color: '#b91c1c', fontSize: '11px', fontWeight: 600, opacity: returnedDisabled ? 0.45 : 1, transition: 'all 0.15s ease', whiteSpace: 'nowrap' }}
+                          style={{ padding: '6px 14px', borderRadius: 'var(--yto-radius-button, 8px)', border: '1px solid #fecaca', cursor: returnedDisabled ? 'not-allowed' : 'pointer', background: '#fef2f2', color: '#b91c1c', fontSize: '12px', fontWeight: 700, opacity: returnedDisabled ? 0.45 : 1, transition: 'all 0.15s ease', whiteSpace: 'nowrap' }}
                         >
                           Returned to Hub
                         </button>
@@ -256,8 +258,9 @@ export default function HubParcelReceiving() {
 
       {/* Return-to-Hub confirmation — reversal of an in-flow parcel */}
       {confirmReturn && (
-        <Modal onBackdropClick={() => setConfirmReturn(null)} tint="rgba(26,6,40,0.55)" blur={false} maxWidth={400} padding={24} cardStyle={{ borderRadius: 12 }}>
-          <h3 style={{ margin: '0 0 10px', fontSize: 17, fontWeight: 800, color: '#991b1b' }}>Return parcel to hub?</h3>
+        <Modal onBackdropClick={() => setConfirmReturn(null)} tint="rgba(26,6,40,0.55)" blur={false} maxWidth={400} padding={0} cardStyle={{ overflow: 'hidden', boxShadow: '0 20px 40px rgba(0,0,0,0.18)' }}>
+          <ModalHeader title="Return parcel to hub?" icon={Undo2} tone="danger" onClose={() => setConfirmReturn(null)} />
+          <div style={{ padding: '24px' }}>
           <p style={{ margin: 0, fontSize: 13, color: '#555', lineHeight: 1.6 }}>
             <strong>{confirmReturn.trackingNumber}</strong> ({confirmReturn.senderName} to {confirmReturn.receiverName}) will be
             marked as <strong>Returned to Hub</strong>. This updates the parcel status and notifies connected screens.
@@ -265,16 +268,17 @@ export default function HubParcelReceiving() {
           <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 20 }}>
             <button
               onClick={() => setConfirmReturn(null)}
-              style={{ padding: '9px 18px', borderRadius: 8, border: '1.5px solid #e0d5f0', background: 'white', color: '#390955', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
+              style={{ padding: '10px 22px', borderRadius: 'var(--yto-radius-button, 8px)', border: '1px solid #e0d5f0', background: 'white', color: '#390955', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
             >
               Cancel
             </button>
             <button
               onClick={() => { const p = confirmReturn; setConfirmReturn(null); markStatus(p, 'Returned to Hub'); }}
-              style={{ padding: '9px 18px', borderRadius: 8, border: 'none', background: '#991b1b', color: 'white', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
+              style={{ padding: '10px 22px', borderRadius: 'var(--yto-radius-button, 8px)', border: 'none', background: '#dc2626', color: 'white', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
             >
               Yes, Return to Hub
             </button>
+          </div>
           </div>
         </Modal>
       )}

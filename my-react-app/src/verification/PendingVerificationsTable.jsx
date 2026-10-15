@@ -254,9 +254,9 @@ const PendingVerificationsTable = ({ type, items = [], onReview }) => {
               </tr>
             ) : (
               currentRecords.map((item, idx) => {
-                const storeName = clean(item.storeName || item.businessName);
+                const storeName = clean(item.storeName);
                 const address = clean(item.address);
-                const vehicle = clean(item.vehicleType || item.vehicle?.type) || 'Motorcycle';
+                const vehicle = clean(item.vehicleType || item.vehicle?.type) || 'No vehicle registered yet';
                 const plate = clean(item.plateNumber || item.vehicle?.plate);
                 return (
                   <tr key={item.id || idx} className="group cursor-pointer" onClick={() => onReview(item)}>
@@ -279,7 +279,7 @@ const PendingVerificationsTable = ({ type, items = [], onReview }) => {
                         </span>
                       ) : (
                         <span className="lp-stack lp-clip">
-                          <span className="lp-stack-main">{vehicle}</span>
+                          <span className={`lp-stack-main${vehicle === 'No vehicle registered yet' ? ' lp-placeholder' : ''}`}>{vehicle}</span>
                           {plate && <span className="lp-stack-sub lp-mono">{plate}</span>}
                         </span>
                       )}

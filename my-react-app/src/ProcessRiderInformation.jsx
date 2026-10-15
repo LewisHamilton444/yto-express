@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
+import CompanyVehiclePoolModal from './verification/CompanyVehiclePoolModal';
 import './ProcessRiderInformation.css';
 import PageHeader from './components/ui/PageHeader';
 
@@ -11,13 +12,14 @@ import SendSMSModal from './verification/SendSMSModal';
 import RefreshButton from './components/ui/RefreshButton';
 import { apiFetch } from './services/api';
 
-const ProcessRiderInformation = ({ pendingRiders: ridersProp, setPendingRiders: setRidersProp }) => {
+const ProcessRiderInformation = ({ pendingRiders: ridersProp, setPendingRiders: setRidersProp, currentUser }) => {
   // Falls back to local state if rendered without the lifted props (defensive
-  // only — in the real app this always comes from AnalyticsDashboard now, so
+  // only â€” in the real app this always comes from AnalyticsDashboard now, so
   // the queue survives navigating to another sidebar section and back).
   const [localRiders, setLocalRiders] = useState(initialPendingRiders);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const riders    = ridersProp    ?? localRiders;
+  const [fleetOpen, setFleetOpen] = useState(false);
   const setRiders = setRidersProp ?? setLocalRiders;
 
   const handleRefresh = async () => {
@@ -37,7 +39,7 @@ const ProcessRiderInformation = ({ pendingRiders: ridersProp, setPendingRiders: 
     }
   };
 
-  // Review/approve/email flow is shared with the seller page — see the hook.
+  // Review/approve/email flow is shared with the seller page â€” see the hook.
   const {
     pendingItems: pendingRiders,
     reviewItem, openReview, closeReview, handleApprove, handleReject,
@@ -58,10 +60,13 @@ const ProcessRiderInformation = ({ pendingRiders: ridersProp, setPendingRiders: 
           subtitle="Review pending rider registrations submitted from the mobile app"
           breadcrumb={['Dashboard', 'People', 'Riders', 'Pending Verifications']}
           actions={(
+            <>
+            <button onClick={() => setFleetOpen(true)} style={{ marginRight: 10, padding: '10px 22px', borderRadius: 'var(--yto-radius-button, 8px)', border: '1px solid #e8e0f0', background: 'white', color: '#390955', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>Fleet vehicles</button>
             <RefreshButton
               onClick={handleRefresh}
               isRefreshing={isRefreshing}
             />
+          </>
           )}
         />
 
@@ -91,6 +96,8 @@ const ProcessRiderInformation = ({ pendingRiders: ridersProp, setPendingRiders: 
         />
       )}
 
+
+      <CompanyVehiclePoolModal open={fleetOpen} onClose={() => setFleetOpen(false)} role={currentUser?.role} />
     </div>
   );
 };

@@ -15,11 +15,11 @@ const s = {
   smsPreview: { background: '#faf7fd', border: '1px solid #e4d8f2', borderRadius: '12px', padding: '14px 16px', fontSize: '13px', lineHeight: 1.5, color: '#390955', position: 'relative' },
   smsLabel:   { position: 'absolute', top: '-9px', left: '14px', background: 'white', padding: '0 6px', fontSize: '10px', fontWeight: 700, color: '#a890c0', textTransform: 'uppercase', letterSpacing: '0.6px' },
   actions:    { display: 'flex', gap: '10px', justifyContent: 'flex-end', paddingTop: '4px' },
-  btnOutline: { padding: '10px 20px', borderRadius: '10px', fontSize: '13px', fontWeight: 700, cursor: 'pointer', background: 'white', color: '#390955', border: '1.5px solid #e4d8f2', fontFamily: 'inherit' },
-  btnPrimary: { padding: '10px 20px', borderRadius: '10px', fontSize: '13px', fontWeight: 700, cursor: 'pointer', background: '#f37021', color: 'white', border: 'none', fontFamily: 'inherit', boxShadow: '0 2px 8px rgba(243,112,33,0.25)' },
+  btnOutline: { padding: '10px 22px', borderRadius: 'var(--yto-radius-button, 8px)', fontSize: '13px', fontWeight: 700, cursor: 'pointer', background: 'white', color: '#390955', border: '1px solid #e4d8f2', fontFamily: 'inherit' },
+  btnPrimary: { padding: '10px 22px', borderRadius: 'var(--yto-radius-button, 8px)', fontSize: '13px', fontWeight: 700, cursor: 'pointer', background: '#f37021', color: 'white', border: 'none', fontFamily: 'inherit', boxShadow: 'none' },
   errorBox:   { display: 'flex', flexDirection: 'column', gap: '10px', background: '#fee2e2', color: '#991b1b', padding: '12px 14px', borderRadius: '10px', fontSize: '13px', fontWeight: 600 },
   errorActions: { display: 'flex', gap: '8px' },
-  btnCopy:    { padding: '7px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', background: 'white', color: '#991b1b', border: '1.5px solid #fca5a5', fontFamily: 'inherit' },
+  btnCopy:    { padding: '6px 14px', borderRadius: 'var(--yto-radius-button, 8px)', fontSize: '12px', fontWeight: 700, cursor: 'pointer', background: 'white', color: '#991b1b', border: '1.5px solid #fca5a5', fontFamily: 'inherit' },
 };
 
 // Credentials go out via Gmail — the free channel that actually delivers.
@@ -31,7 +31,7 @@ const SendSMSModal = ({ item, credentials, message, onCancel, onConfirm, sending
   if (!item) return null;
 
   return (
-    <Modal onBackdropClick={onCancel} blur={false} tint="rgba(26,6,40,0.5)" zIndex={2100} maxWidth={460} padding={0} cardStyle={{ borderRadius: 12, overflow: 'hidden', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)', fontFamily: "'DM Sans', sans-serif" }}>
+    <Modal onBackdropClick={onCancel} blur={false} tint="rgba(26,6,40,0.5)" zIndex={2100} maxWidth={460} padding={0} cardStyle={{ overflow: 'hidden', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)', fontFamily: "'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif" }}>
         <ModalHeader
           title="Approve Account Registration"
           subtitle={`Confirm before activating account and notifying ${item.fullName}`}

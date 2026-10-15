@@ -6,8 +6,8 @@
 import { CITY_COORDS } from '../luzonCityCoords';
 import { haversineKm } from '../hubGeofenceData';
 
-// A ping older than this no longer counts as live.
-export const LIVE_PING_MAX_AGE_MS = 60 * 1000;
+// A ping older than this no longer counts as live (5 minutes allows reliable on-duty tracking).
+export const LIVE_PING_MAX_AGE_MS = 5 * 60 * 1000;
 
 // How often the Geofence Monitor re-loads rider positions.
 export const LIVE_REFRESH_MS = 3000;

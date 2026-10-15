@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { apiFetch } from './services/api';
+import ParcelWaybill from './ParcelWaybill';
 import StatusBadge from './components/ui/StatusBadge';
 import { PARCEL_STATUS_COLORS } from './components/ui/statusColors';
 import Modal from './components/ui/Modal';
@@ -60,7 +61,7 @@ import { resolveCityCoords } from './luzonCityCoords';
 // The last four are the failed-delivery flow (older 'Failed' rows display as
 // "Failed Attempt" via normalizeParcelStatus).
 const STATUSES = [
-  'Pending', 'Picked Up', 'In Transit', 'Out for Delivery', 'Delivered', 'Returned',
+  'Pending', 'To Pickup', 'To Ship', 'Picked Up', 'In Transit', 'Out for Delivery', 'Delivered', 'Returned',
   'Failed Attempt', 'Returned to Hub', 'Received at Hub (Returned)', 'Returned to Seller',
 ];
 
@@ -129,6 +130,30 @@ function mapServiceLabel(rawServiceType) {
   return SERVICE_LABELS[key] || '—';
 }
 
+// Parcel custody exactly as the mobile app tracks it (Shipment.custody),
+// shown in plain words rather than the raw enum.
+const CUSTODY_LABELS = {
+  COURIER: 'With courier',
+  HUB: 'At sorting hub',
+  SELLER: 'Back with seller',
+};
+function mapCustodyLabel(rawCustody) {
+  return CUSTODY_LABELS[String(rawCustody || '').trim().toUpperCase()] || '—';
+}
+
+// Mobile Shipment.pickupCoordinates mirrored onto pickupLat/pickupLng by the
+// bridge. The app's unresolved [0,0] placeholder is already dropped bridge-side
+// and is rejected again here, so a null-island pair can never render as a real
+// pickup position.
+function formatPickupPoint(lat, lng) {
+  const usable = (v) => v !== null && v !== undefined && String(v).trim() !== '' && Number.isFinite(Number(v));
+  if (!usable(lat) || !usable(lng)) return '—';
+  const la = Number(lat);
+  const ln = Number(lng);
+  if (la === 0 && ln === 0) return '—';
+  return `${la.toFixed(5)}, ${ln.toFixed(5)}`;
+}
+
 function normalizeParcel(raw, riderNameById) {
   const city = raw.destination || raw.origin || '';
   // null when the destination/origin city isn't in the shared Luzon table —
@@ -165,7 +190,7 @@ function normalizeParcel(raw, riderNameById) {
     productName: raw.item || '—',
     category: raw.packageCategory || '—',
     quantity: raw.packageCount ? `${raw.packageCount} pc(s)` : '1 pc',
-    packagePhoto: raw.packagePhoto || '',
+    packagePhoto: raw.packagePhoto || raw.imageUri || (raw.package && raw.package.imageUri) || '',
     value: raw.value || '—',
     // Service tier: packageType is the bridge-synced mobile package.type
     // (Standard/Express); serviceType remains the legacy web-created field.
@@ -203,6 +228,53 @@ function normalizeParcel(raw, riderNameById) {
     riderGpsAt: raw.updatedAt || raw.createdAt || null,
     // Failed delivery tries reported by the rider app, oldest first.
     deliveryAttempts: Array.isArray(raw.deliveryAttempts) ? raw.deliveryAttempts : [],
+    // ── Returns / cancellation parity with the mobile app (2026-10-12) ──
+    // Custody, the return handover, the cancellation reason and the pickup
+    // origin now sync across the bridge (they used to be dropped at the door,
+    // which left a completed return visible as a bare "Returned" status).
+    // Attempt count/reason are deliberately DERIVED from deliveryAttempts below
+    // instead of stored a second time — one source of truth for one number.
+    custody: mapCustodyLabel(raw.custody),
+    cancelledReason: raw.cancellationReason
+      ? `${raw.cancellationReason}${raw.cancellationReasonDescription ? ` — ${raw.cancellationReasonDescription}` : ''}`
+      : '—',
+    returnHandover: raw.returnFlow && raw.returnFlow.signerName
+      ? `${raw.returnFlow.signerName} (${String(raw.returnFlow.signerRole || 'SELLER').toLowerCase()})`
+      : '—',
+    returnedOn: raw.returnFlow && raw.returnFlow.completedAt
+      ? fmtDate(String(raw.returnFlow.completedAt).slice(0, 10))
+      : '—',
+    pickupPoint: formatPickupPoint(raw.pickupLat, raw.pickupLng),
+    // D-19: the return handover artifacts themselves. Stored since the F4
+    // parity fix and served by the normal parcels API; rendered in the details
+    // drawer so a return carries the same evidence trail as a delivery.
+    hasReturnHandover: !!(raw.returnFlow && raw.returnFlow.signerName),
+    returnSignaturePhoto: typeof raw.returnFlow?.signaturePhoto === 'string' ? raw.returnFlow.signaturePhoto : '',
+    returnConditionPhoto: typeof raw.returnFlow?.conditionPhoto === 'string' ? raw.returnFlow.conditionPhoto : '',
+    // I-4: what the waybill / QR card needs. qrPayload is the canonical code the
+    // portal minted on sync-parcel (YTOQR1|...), the same one the app's scanner
+    // reads; the raw numeric fields are kept alongside their formatted twins so
+    // the label can print real amounts instead of parsing a display string.
+    qrPayload: raw.qrPayload || '',
+    sellerEnterpriseId: raw.sellerEnterpriseId || '',
+    customerEnterpriseId: raw.customerEnterpriseId || '',
+    packageCount: Number(raw.packageCount) || 1,
+    codAmountValue: Number(raw.codAmount) || 0,
+    deliveryFeeValue: Number(raw.deliveryFee) || 0,
+    createdAt: raw.createdAt || null,
+    destination: raw.destination || '',
+    attemptSummary: (() => {
+      if (!Array.isArray(raw.deliveryAttempts) || raw.deliveryAttempts.length === 0) return 'None';
+      const last = raw.deliveryAttempts[raw.deliveryAttempts.length - 1];
+      const code = String(last.reasonCode || '').toUpperCase();
+      const reasonText = String(last.reason || '');
+      const isImm = ['CONSIGNEE_REFUSED', 'ORDER_CANCELLED', 'DAMAGED_IN_TRANSIT'].includes(code)
+        || /refus|cancel|damage/i.test(reasonText);
+      if (isImm) {
+        return `Immediate Return (Attempt ${raw.deliveryAttempts.length}): ${last.reason || last.reasonCode || 'Consignee refused'}`;
+      }
+      return `${raw.deliveryAttempts.length}${raw.maxDeliveryAttempts ? ` of ${raw.maxDeliveryAttempts}` : ''} (${last.reason || 'reason not given'})`;
+    })(),
   };
 
   // Real per-scan history when the backend recorded any events. When it
@@ -382,16 +454,36 @@ function Timeline({ events }) {
 
 // ── Failed delivery attempts ────────────────────────────────────────────────
 
-// "Attempt 2/3" pill shown next to the status once a delivery has failed.
-function AttemptsBadge({ count }) {
+// "Attempt 2/3" or "Immediate Return" pill shown next to the status once a delivery has failed or returned.
+function AttemptsBadge({ count, parcel }) {
   if (!count) return null;
+  const status = String(parcel?.status || '').toLowerCase();
+  const isReturningOrReturned = status.includes('return');
+  const attempts = Array.isArray(parcel?.deliveryAttempts) ? parcel.deliveryAttempts : [];
+  const lastAttempt = attempts.length > 0 ? attempts[attempts.length - 1] : null;
+  const code = String(lastAttempt?.reasonCode || '').toUpperCase();
+  const reasonText = String(lastAttempt?.reason || '');
+  const isImmediate = ['CONSIGNEE_REFUSED', 'ORDER_CANCELLED', 'DAMAGED_IN_TRANSIT'].includes(code)
+    || /refus|cancel|damage/i.test(reasonText);
+
+  if (isReturningOrReturned && (isImmediate || count < MAX_DELIVERY_ATTEMPTS)) {
+    return (
+      <span
+        title="Immediate return to seller — consignee refused delivery. No further delivery attempts."
+        style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 6, background: '#fee2e2', color: '#991b1b', border: '1px solid #fecaca', whiteSpace: 'nowrap' }}
+      >
+        Immediate Return
+      </span>
+    );
+  }
+
   const isLast = count >= MAX_DELIVERY_ATTEMPTS;
   return (
     <span
-      title={`${count} of ${MAX_DELIVERY_ATTEMPTS} delivery attempts used`}
+      title={isLast ? `Maximum ${MAX_DELIVERY_ATTEMPTS} of ${MAX_DELIVERY_ATTEMPTS} delivery attempts reached. Returned to seller.` : `${count} of ${MAX_DELIVERY_ATTEMPTS} delivery attempts used. Retry pending.`}
       style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 6, background: isLast ? '#fee2e2' : '#fff3eb', color: isLast ? '#991b1b' : '#f37021', border: `1px solid ${isLast ? '#fecaca' : '#fbd5bd'}`, whiteSpace: 'nowrap' }}
     >
-      Attempt {count}/{MAX_DELIVERY_ATTEMPTS}
+      {isLast ? `Max Attempts (${MAX_DELIVERY_ATTEMPTS}/${MAX_DELIVERY_ATTEMPTS})` : `Attempt ${count}/${MAX_DELIVERY_ATTEMPTS}`}
     </span>
   );
 }
@@ -403,8 +495,8 @@ function fmtDateTime(value) {
 }
 
 const attemptActionBtn = (primary) => ({
-  padding: '8px 14px', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
-  border: primary ? 'none' : '1.5px solid #390955',
+  padding: '6px 14px', borderRadius: 'var(--yto-radius-button, 8px)', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+  border: primary ? 'none' : '1px solid #390955',
   background: primary ? '#f37021' : 'white',
   color: primary ? 'white' : '#390955',
 });
@@ -454,7 +546,7 @@ function DeliveryAttemptsSection({ parcel, riders, role, onChanged }) {
     <div style={{ background: '#faf8fd', border: '1.5px solid #ede8f8', borderRadius: 10, padding: '14px 16px' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
         <div style={{ fontSize: 10, fontWeight: 800, color: '#390955', textTransform: 'uppercase', letterSpacing: 0.7 }}>Delivery Attempts</div>
-        <AttemptsBadge count={attempts.length} />
+        <AttemptsBadge count={attempts.length} parcel={parcel} />
       </div>
 
       {attempts.length === 0 ? (
@@ -599,7 +691,7 @@ function ParcelModal({ parcel, onClose, allParcels, riders = [], role, onChanged
       maxWidth={720}
       padding={0}
       overlayStyle={{ padding: 24 }}
-      cardStyle={{ borderRadius: 12, width: '100%', animation: 'mp-modal-in 0.22s cubic-bezier(0.34,1.56,0.64,1) both', boxShadow: '0 32px 80px rgba(57,9,85,0.25)' }}
+      cardStyle={{ width: '100%', animation: 'mp-modal-in 0.22s cubic-bezier(0.34,1.56,0.64,1) both', boxShadow: '0 32px 80px rgba(57,9,85,0.25)' }}
     >
 
         {/* Header */}
@@ -617,7 +709,7 @@ function ParcelModal({ parcel, onClose, allParcels, riders = [], role, onChanged
             <RiderBadge name={parcel.assignedRider} />
             <span style={{ fontSize: 10, fontWeight: 700, padding: '4px 10px', borderRadius: 6, background: svc.bg, color: svc.color }}>{parcel.service}</span>
             <Tooltip content="Close parcel details">
-      <button onClick={onClose} aria-label="Close parcel details" style={{ width: 30, height: 30, borderRadius: 8, border: '1.5px solid #e0d5f0', background: 'white', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: '#999' }}><X size={15} aria-hidden="true" /></button>
+      <button onClick={onClose} aria-label="Close parcel details" style={{ width: 30, height: 30, borderRadius: 8, border: 'none', background: 'transparent', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: '#999' }}><X size={15} aria-hidden="true" /></button>
       </Tooltip>
           </div>
         </div>
@@ -698,6 +790,14 @@ function ParcelModal({ parcel, onClose, allParcels, riders = [], role, onChanged
                     ['Est. Delivery', parcel.estimatedDelivery],
                     ['Delivered On', parcel.actualDelivery || '—'],
                     ['Recipient Email', parcel.receiver.email],
+                    // Returns / cancellation parity (2026-10-12). These sit in
+                    // the existing details grid rather than a separate panel.
+                    ['Parcel Custody', parcel.custody],
+                    ['Failed Attempts', parcel.attemptSummary],
+                    ['Cancelled Reason', parcel.cancelledReason],
+                    ['Returned To', parcel.returnHandover],
+                    ['Returned On', parcel.returnedOn],
+                    ['Pickup Point', parcel.pickupPoint],
                   ].map(([l, v]) => (
                     <div key={l} style={{ background: 'white', border: '1px solid #ebe4f5', borderRadius: 8, padding: '10px 12px' }}>
                       <div style={{ fontSize: 10, color: '#aaa', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 3 }}>{l}</div>
@@ -710,9 +810,16 @@ function ParcelModal({ parcel, onClose, allParcels, riders = [], role, onChanged
               <div style={{ background: '#faf8ff', border: '1.5px solid #ebe4f5', borderRadius: 10, padding: '14px 15px' }}>
                 <div style={{ fontSize: 10, fontWeight: 700, color: '#aaa', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>Product Photo</div>
                 {parcel.packagePhoto ? (
-                  <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                    <img src={parcel.packagePhoto} alt="Product" style={{ width: 80, height: 80, objectFit: 'cover', borderRadius: 8, border: '1px solid #ddd0f8' }} />
-                    <span style={{ fontSize: 12, color: '#555' }}>Attached parcel image</span>
+                  <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
+                    <a href={parcel.packagePhoto} target="_blank" rel="noopener noreferrer" title="Click to view full photo">
+                      <img src={parcel.packagePhoto} alt="Product" style={{ width: 84, height: 84, objectFit: 'cover', borderRadius: 8, border: '1.5px solid #ddd0f8', cursor: 'pointer', display: 'block' }} />
+                    </a>
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: '#390955', marginBottom: 2 }}>Attached parcel photo</div>
+                      <a href={parcel.packagePhoto} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, color: '#f37021', fontWeight: 600, textDecoration: 'none' }}>
+                        View full size
+                      </a>
+                    </div>
                   </div>
                 ) : (
                   <div style={{ fontSize: 12, color: '#888', fontStyle: 'italic' }}>
@@ -764,11 +871,11 @@ function ParcelModal({ parcel, onClose, allParcels, riders = [], role, onChanged
                     </div>
                   ))}
                 </div>
-                <button onClick={handleExport} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, padding: 10, background: '#390955', color: 'white', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', width: '100%', fontFamily: 'inherit', marginBottom: 8 }}>
+                <button onClick={handleExport} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, padding: '10px 22px', background: '#390955', color: 'white', border: 'none', borderRadius: 'var(--yto-radius-button, 8px)', fontSize: 13, fontWeight: 700, cursor: 'pointer', width: '100%', fontFamily: 'inherit', marginBottom: 8 }}>
                   <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" width="13" height="13"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /></svg>
                   Export as {exportFmt.toUpperCase()}
                 </button>
-                <button onClick={handlePrint} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, padding: 10, background: 'white', color: '#390955', border: '2px solid #390955', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', width: '100%', fontFamily: 'inherit' }}>
+                <button onClick={handlePrint} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, padding: '10px 22px', background: 'white', color: '#390955', border: '1px solid #390955', borderRadius: 'var(--yto-radius-button, 8px)', fontSize: 13, fontWeight: 700, cursor: 'pointer', width: '100%', fontFamily: 'inherit' }}>
                   <svg viewBox="0 0 24 24" fill="none" stroke="#390955" strokeWidth="2" width="13" height="13"><polyline points="6 9 6 2 18 2 18 9" /><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" /><rect x="6" y="14" width="12" height="8" /></svg>
                   Print Report
                 </button>
@@ -835,6 +942,57 @@ function ParcelModal({ parcel, onClose, allParcels, riders = [], role, onChanged
                   </div>
                 )}
 
+                {/* Return handover (D-19): the merchant signature and the optional
+                    condition photo the rider captured in the app when a parcel came
+                    back. Rendered next to the POD photo so a return has the same
+                    evidence trail as a delivery; absent altogether when there is
+                    no handover, so a normal parcel's drawer is unchanged. */}
+                {parcel.hasReturnHandover && (
+                  <div style={{ background: '#fff8f3', border: '1.5px solid #f6ddd0', borderRadius: 12, padding: 14, marginTop: 12 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#8a3b12', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10 }}>
+                      Return Handover — {parcel.returnHandover}
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+                      <div>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: '#aaa', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>Merchant Signature</div>
+                        {parcel.returnSignaturePhoto ? (
+                          <div style={{ borderRadius: 8, overflow: 'hidden', border: '1px solid #f0d5c4', background: 'white' }}>
+                            <img
+                              src={parcel.returnSignaturePhoto}
+                              alt="Signature of the person who received the returned parcel"
+                              style={{ width: '100%', maxHeight: 160, objectFit: 'contain', display: 'block' }}
+                            />
+                          </div>
+                        ) : (
+                          <p style={{ fontSize: 11, color: '#bbb', margin: 0 }}>No signature captured</p>
+                        )}
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: '#aaa', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>Parcel Condition</div>
+                        {parcel.returnConditionPhoto ? (
+                          <div style={{ borderRadius: 8, overflow: 'hidden', border: '1px solid #f0d5c4', background: '#111' }}>
+                            <img
+                              src={parcel.returnConditionPhoto}
+                              alt="Condition of the parcel when it was handed back"
+                              style={{ width: '100%', maxHeight: 160, objectFit: 'contain', display: 'block' }}
+                            />
+                          </div>
+                        ) : (
+                          <p style={{ fontSize: 11, color: '#bbb', margin: 0 }}>No condition photo captured</p>
+                        )}
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 11, color: '#8a6a55', marginTop: 10 }}>Returned on {parcel.returnedOn}</div>
+                  </div>
+                )}
+
+                {/* I-4: the parcel's own QR code plus a printable A6 label card,
+                    built from the same contract the app's waybill endpoint
+                    returns (services/waybill.js is a 1:1 port). */}
+                <div style={{ marginTop: 12 }}>
+                  <ParcelWaybill parcel={parcel} />
+                </div>
+
                 <div style={{ background: '#faf8ff', border: '1.5px solid #e8e0f5', borderRadius: 12, padding: 16, marginTop: 12 }}>
                   <div style={{ fontSize: 11, fontWeight: 700, color: '#390955', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 12, paddingBottom: 10, borderBottom: '1.5px solid #f0eaf8' }}>Delivery Summary</div>
                   {[
@@ -872,12 +1030,13 @@ const menuItemStyle = { display: 'block', width: '100%', textAlign: 'left', padd
 // Small square icon-button used by the Assign Rider action in the Actions
 // column — same outline-purple-hovers-to-orange treatment as the existing
 // "View" pill, just icon-only and more compact.
-const iconBtnStyle = { width: 28, height: 28, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: 6, border: '1.5px solid #390955', background: 'white', color: '#390955', cursor: 'pointer', fontFamily: 'inherit' };
+const iconBtnStyle = { width: 30, height: 30, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: 'var(--yto-radius-button, 8px)', border: '1.5px solid #390955', background: 'white', color: '#390955', cursor: 'pointer', fontFamily: 'inherit' };
 
 // ── Assign Rider (popover menu attached to its own action-column button) ───
 
 function AssignRiderButton({ parcel, riders, onAssign }) {
   const [open, setOpen] = useState(false);
+  const [openUpward, setOpenUpward] = useState(false);
   const ref = useRef(null);
 
   useEffect(() => {
@@ -886,18 +1045,45 @@ function AssignRiderButton({ parcel, riders, onAssign }) {
     return () => document.removeEventListener('mousedown', onClickOutside);
   }, []);
 
+  const handleToggle = (e) => {
+    e.stopPropagation();
+    if (!open && ref.current) {
+      const rect = ref.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      setOpenUpward(spaceBelow < 260 && rect.top > 260);
+    }
+    setOpen((v) => !v);
+  };
+
   return (
     <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
       <Tooltip content="Assign a rider to this parcel">
-      <button onClick={() => setOpen((v) => !v)} className="mp-icon-btn" style={iconBtnStyle}>
+      <button onClick={handleToggle} className="mp-icon-btn" style={iconBtnStyle}>
         <RiderIcon size={13} />
       </button>
       </Tooltip>
       {open && (
-        <div style={{ position: 'absolute', right: 0, top: 'calc(100% + 6px)', background: 'white', border: '1px solid #e0d5f0', borderRadius: 10, boxShadow: '0 12px 32px rgba(57,9,85,0.14)', overflow: 'hidden', minWidth: 160, maxHeight: 260, overflowY: 'auto', zIndex: 20, textAlign: 'left' }}>
-          <div style={{ padding: '8px 14px', fontSize: 10, fontWeight: 700, color: '#aaa', textTransform: 'uppercase', letterSpacing: 0.4 }}>Assign Rider</div>
+        <div style={{
+          position: 'absolute',
+          right: 0,
+          ...(openUpward ? { bottom: 'calc(100% + 6px)' } : { top: 'calc(100% + 6px)' }),
+          background: 'white',
+          border: '1.5px solid #d8b4fe',
+          borderRadius: 10,
+          boxShadow: '0 14px 36px rgba(57,9,85,0.22)',
+          minWidth: 200,
+          maxHeight: 260,
+          overflowY: 'auto',
+          zIndex: 100,
+          textAlign: 'left'
+        }}>
+          <div style={{ padding: '8px 14px', fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.5, borderBottom: '1px solid #f3f0f8' }}>
+            Assign Rider
+          </div>
           {riders.length === 0 ? (
-            <div style={{ padding: '10px 14px', fontSize: 12, color: '#bbb' }}>No riders available.</div>
+            <div style={{ padding: '12px 14px', fontSize: 12, color: '#888', lineHeight: 1.4 }}>
+              No available riders (all riders are currently out for delivery).
+            </div>
           ) : riders.map((r) => (
             <button key={r.riderId} onClick={() => { onAssign(parcel, r); setOpen(false); }}
               style={{ ...menuItemStyle, background: parcel.riderId === r.riderId ? '#f0eaf8' : 'transparent', color: parcel.riderId === r.riderId ? '#390955' : '#1a1a1a', fontWeight: parcel.riderId === r.riderId ? 700 : 600 }}>
@@ -947,7 +1133,13 @@ export default function ManageParcels({ currentUser }) {
 
       const riderList = (Array.isArray(ridersData) ? ridersData : [])
         .filter((r) => String(r.status || '').toLowerCase() !== 'archived')
-        .map((r) => ({ riderId: r.registrationId || r._id, riderName: r.riderName || '—' }));
+        .map((r) => ({
+          riderId: r.registrationId || r._id,
+          riderName: r.riderName || '—',
+          status: r.status,
+          dutyStatus: r.dutyStatus,
+          isOnDuty: r.isOnDuty,
+        }));
       const riderNameById = {};
       riderList.forEach((r) => { riderNameById[r.riderId] = r.riderName; });
 
@@ -982,6 +1174,34 @@ export default function ManageParcels({ currentUser }) {
   useEffect(() => {
     setViewParcel((open) => (open ? parcels.find((p) => p._id === open._id) || open : open));
   }, [parcels]);
+
+  // Set of rider IDs and names currently carrying an active "Out for Delivery" parcel
+  const outForDeliveryRiderSet = useMemo(() => {
+    const set = new Set();
+    parcels.forEach((p) => {
+      const norm = normalizeParcelStatus(p.status);
+      if (norm === 'Out for Delivery') {
+        if (p.riderId) set.add(String(p.riderId).trim().toLowerCase());
+        if (p.assignedRider && p.assignedRider !== 'Unassigned') {
+          set.add(String(p.assignedRider).trim().toLowerCase());
+        }
+      }
+    });
+    return set;
+  }, [parcels]);
+
+  // Only display couriers that are not yet out for delivery
+  const availableRiders = useMemo(() => {
+    return riders.filter((r) => {
+      const id = String(r.riderId || '').trim().toLowerCase();
+      const name = String(r.riderName || '').trim().toLowerCase();
+      const status = String(r.status || '').trim().toLowerCase();
+      const duty = String(r.dutyStatus || '').trim().toLowerCase();
+      if (outForDeliveryRiderSet.has(id) || outForDeliveryRiderSet.has(name)) return false;
+      if (status === 'out for delivery' || duty === 'out for delivery') return false;
+      return true;
+    });
+  }, [riders, outForDeliveryRiderSet]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -1057,7 +1277,7 @@ export default function ManageParcels({ currentUser }) {
   );
 
   return (
-    <div style={{ flex: 1, padding: '24px 30px 48px', backgroundColor: '#f0ecf7', minHeight: '100vh', fontFamily: "'DM Sans', sans-serif" }}>
+    <div style={{ flex: 1, padding: '24px 30px 48px', backgroundColor: '#f0ecf7', minHeight: '100vh', fontFamily: "'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif" }}>
       <style>{`
         @keyframes mp-modal-in { from { opacity:0; transform:scale(0.95) translateY(10px); } to { opacity:1; transform:scale(1) translateY(0); } }
 
@@ -1066,8 +1286,8 @@ export default function ManageParcels({ currentUser }) {
         .mp-row:hover .mp-view-btn, .mp-row:hover .mp-icon-btn { opacity: 1; }
         .mp-view-btn:hover, .mp-icon-btn:hover { background:#f37021 !important; color:white !important; border-color:#f37021 !important; opacity: 1; }
 
-        .mp-table-wrap { width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch; }
-        .mp-table-wrap table { width:100%; min-width:1080px; border-collapse:collapse; font-size:13px; }
+        .mp-table-wrap { width: calc(100% - 48px); margin: 8px 24px 24px; box-sizing: border-box; overflow-x: auto; -webkit-overflow-scrolling: touch; min-height: 380px; }
+        .mp-table-wrap table { width: 100%; min-width: 1580px; border-collapse: collapse; font-size: 13px; }
       `}</style>
 
       {viewParcel && (
@@ -1144,7 +1364,7 @@ export default function ManageParcels({ currentUser }) {
         </FilterBar>
 
           {/* Table — same bordered/rounded container the other ledgers use */}
-          <div className="mp-table-wrap custom-table-scroll" style={{ margin: '8px 24px 24px', border: '1px solid #e4d8f2', borderRadius: 12 }}>
+          <div className="mp-table-wrap custom-table-scroll" style={{ border: '1px solid #e4d8f2', borderRadius: 12 }}>
             <table>
               <thead>
                 <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
@@ -1172,7 +1392,7 @@ export default function ManageParcels({ currentUser }) {
                       </th>
                     );
                   })}
-                  <th style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 600, color: '#64748b', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>Actions</th>
+                  <th style={{ padding: '12px 36px 12px 16px', textAlign: 'right', fontWeight: 600, color: '#64748b', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -1206,16 +1426,16 @@ export default function ManageParcels({ currentUser }) {
                     </td>
                     <td style={{ padding: '12px 16px', whiteSpace: 'nowrap', borderBottom: '1px solid #f3f0f8' }}>
                       <StatusBadge status={p.status} />
-                      <AttemptsBadge count={p.deliveryAttempts.length} />
+                      <AttemptsBadge count={p.deliveryAttempts.length} parcel={p} />
                     </td>
-                    <td style={{ padding: '12px 16px', textAlign: 'right', borderBottom: '1px solid #f3f0f8' }}>
+                    <td style={{ padding: '12px 36px 12px 16px', textAlign: 'right', borderBottom: '1px solid #f3f0f8', whiteSpace: 'nowrap' }}>
                       <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
                         <button onClick={() => setViewParcel(p)} className="mp-view-btn" title="View Details"
-                          style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 14px', borderRadius: 6, border: '1.5px solid #390955', background: 'white', color: '#390955', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 14px', borderRadius: 'var(--yto-radius-button, 8px)', border: '1px solid #390955', background: 'white', color: '#390955', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="11" height="11"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>
                           View Details
                         </button>
-                        <AssignRiderButton parcel={p} riders={riders} onAssign={handleAssignRider} />
+                        <AssignRiderButton parcel={p} riders={availableRiders} onAssign={handleAssignRider} />
                       </div>
                     </td>
                   </tr>

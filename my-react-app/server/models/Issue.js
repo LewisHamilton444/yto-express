@@ -29,6 +29,15 @@ const IssueSchema = new mongoose.Schema({
     ],
     default: 'Other',
   },
+  // D-14: what the reporter actually chose before the app folded it into a
+  // canonical `category` ("Dispute Failed Attempt", "Reschedule Delivery", ...).
+  // Empty for an already-canonical report, so triage can tell the two apart
+  // without a second category list.
+  subCategory: {
+    type: String,
+    default: '',
+    trim: true,
+  },
   description: {
     type: String,
     required: true,
@@ -75,7 +84,11 @@ const IssueSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['Open', 'Under Investigation', 'Resolved', 'Closed'],
+    // 'Rejected' mirrors the mobile Issue enum (A models/Issue.js:105) — the
+    // app has let staff deny a claim since v2, and the bridge used to SKIP a
+    // rejected ticket because this list had no equivalent, so the portal never
+    // reflected the decision the app had already made.
+    enum: ['Open', 'Under Investigation', 'Resolved', 'Rejected', 'Closed'],
     default: 'Open',
   },
   adminNotes: {

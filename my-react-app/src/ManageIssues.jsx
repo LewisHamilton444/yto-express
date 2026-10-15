@@ -26,6 +26,8 @@ const STATUS_TONE = {
   'Open': 'red',
   'Under Investigation': 'amber',
   'Resolved': 'green',
+  // 'Rejected' mirrors the mobile app's Issue vocabulary: a claim staff denied.
+  'Rejected': 'red',
   'Closed': 'slate',
 };
 
@@ -36,6 +38,7 @@ const STATUS_HINT = {
   'Open': 'Reported — awaiting first action',
   'Under Investigation': 'Being investigated by operations staff',
   'Resolved': 'Closed after a resolution was confirmed',
+  'Rejected': 'Not approved — the report was reviewed and denied',
   'Closed': 'Ticket closed — no further action needed',
 };
 
@@ -53,7 +56,7 @@ const CATEGORIES = [
 
 // Status filter options - rendered as a shared FilterBar.Select so this tab's
 // control bar matches the Customers / Sellers / Riders / All Parcels tables.
-const STATUS_OPTIONS = ['All', 'Open', 'Under Investigation', 'Resolved', 'Closed'];
+const STATUS_OPTIONS = ['All', 'Open', 'Under Investigation', 'Resolved', 'Rejected', 'Closed'];
 
 const TABLE_HEADERS = [
   { label: 'Ticket ID',     icon: Hash },
@@ -147,7 +150,9 @@ export default function ManageIssues() {
       });
 
       if (!res.ok) throw new Error('Status update failed');
-      const updated = await res.json();
+      const body = await res.json();
+      const updated = body?.data ?? body;
+      if (!updated || !updated._id) throw new Error('Unexpected server response');
       setIssues(prev => prev.map(i => (i._id === updated._id ? updated : i)));
       setSelectedIssue(updated);
       showToast('Issue ticket updated and synchronized to mobile user.');
@@ -165,6 +170,8 @@ export default function ManageIssues() {
         (issue.ticketId && issue.ticketId.toLowerCase().includes(search.toLowerCase())) ||
         (issue.trackingNumber && issue.trackingNumber.toLowerCase().includes(search.toLowerCase())) ||
         (issue.category && issue.category.toLowerCase().includes(search.toLowerCase())) ||
+        // D-14: triage searches for what the reporter said, e.g. "dispute".
+        (issue.subCategory && issue.subCategory.toLowerCase().includes(search.toLowerCase())) ||
         (issue.reporterName && issue.reporterName.toLowerCase().includes(search.toLowerCase())) ||
         (issue.reporterEmail && issue.reporterEmail.toLowerCase().includes(search.toLowerCase())) ||
         (issue.productName && issue.productName.toLowerCase().includes(search.toLowerCase())) ||
@@ -288,7 +295,7 @@ export default function ManageIssues() {
             {hasActiveFilters && (
               <button
                 onClick={handleClearFilters}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white text-[#475569] text-xs font-bold border border-[#cbd5e1] hover:brightness-105 active:scale-95 transition-all shadow-xs cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white text-[#475569] text-xs font-bold border border-[#cbd5e1] hover:brightness-105 active:scale-95 transition-all cursor-pointer"
               >
                 <X size={13} aria-hidden="true" /> Clear Filters
               </button>
@@ -341,7 +348,7 @@ export default function ManageIssues() {
                         action={
                           <button
                             onClick={handleClearFilters}
-                            className="h-[34px] px-3.5 bg-[#390955] text-white text-xs font-bold rounded-lg hover:brightness-110 cursor-pointer shadow-sm"
+                            className="h-[34px] px-3.5 bg-[#390955] text-white text-xs font-bold rounded-lg hover:brightness-110 cursor-pointer"
                           >
                             Clear Filters
                           </button>
@@ -360,7 +367,14 @@ export default function ManageIssues() {
                       {issue.ticketId}
                     </DataTable.Cell>
                     <DataTable.Cell className="text-xs font-semibold text-gray-700 whitespace-nowrap">
-                      {issue.category}
+                      <div>{issue.category}</div>
+                      {/* D-14: what the reporter actually chose, when the app
+                          folded it into the canonical type above. Absent for
+                          every already-canonical report, so this row looks
+                          exactly as it did before. */}
+                      {issue.subCategory && (
+                        <div className="mt-0.5 text-[11px] font-medium text-brand-muted">{issue.subCategory}</div>
+                      )}
                     </DataTable.Cell>
                     <DataTable.Cell className="font-mono text-xs font-bold text-brand-orange whitespace-nowrap">
                       {issue.trackingNumber}
@@ -383,7 +397,7 @@ export default function ManageIssues() {
                           e.stopPropagation();
                           handleOpenDetail(issue);
                         }}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-purple-200 text-brand-purple text-xs font-bold hover:bg-purple-50 transition opacity-80 group-hover:opacity-100 group-focus-within:opacity-100 whitespace-nowrap"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#e2d9ee] bg-white text-brand-purple text-xs font-bold hover:bg-purple-50 transition opacity-80 group-hover:opacity-100 group-focus-within:opacity-100 whitespace-nowrap"
                       >
                         <Eye size={12} /> View Details
                       </button>
@@ -420,7 +434,7 @@ export default function ManageIssues() {
           maxWidth={560}
           padding={0}
           onBackdropClick={() => !updating && setSelectedIssue(null)}
-          cardStyle={{ borderRadius: 12, overflow: 'hidden', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)' }}
+          cardStyle={{ overflow: 'hidden', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)' }}
         >
           <ModalHeader
             title={`Ticket Details — ${selectedIssue.ticketId}`}
@@ -440,6 +454,9 @@ export default function ManageIssues() {
               <div className="rounded-lg bg-brand-purple-50 p-3">
                 <div className="flex items-center gap-1.5 text-[11px] font-bold text-brand-muted"><Tag size={12} /> ISSUE TYPE</div>
                 <div className="mt-0.5 text-sm font-extrabold text-brand-purple">{selectedIssue.category}</div>
+                {selectedIssue.subCategory && (
+                  <div className="mt-0.5 text-[11px] font-bold text-brand-muted">Reported as: {selectedIssue.subCategory}</div>
+                )}
               </div>
             </div>
 
@@ -532,14 +549,14 @@ export default function ManageIssues() {
               <div className="mt-3.5 flex justify-end gap-2.5">
                 <button
                   onClick={() => setSelectedIssue(null)}
-                  className="rounded-md border border-brand-purple-200 bg-white px-4 py-2 text-xs font-bold text-brand-purple transition hover:bg-brand-purple-50"
+                  className="rounded-lg border border-brand-purple-200 bg-white px-4 py-2 text-xs font-bold text-brand-purple transition hover:bg-brand-purple-50"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleUpdateStatus}
                   disabled={updating}
-                  className="rounded-md bg-brand-orange px-5 py-2 text-xs font-bold text-white transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="rounded-lg bg-brand-orange px-5 py-2 text-xs font-bold text-white transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {updating ? 'Saving Status...' : 'Save & Notify User'}
                 </button>
@@ -556,8 +573,8 @@ export default function ManageIssues() {
           className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/85 p-5"
         >
           <div className="relative max-h-[90vh] max-w-[90vw]">
-            <button onClick={() => setZoomedImage(null)} className="absolute -top-9 right-0 text-white transition hover:text-white/70">
-              <X size={28} />
+            <button onClick={() => setZoomedImage(null)} className="absolute -top-9 right-0 inline-flex h-[30px] w-[30px] items-center justify-center rounded-lg text-white transition hover:text-white/70">
+              <X size={16} />
             </button>
             <img src={zoomedImage} alt="Evidence Zoom" className="max-h-[85vh] max-w-full rounded-lg shadow-2xl" />
           </div>

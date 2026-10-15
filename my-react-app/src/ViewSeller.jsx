@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './ViewSeller.css';
 import './LedgerPage.css';
-import { LEDGER_MODAL_CARD, LEDGER_MODAL_OVERLAY, LEDGER_MODAL_TINT, initialsOf, statusTone } from './ledger';
+import { LEDGER_MODAL_CARD, LEDGER_MODAL_OVERLAY, LEDGER_MODAL_TINT, statusTone } from './ledger';
 import { normalizeSeller, formatStatusLabel, SELLER_STATUS } from './sellerRiderData';
 import PaginationControls from './PaginationControls';
 import { exportToCSV, exportToExcel, exportToWord, exportToPDF } from './exportUtils';
@@ -11,12 +11,13 @@ import { apiFetch } from './services/api';
 import useSSE from './services/useSSE';
 import LedgerStatus from './components/ui/LedgerStatus';
 import Modal from './components/ui/Modal';
-import { Hash, User, Mail, Phone, MapPin, Activity, Store, Eye, Pencil, X, Info, History } from 'lucide-react';
+import { Hash, User, Mail, Phone, MapPin, Activity, Store, Eye, Pencil, X, Info, History, FileText } from 'lucide-react';
 import { useToast } from './components/ui/useToast';
 import PageHeader from './components/ui/PageHeader';
 import EmptyState from './components/ui/EmptyState';
 import Badge from './components/ui/Badge';
 import SectionCard from './components/ui/SectionCard';
+import PhotoAvatar from './components/ui/PhotoAvatar';
 import CardSectionHeader from './components/ui/CardSectionHeader';
 import FilterBar from './components/ui/FilterBar';
 import { takeSearchHandoff, onSearchHandoff } from './utils/searchHandoff';
@@ -84,6 +85,7 @@ const GenerateSellerReport = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [detailSeller,  setDetailSeller]  = useState(null);
   const [detailTab,     setDetailTab]     = useState('details');
+  const [zoomDoc,       setZoomDoc]       = useState(null);
   const [sellerTimeline, setSellerTimeline] = useState([]);
   const [timelineLoading, setTimelineLoading] = useState(false);
   const [currentPage,   setCurrentPage]   = useState(1);
@@ -222,13 +224,13 @@ const GenerateSellerReport = () => {
   };
 
   const s = {
-    main:        { flex: 1, padding: '24px 30px 48px', minHeight: '100vh', background: '#f0ecf7', fontFamily: "'DM Sans', sans-serif", color: '#390955' },
+    main:        { flex: 1, padding: '24px 30px 48px', minHeight: '100vh', background: '#f0ecf7', fontFamily: "'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif", color: '#390955' },
     formInput:   { padding: '10px 14px', background: 'white', border: '1.5px solid #e4d8f2', borderRadius: '10px', color: '#390955', fontSize: '13px', outline: 'none', width: '100%', boxSizing: 'border-box', fontFamily: 'inherit' },
     table:       { width: '100%', minWidth: '1080px', borderCollapse: 'collapse', fontSize: '13px' },
     th:          { padding: '12px 16px', textAlign: 'left', fontWeight: 600, color: '#64748b', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', textTransform: 'uppercase', fontSize: '11px', letterSpacing: '0.05em', whiteSpace: 'nowrap' },
     td:          { padding: '14px 16px', color: '#390955', borderBottom: '1px solid #f3edfb', whiteSpace: 'nowrap' },
-    btnPrimary:  { padding: '8px 16px', borderRadius: '8px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', background: '#f37021', color: 'white', border: 'none', fontFamily: 'inherit' },
-    btnOutline:  { padding: '8px 16px', borderRadius: '8px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', background: 'white', color: '#390955', border: '1.5px solid #e4d8f2', fontFamily: 'inherit' },
+    btnPrimary:  { padding: '10px 22px', borderRadius: 'var(--yto-radius-button, 8px)', fontSize: '13px', fontWeight: 700, cursor: 'pointer', background: '#f37021', color: 'white', border: 'none', fontFamily: 'inherit' },
+    btnOutline:  { padding: '10px 22px', borderRadius: 'var(--yto-radius-button, 8px)', fontSize: '13px', fontWeight: 700, cursor: 'pointer', background: 'white', color: '#390955', border: '1px solid #e4d8f2', fontFamily: 'inherit' },
     detailRow:   { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 0', borderBottom: '1px solid #f5f0ff', fontSize: 13 },
     detailLabel: { color: '#a890c0', fontWeight: 600 },
     detailValue: { color: '#390955', fontWeight: 700, textAlign: 'right' },
@@ -356,7 +358,7 @@ const GenerateSellerReport = () => {
                       <td className="lp-id whitespace-nowrap">{seller.sellerId}</td>
                       <td className="whitespace-nowrap">
                         <span className="lp-name">
-                          <span className="lp-avatar" aria-hidden="true">{initialsOf(seller.fullName)}</span>
+                          <PhotoAvatar className="lp-avatar" photo={seller.profilePhotoUrl} name={seller.fullName} />
                           <span className="lp-name-text">{seller.fullName || '—'}</span>
                         </span>
                       </td>
@@ -364,7 +366,7 @@ const GenerateSellerReport = () => {
                       <td className="lp-muted whitespace-nowrap tabular-nums">{seller.phone || '—'}</td>
                       <td className="whitespace-nowrap">
                         <span className="lp-stack lp-clip" title={[storeName, storeAddress].filter(Boolean).join(' — ') || undefined}>
-                          <span className="lp-stack-main">{storeName || 'Personal merchant'}</span>
+                          <span className={`lp-stack-main${storeName ? '' : ' lp-placeholder'}`}>{storeName || 'No store name yet'}</span>
                           {storeAddress && <span className="lp-stack-sub">{storeAddress}</span>}
                         </span>
                       </td>
@@ -395,7 +397,7 @@ const GenerateSellerReport = () => {
       {detailSeller && (
         <Modal tint={LEDGER_MODAL_TINT} blur={false} overlayStyle={LEDGER_MODAL_OVERLAY} maxWidth={560} padding={0} label="Seller details" onBackdropClick={() => setDetailSeller(null)} cardStyle={LEDGER_MODAL_CARD}>
           <div className="lp-modal-head">
-            <span className="lp-modal-avatar" aria-hidden="true">{initialsOf(detailSeller.fullName)}</span>
+            <PhotoAvatar className="lp-modal-avatar" photo={detailSeller.profilePhotoUrl} name={detailSeller.fullName} />
             <div className="lp-modal-identity">
               <h3>{detailSeller.fullName || 'Seller'}</h3>
               {(detailSeller.storeName || detailSeller.raw?.storeName) && (
@@ -447,7 +449,7 @@ const GenerateSellerReport = () => {
                   {
                     title: 'Address',
                     rows: [
-                      { label: 'Street', value: detailSeller.address?.street, wrap: true },
+                      { label: 'Street', value: detailSeller.address?.street || detailSeller.warehouseAddress || detailSeller.raw?.warehouseAddress || detailSeller.address?.fullAddress, wrap: true },
                       { label: 'City', value: detailSeller.address?.city },
                       { label: 'State / Province', value: detailSeller.address?.state },
                       { label: 'Postal Code', value: detailSeller.address?.postalCode },
@@ -457,8 +459,8 @@ const GenerateSellerReport = () => {
                   {
                     title: 'Store & Operations',
                     rows: [
-                      { label: 'Store Name', value: detailSeller.storeName || detailSeller.raw?.storeName || 'Personal Merchant' },
-                      { label: 'Warehouse Address', value: detailSeller.warehouseAddress || detailSeller.raw?.warehouseAddress, wrap: true },
+                      { label: 'Store Name', value: detailSeller.storeName || detailSeller.raw?.storeName || 'No store name yet' },
+                      { label: 'Warehouse Address', value: detailSeller.warehouseAddress || detailSeller.raw?.warehouseAddress || detailSeller.address?.street || detailSeller.address?.fullAddress, wrap: true },
                       { label: 'Operating Hours', value: detailSeller.operatingHours || detailSeller.raw?.operatingHours },
                       { label: 'Registration Date', value: (detailSeller.createdAt || detailSeller.raw?.createdAt) ? formatTimelineDate(detailSeller.createdAt || detailSeller.raw?.createdAt) : '' },
                     ],
@@ -468,7 +470,7 @@ const GenerateSellerReport = () => {
                     rows: [
                       { label: 'Bank Name', value: detailSeller.bankName },
                       { label: 'Account Number', value: detailSeller.accountNumber },
-                      { label: 'Payment Cycle', value: detailSeller.paymentCycle || 'Weekly' },
+                      { label: 'Payment Cycle', value: detailSeller.paymentCycle },
                       { label: 'Commission Rate', value: `${detailSeller.commissionRate ?? 0}%` },
                     ],
                   }] : []),
@@ -488,6 +490,43 @@ const GenerateSellerReport = () => {
                     </dl>
                   </section>
                 ))}
+
+                {/* Verification Documents & Credentials */}
+                <section className="lp-detail-group" aria-label="Verification and credentials">
+                  <h4>Verification Documents</h4>
+                  {((detailSeller.documents && detailSeller.documents.length > 0) || (detailSeller.raw?.documents && detailSeller.raw.documents.length > 0)) ? (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '10px', marginTop: '8px' }}>
+                      {(detailSeller.documents?.length ? detailSeller.documents : detailSeller.raw?.documents).map((doc, idx) => {
+                        const src = doc.url || doc.dataUrl || '';
+                        const label = doc.label || doc.name || `Document #${idx + 1}`;
+                        return (
+                          <div
+                            key={idx}
+                            onClick={() => src && setZoomDoc({ src, label })}
+                            style={{
+                              border: '1px solid #e2d8f0', borderRadius: '8px', padding: '8px',
+                              background: '#faf7fd', cursor: src ? 'pointer' : 'default',
+                              display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center'
+                            }}
+                          >
+                            {src ? (
+                              <img src={src} alt={label} style={{ width: '100%', height: '80px', objectFit: 'cover', borderRadius: '6px', marginBottom: '6px' }} />
+                            ) : (
+                              <div style={{ width: '100%', height: '80px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f3eef8', borderRadius: '6px', marginBottom: '6px' }}>
+                                <FileText size={22} color="#7b6d8d" />
+                              </div>
+                            )}
+                            <span style={{ fontSize: '11px', fontWeight: 600, color: '#390955', lineHeight: 1.2 }}>{label}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: '12px', color: '#7b6d8d', fontStyle: 'italic', padding: '6px 0' }}>
+                      No verification documents attached to this seller profile.
+                    </div>
+                  )}
+                </section>
               </div>
             )}
 
@@ -528,8 +567,35 @@ const GenerateSellerReport = () => {
         </Modal>
       )}
 
+      {/* Zoomed document preview */}
+      {zoomDoc && (
+        <div
+          onClick={() => setZoomDoc(null)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(10,2,16,0.88)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999, padding: 24 }}
+          role="dialog"
+          aria-modal="true"
+          aria-label={zoomDoc.label}
+        >
+          <button
+            onClick={() => setZoomDoc(null)}
+            aria-label="Close preview"
+            style={{ position: 'absolute', top: 18, right: 22, width: '30px', height: '30px', borderRadius: 'var(--yto-radius-button, 8px)', background: 'none', border: 'none', color: 'white', fontSize: 28, lineHeight: 1, cursor: 'pointer' }}
+          >
+            &times;
+          </button>
+          <div style={{ maxWidth: '92vw', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+            <img
+              src={zoomDoc.src}
+              alt={zoomDoc.label}
+              style={{ maxWidth: '92vw', maxHeight: '80vh', borderRadius: 10, boxShadow: '0 24px 70px rgba(0,0,0,0.55)', objectFit: 'contain', background: 'white' }}
+            />
+            <div style={{ color: 'rgba(255,255,255,0.85)', fontSize: 13, fontWeight: 600 }}>{zoomDoc.label}</div>
+          </div>
+        </div>
+      )}
+
       {showEditModal && editingSeller && (
-        <Modal tint="rgba(26,6,40,0.5)" blur={false} maxWidth={500} padding={0} cardStyle={{ borderRadius: 12, overflow: 'hidden', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
+        <Modal tint="rgba(26,6,40,0.5)" blur={false} maxWidth={500} padding={0} cardStyle={{ overflow: 'hidden', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
             <ModalHeader
               title="Update Profile Details"
               subtitle={editingSeller.fullName || undefined}
@@ -557,12 +623,13 @@ const GenerateSellerReport = () => {
               </div>
               <div>
                 <label style={{ fontSize: '11px', fontWeight: 700, color: '#a890c0', textTransform: 'uppercase', display: 'block', marginBottom: '6px' }}>ID Type</label>
-                <select style={s.formInput} value={editingSeller.idType || 'National ID'} onChange={e => setEditingSeller({ ...editingSeller, idType: e.target.value })}>
-                  <option>National ID</option>
-                  <option>Passport</option>
-                  <option>Driver's License</option>
-                  <option>PhilSys ID</option>
-                  <option>Postal ID</option>
+                <select style={s.formInput} value={editingSeller.idType || ''} onChange={e => setEditingSeller({ ...editingSeller, idType: e.target.value })}>
+                  <option value="">None / Not provided</option>
+                  <option value="National ID">National ID</option>
+                  <option value="Passport">Passport</option>
+                  <option value="Driver's License">Driver's License</option>
+                  <option value="PhilSys ID">PhilSys ID</option>
+                  <option value="Postal ID">Postal ID</option>
                 </select>
               </div>
               <div>

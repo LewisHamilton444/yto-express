@@ -85,7 +85,7 @@ export default function ExportDropdown({
         onClick={() => setIsOpen((prev) => !prev)}
         aria-haspopup="true"
         aria-expanded={isOpen}
-        className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-lg bg-[#f37021] text-white text-xs font-bold hover:brightness-105 active:scale-95 transition-all shadow-sm ${
+        className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-lg bg-[#f37021] text-white text-xs font-bold hover:brightness-105 active:scale-95 transition-all ${
           disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
         }`}
       >

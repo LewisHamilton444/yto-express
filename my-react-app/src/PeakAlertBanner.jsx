@@ -83,6 +83,8 @@ const PeakAlertBanner = () => {
                         <button onClick={dismiss} style={{
                             background: 'none', border: 'none', color: 'white', cursor: 'pointer',
                             fontSize: 16, lineHeight: 1, padding: 0, opacity: 0.7,
+                            width: 30, height: 30, borderRadius: 'var(--yto-radius-button, 8px)',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
                         }}>&times;</button>
                     </div>
                 </div>

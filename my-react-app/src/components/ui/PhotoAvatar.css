@@ -1,0 +1,12 @@
+/* The app-synced profile photo inside whichever avatar class the caller uses
+   (D-16). Sizing follows the parent avatar box, so `.lp-avatar` (30px) and
+   `.lp-modal-avatar` (36px) both get a correctly scaled circular photo with no
+   per-page CSS. object-fit keeps a non-square capture from being stretched. */
+.yto-avatar-img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: center;
+  display: block;
+}

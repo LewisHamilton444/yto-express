@@ -5,21 +5,20 @@
 // the same way normalizeSeller/normalizeRider replaced disconnected mock
 // counts elsewhere in this app.
 //
-// COVERAGE ALIGNMENT (2026-09-13): the Android app's service area is
-// Bulacan Province ONLY (see app ETACalculatorUtils: "Geographic Scope:
-// Bulacan Province Only"). The single hub listed below IS the app's real
-// operations hub — YTO Pulilan Main Sorting Hub — at the warehouse address
-// "Warehouse 8-17, Pulilan Enterprises Center, Block 3, Pulilan Regional
-// Road, Dampol II-B, Pulilan, Bulacan" at the OSM-verified Dampol 2nd B
-// location (14.9027° N, 120.8073° E), which matches the app's updated
-// PULILAN_MAIN_HUB. Corrections applied 2026-09-13:
-//   1. HUB-002 coordinates 14.8967, 120.8528 -> 14.9027, 120.8073
-//      (14.8967/120.8528 is NOT inside Dampol II-B; OSM places the
-//      barangay polygon at bbox 14.9012-14.9244, 120.8003-120.8107 and
-//      the NLEX Pulilan interchange at 14.9103, 120.8152).
-//   2. HUB-001 (Quezon City) and HUB-003 (South Luzon - Laguna) were
-//      REMOVED — non-Bulacan hubs contradicted the Bulacan-only app
-//      service area. The hub list is now Bulacan-only.
+// D-6 / G-10 (2026-10-12): this list is now the app's REAL directory, not one
+// hub. The Android backend seeds TEN Bulacan hubs/branches
+// (controllers/hubController.js defaultHubRows() -> HubBranch, served by
+// GET /api/hubs); this file previously carried only the central one, so the
+// portal's hub intake, sort codes and hub map disagreed with the app about how
+// many hubs exist. Every row below is copied 1:1 from that source — same
+// hubId, name, municipality, address and coordinates — so a hub named in the
+// app resolves here. `sortCode` is the destination code printed on the waybill
+// label, resolved by the same table as services/waybill.js.
+//
+// COORDINATE NOTE: the central hub's address is the OSM-verified Dampol II-B
+// warehouse (14.9027° N, 120.8073° E); branch coordinates come from the app's
+// own row for that branch and are NOT independently surveyed — they place the
+// pin on the municipality, which is what the hub map needs.
 //
 // STATUS HONESTY: `status` below is the hub's declared operating state used
 // for map coloring only — it is NOT derived from live load telemetry (no
@@ -31,18 +30,70 @@ const HUB_STATUS = {
   OFFLINE: 'Offline',
 };
 
+// geofenceRadius is the operating-area ring drawn around a hub (km). It is a
+// planning radius, not telemetry — live parcel/rider counts inside it are
+// computed from real data in LiveRiderMap.
+const HUB_RADIUS_MAIN = 2.5;
+const HUB_RADIUS_BRANCH = 1.5;
+
+/**
+ * One branch row, in the shape this file's consumers already read
+ * (hubId/hubName/region/address/coordinates/geofenceRadius/status), built from
+ * the Android directory's own fields (name/municipality/address/lat/lng).
+ */
+function hubRow(hubId, name, address, municipality, lat, lng, sortCode) {
+  return {
+    hubId,
+    hubName: name,
+    region: 'Central Luzon — Bulacan',
+    municipality,
+    sortCode,
+    address,
+    coordinates: { lat, lng },
+    geofenceRadius: HUB_RADIUS_BRANCH,
+    status: HUB_STATUS.OPERATIONAL,
+    isCentralHub: false,
+  };
+}
+
 export const LOGISTICS_HUBS = [
   {
-    hubId: 'HUB-002',
+    hubId: 'hub_pulilan',
     hubName: 'YTO Pulilan Main Sorting Hub',
     region: 'Central Luzon — Bulacan',
-    // Exact warehouse coordinates (matches the app's PULILAN_MAIN_HUB —
-    // OSM-verified Dampol 2nd B, Pulilan, near the NLEX Pulilan interchange).
-    address: 'Warehouse 8-17, Pulilan Enterprises Center, Block 3, Pulilan Regional Road, Dampol II-B, Pulilan, Bulacan',
+    municipality: 'Pulilan',
+    sortCode: 'BUL-PUL-01',
+    // Exact warehouse coordinates (the app's PULILAN_MAIN_HUB — OSM-verified
+    // Dampol 2nd B, Pulilan, near the NLEX Pulilan interchange).
+    address: 'Warehouse 8-17, Pulilan Enterprises Center, Dampol II-B, Pulilan',
     coordinates: { lat: 14.9027, lng: 120.8073 },
-    geofenceRadius: 2.5,
+    geofenceRadius: HUB_RADIUS_MAIN,
     status: HUB_STATUS.OPERATIONAL,
+    isCentralHub: true,
   },
+  // A's branch ids carry no prefix (the app's branch() helper stores the id it
+  // is given, and that helper is called with these bare names), while its
+  // central hub is 'hub_pulilan'. They are reproduced exactly here: a hub id is
+  // how both sides name the same hub, so inventing a tidier one would just be a
+  // different kind of disagreement. Verified by npm run qa:hubs.
+  hubRow('malolos', 'Malolos Branch', 'McArthur Highway, Catmon, Malolos City',
+    'Malolos', 14.8433, 120.8114, 'BUL-MAL-02'),
+  hubRow('baliuag', 'Baliuag Station', 'Dona Remedios Trinidad Hwy, Poblacion, Baliuag',
+    'Baliuag', 14.9547, 120.9008, 'BUL-BAL-04'),
+  hubRow('calumpit', 'Calumpit Center', 'Calumpit Municipal Road, Poblacion, Calumpit',
+    'Calumpit', 14.9050, 120.7700, 'BUL-CAL-09'),
+  hubRow('plaridel', 'Plaridel Hub', 'Cagayan Valley Road, Banga 1st, Plaridel',
+    'Plaridel', 14.8872, 120.8572, 'BUL-PLA-10'),
+  hubRow('meycauayan', 'Meycauayan Hub', 'Malhacan Road, Meycauayan City',
+    'Meycauayan', 14.7350, 120.9610, 'BUL-MEY-03'),
+  hubRow('sjdm', 'San Jose del Monte Branch', 'Quirino Highway, Tungkong Mangga, San Jose del Monte',
+    'San Jose del Monte', 14.8136, 121.0453, 'BUL-SJD-05'),
+  hubRow('santa_maria', 'Santa Maria Branch', 'Santa Maria Bypass Road, Poblacion, Santa Maria',
+    'Santa Maria', 14.8189, 120.9575, 'BUL-STM-07'),
+  hubRow('marilao', 'Marilao Station', 'Manila North Road, Abangan Sur, Marilao',
+    'Marilao', 14.7578, 120.9489, 'BUL-MAR-06'),
+  hubRow('guiguinto', 'Guiguinto Center', 'Cagayan Valley Road, Tabang, Guiguinto',
+    'Guiguinto', 14.8310, 120.8800, 'BUL-GUI-08'),
 ];
 
 // Great-circle distance in kilometers between two lat/lng points.

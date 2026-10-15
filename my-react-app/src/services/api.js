@@ -7,8 +7,8 @@
 // time the backend moved, and no single spot to point at a different
 // environment. Everything now resolves against the same base here.
 //
-// `apiFetch` is a deliberately thin wrapper — same signature as fetch(),
-// just with the origin filled in — so it's a drop-in replacement at each
+// `apiFetch` is a deliberately thin wrapper â€” same signature as fetch(),
+// just with the origin filled in â€” so it's a drop-in replacement at each
 // call site without changing any of that site's existing response/error
 // handling (some throw, some read `data.error`, some ignore failures and
 // return an empty array, etc.). The `*Api.list()` helpers below cover the
@@ -17,21 +17,21 @@
 export const API_ROOT = import.meta.env.VITE_API_URL || 'https://yto-express-backend.onrender.com';
 const API_BASE = `${API_ROOT}/api`;
 
-// ── Demo/UAT fallback (build-time, ON BY DEFAULT while pre-launch) ─────────
+// â”€â”€ Demo/UAT fallback (build-time, ON BY DEFAULT while pre-launch) â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // A GET to a known collection route whose real response comes back empty
 // (no mobile-app data synced yet) is transparently swapped for the same
-// realistic, linked fixture set scripts/qa/seedServer.mjs uses locally —
+// realistic, linked fixture set scripts/qa/seedServer.mjs uses locally â€”
 // never for mutations, and NEVER overriding a real non-empty response: the
 // instant a real customer/parcel/rider/etc. exists, that endpoint's real
-// data wins automatically and permanently, with no redeploy needed. Pairs
-// with the "Demo Data" banner in AnalyticsDashboard.jsx so fabricated rows
-// are never mistaken for real ones.
+// data wins automatically and permanently, with no redeploy needed. The
+// former "Demo Data" banner in AnalyticsDashboard.jsx was removed
+// (2026-10-14); the fallback logic itself is unchanged.
 //
 // Defaults ON for this pre-launch phase (no mobile app connected, every
 // endpoint is currently empty either way) so the deployed site is populated
 // without any Render dashboard step. Set VITE_DEMO_MODE=0 at build time to
-// force it off — do this once the mobile app is connected and this should
-// go fully REAL-only (AGENTS2.md §7); it stops being needed anyway the
+// force it off â€” do this once the mobile app is connected and this should
+// go fully REAL-only (AGENTS2.md Â§7); it stops being needed anyway the
 // moment every one of these endpoints has real rows, since the fallback
 // only ever fires on an empty response.
 import {
@@ -40,7 +40,7 @@ import {
   DEMO_DASHBOARD_STATS, filterByStatus,
 } from './demoFixtures';
 
-export const isDemoMode = import.meta.env.VITE_DEMO_MODE !== '0';
+export const isDemoMode = import.meta.env.VITE_DEMO_MODE === '1';
 
 const DEMO_ROUTES = {
   '/customers': () => DEMO_CUSTOMERS,
@@ -65,7 +65,7 @@ function isEmptyPayload(pathname, body) {
 /** fetch(), with `path` resolved against the shared API base and JWT token attached. */
 export async function apiFetch(path, options = {}) {
   // Per-call timeout (default 60s): without this a hanging connection leaves
-  // every caller waiting forever — the login spinner and the dashboard
+  // every caller waiting forever â€” the login spinner and the dashboard
   // skeleton never resolve. A timeout converts the hang into a catchable
   // error so each screen shows its honest error state instead. Callers that
   // need longer (or shorter) pass { timeout: ms }.
@@ -108,14 +108,14 @@ export async function apiFetch(path, options = {}) {
     return res;
   } catch (err) {
     if (err && err.name === 'AbortError') {
-      const timeoutErr = new Error('Taking too long to respond. The system may be starting up — please try again.');
+      const timeoutErr = new Error('Taking too long to respond. The system may be starting up â€” please try again.');
       timeoutErr.kind = 'timeout';
       throw timeoutErr;
     }
     if (err instanceof TypeError) {
       // Browser-native fetch failures (DNS, refusal, offline) arrive as a bare
       // TypeError whose message leaks internals like "Failed to fetch". Surface
-      // plain language instead — the login screen prints this verbatim.
+      // plain language instead â€” the login screen prints this verbatim.
       const networkErr = new Error('Cannot reach the server right now. Check that it is running, then try again.');
       networkErr.kind = 'network';
       throw networkErr;
@@ -167,6 +167,14 @@ export const sellersApi = {
 export const ridersApi = {
   list: () => getJson('/riders'),
 };
+export const companyVehiclesApi = {
+  list: () => getJson('/company-vehicles'),
+  create: (payload) => apiFetch('/company-vehicles', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).then((res) => res.json()),
+  update: (id, payload) => apiFetch(`/company-vehicles/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).then((res) => res.json()),
+  assign: (id, riderEmail) => apiFetch(`/company-vehicles/${id}/assign`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ riderEmail }) }).then((res) => res.json()),
+  unassign: (id) => apiFetch(`/company-vehicles/${id}/unassign`, { method: 'PUT' }).then((res) => res.json()),
+  remove: (id) => apiFetch(`/company-vehicles/${id}`, { method: 'DELETE' }).then((res) => res.json()),
+};
 
 export const customersApi = {
   list: () => getJson('/customers'),
@@ -184,7 +192,7 @@ export const accountsApi = {
   list: () => getJson('/accounts'),
 };
 
-// ── Login Helper ────────────────────────────────────────────────────────
+// â”€â”€ Login Helper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export async function adminLogin(email, password, remember = false) {
   const res = await apiFetch('/accounts/login', {
     method: 'POST',
@@ -207,7 +215,7 @@ export async function adminLogin(email, password, remember = false) {
 
 export const notificationsApi = {
   // Both approval flows (seller + rider) POST here with the identical
-  // request/response shape — mails the new account's credentials via Gmail.
+  // request/response shape â€” mails the new account's credentials via Gmail.
   // Throws with the server's error message on failure, same as both call
   // sites used to do by hand.
   sendEmail: async (payload) => {

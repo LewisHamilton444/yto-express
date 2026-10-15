@@ -69,7 +69,7 @@ export const isDeliveredStatus = (status) =>
 // stored statuses are Title-case ('Delivered'), older rows may be lowercase.
 // 'failed' is the legacy end state from before the failed-delivery flow; the
 // new 'Failed Attempt' is NOT finished (the rider tries again).
-const FINISHED_STATUSES = ['delivered', 'returned', 'failed', 'returned to seller'];
+const FINISHED_STATUSES = ['delivered', 'returned', 'failed', 'returned to seller', 'cancelled', 'received at hub (returned)'];
 export const isFinishedParcelStatus = (status) =>
   FINISHED_STATUSES.includes(String(status ?? '').trim().toLowerCase());
 
@@ -82,4 +82,18 @@ export const isReturnFamilyStatus = (status) =>
 export const isInTransitFamilyStatus = (status) => {
   const s = String(status ?? '').trim().toLowerCase();
   return s === 'in transit' || s === 'out for delivery' || s === 'picked up' || s === 'shipping' || s === 'received at hub';
+};
+
+// In-flight ranking shared by every live-parcel sort (LiveRiderMap courier
+// list, MonitorParcel tables). Higher = more urgent. Keys are lowercase so
+// callers pass String(status).toLowerCase().
+export const IN_FLIGHT_WEIGHT = {
+  'out for delivery': 4,
+  'in transit': 3,
+  'returning': 3,
+  'picked up': 2,
+  'received at hub': 2,
+  'to pickup': 1,
+  'to ship': 1,
+  'pending': 0,
 };

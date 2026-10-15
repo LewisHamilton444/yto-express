@@ -207,6 +207,21 @@ async function sendIssueStatus(ticketId, status, adminNotes = '') {
 }
 
 /**
+ * D-5 / G-8: send an operator announcement into the app's notification inbox.
+ * The Android side fans it out to real accounts (never the demo fixtures) and
+ * answers with how many were reached.
+ */
+async function sendBroadcast({ title, message, audience = 'all', type = 'system_alert' }) {
+    return postWithRetry('/receive-broadcast', {
+        title,
+        message,
+        audience,
+        type,
+        requestedAt: new Date().toISOString(),
+    });
+}
+
+/**
  * Send user profile updates to the Android backend.
  */
 async function sendUserUpdate(email, role, updates) {
@@ -243,4 +258,4 @@ async function healthCheck() {
     });
 }
 
-module.exports = { sendStatus, sendApproval, syncParcel, sendIssueStatus, pollChanges, sendUserUpdate, healthCheck, isBridgeEnabled };
+module.exports = { sendStatus, sendApproval, syncParcel, sendIssueStatus, pollChanges, sendUserUpdate, sendBroadcast, healthCheck, isBridgeEnabled };

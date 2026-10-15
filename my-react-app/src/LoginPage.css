@@ -25,7 +25,7 @@
   flex-direction: column;
   padding: clamp(20px, 3vh, 28px) 0 44px;
   overflow: hidden;
-  font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
   /* Photo fills the whole viewport. Scrim stack (bottom to top):
      1. soft white veil at the top for the glass to read as light frosted
      2. brand-violet gradient deepening toward the left (behind the panel)
@@ -568,11 +568,12 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
+  width: 28px;
+  height: 28px;
   padding: 0;
   border-radius: 8px;
   transition: color 0.2s ease, background-color 0.2s ease;
+  box-shadow: none;
 }
 
 .login-show-pass:hover {
@@ -704,14 +705,10 @@
   height: 52px;
   margin-top: 4px;
   padding: 0 24px;
-  /* 200%-wide gradient: hover slides it to the deeper orange half, since
-     gradients themselves can't be transitioned. */
-  background: linear-gradient(120deg, #ffa05a 0%, #ff7a2a 30%, #f37021 50%, #e0520a 78%, #c8440a 100%);
-  background-size: 200% 100%;
-  background-position: 0% 0;
+  background: #f37021;
   color: #ffffff;
-  border: 1px solid rgba(255, 200, 150, 0.55);
-  border-radius: 12px;
+  border: none;
+  border-radius: 8px;
   font-size: 15px;
   font-weight: 700;
   letter-spacing: 0.2px;
@@ -719,31 +716,14 @@
   cursor: pointer;
   font-family: inherit;
   transition:
-    background-position 0.45s cubic-bezier(0.16, 1, 0.3, 1),
     transform 0.2s ease,
-    box-shadow 0.25s ease,
     opacity 0.2s ease;
-  box-shadow:
-    0 14px 30px -10px rgba(243, 112, 33, 0.85),
-    0 0 26px -6px rgba(255, 122, 42, 0.55),
-    0 2px 6px rgba(80, 20, 0, 0.35),
-    inset 0 1px 0 rgba(255, 255, 255, 0.38),
-    inset 0 -2px 0 rgba(120, 30, 0, 0.25);
+  box-shadow: none;
 }
 
-/* Light sheen that sweeps across on hover. */
+/* Flat button: sheen sweep removed (was a gradient overlay on the CTA). */
 .login-btn::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -60%;
-  width: 45%;
-  height: 100%;
-  z-index: -1;
-  background: linear-gradient(100deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.28) 50%, rgba(255, 255, 255, 0) 100%);
-  transform: skewX(-20deg);
-  transition: left 0.6s cubic-bezier(0.16, 1, 0.3, 1);
-  pointer-events: none;
+  display: none;
 }
 
 .login-btn svg {
@@ -751,18 +731,12 @@
 }
 
 .login-btn:hover:not(:disabled) {
-  background-position: 100% 0;
   transform: translateY(-2px);
-  box-shadow:
-    0 20px 38px -12px rgba(243, 112, 33, 0.95),
-    0 0 36px -4px rgba(255, 122, 42, 0.65),
-    0 4px 10px rgba(80, 20, 0, 0.35),
-    inset 0 1px 0 rgba(255, 255, 255, 0.38),
-    inset 0 -2px 0 rgba(120, 30, 0, 0.25);
+  box-shadow: none;
 }
 
 .login-btn:hover:not(:disabled)::after {
-  left: 120%;
+  display: none;
 }
 
 .login-btn:hover:not(:disabled) svg {
@@ -772,17 +746,13 @@
 .login-btn:active:not(:disabled) {
   transform: translateY(0) scale(0.985);
   transition-duration: 0.08s;
-  box-shadow:
-    0 8px 18px -8px rgba(243, 112, 33, 0.80),
-    inset 0 2px 4px rgba(120, 30, 0, 0.35);
+  box-shadow: none;
 }
 
 .login-btn:focus-visible {
-  outline: none;
-  box-shadow:
-    0 0 0 3px rgba(20, 3, 30, 0.6),
-    0 0 0 5px #ff9a5a,
-    0 10px 24px -8px rgba(243, 112, 33, 0.65);
+  outline: 2px solid #f37021;
+  outline-offset: 2px;
+  box-shadow: none;
 }
 
 .login-btn:disabled {

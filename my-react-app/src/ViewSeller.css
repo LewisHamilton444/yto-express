@@ -8,7 +8,7 @@
   padding: 24px 30px 48px;
   min-height: 100vh;
   background: #f0ecf7;
-  font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
   color: #390955;
   box-sizing: border-box;
 }
@@ -179,7 +179,7 @@
 /* Custom Buttons matching system config */
 .gsr-btn-primary {
   padding: 10px 22px;
-  border-radius: 10px;
+  border-radius: 8px;
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
@@ -196,7 +196,7 @@
 
 .gsr-btn-outline {
   padding: 10px 22px;
-  border-radius: 10px;
+  border-radius: 8px;
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;

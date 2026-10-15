@@ -7,6 +7,8 @@
 // exclusively exports components).
 export const PARCEL_STATUS_COLORS = {
   'Pending':          { bg: '#f3f4f6', color: '#374151' },
+  'To Pickup':        { bg: '#f3f4f6', color: '#4b5563' },
+  'To Ship':          { bg: '#fff4ec', color: '#ea580c' },
   'Picked Up':        { bg: '#ede9fe', color: '#4c1d95' },
   'In Transit':       { bg: '#e0f2fe', color: '#075985' },
   'Out for Delivery': { bg: '#fef3c7', color: '#92400e' },
@@ -37,6 +39,8 @@ export const SELLER_STATUS_COLORS = {
 // status pills (see StatusBadge). Mirrors the delivery-workflow vocabulary.
 export const STATUS_HINTS = {
   'Pending':          'Awaiting pickup from the sender',
+  'To Pickup':        'Assigned to courier — awaiting pickup from sender',
+  'To Ship':          'Booking confirmed — ready for handover',
   'To Pay':           'Awaiting payment confirmation before shipment',
   'Confirmed':        'Booking confirmed, preparing for pickup',
   'Picked Up':        'Collected by the courier — in the network',
